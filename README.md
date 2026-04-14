@@ -6,6 +6,10 @@ A dark-themed web demo for **multi-agent cricket match analysis**: specialist ag
 
 *Example: full prediction flow for an upcoming fixture — search, five intel agents, debate stage, and judge verdict card.*
 
+![AI Cricket War Room — completed fixture shows Final result only (CSK vs KKR)](image/war-room-final-result.jpg)
+
+*Example: a **completed** match from `match_suggestions.json` — agents and debate are skipped; only the **Final result** card is shown.*
+
 ## What it does
 
 - **Search fixtures** via autocomplete backed by `match_suggestions.json` (and `GET /api/match-suggest` when you use the Node server).
