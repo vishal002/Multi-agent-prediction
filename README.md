@@ -2,7 +2,7 @@
 
 A dark-themed web demo for **multi-agent cricket match analysis**: specialist agents gather intel, two adversarial debaters argue the fixture, and a **Judge** produces a structured verdict (winner, confidence, projected score band, key player, swing factor).
 
-![AI Cricket War Room — RCB vs LSG prediction with intel agents, debate flow, and judge verdict](assets/war-room-screenshot.jpg)
+![AI Cricket War Room — RCB vs LSG prediction with intel agents, debate flow, and judge verdict](image/war-room-screenshot.jpg)
 
 *Example: full prediction flow for an upcoming fixture — search, five intel agents, debate stage, and judge verdict card.*
 
