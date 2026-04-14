@@ -1,0 +1,8 @@
+{
+  "name": "ai-cricket-war-room",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  }
+}

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#202124" />
+  <title>AI Cricket War Room</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="ai_cricket_war_room.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="app-header" role="banner">
+      <div class="app-header__main">
+        <div class="brand">
+          <span class="brand__eyebrow">Multi-agent prediction</span>
+          <h1 class="brand__title">AI Cricket War Room</h1>
+        </div>
+        <p class="brand__tagline">Intel → debate → judge verdict in one flow.</p>
+      </div>
+      <nav class="app-header__nav" aria-label="Reference">
+        <button type="button" class="text-btn" id="btnOpenArch">Architecture</button>
+        <span class="app-header__sep" aria-hidden="true">·</span>
+        <button type="button" class="text-btn" id="btnOpenHowto">Build guide</button>
+      </nav>
+    </header>
+
+    <section class="command-bar" aria-label="Match and run">
+      <div class="command-bar__match match-field g-search">
+        <div class="g-search__shell">
+          <svg class="g-search__mag" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <label class="visually-hidden" for="matchInput">Search fixtures</label>
+          <input class="match-input g-search__input" id="matchInput" type="search" autocomplete="off" spellcheck="false" enterkeyhint="search"
+            placeholder="Search teams, venues, fixtures…" value="IPL 2026 final — Narendra Modi Stadium, Ahmedabad"
+            role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="matchAutocompletePanel" />
+          <button type="button" class="g-search__clear" id="matchSearchClear" aria-label="Clear search" hidden>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <div class="g-search__dropdown" id="matchAutocompletePanel" hidden>
+          <ul class="match-autocomplete g-search__results" id="matchAutocompleteList" role="listbox"></ul>
+          <div class="g-search__empty" id="matchAutocompleteEmpty" hidden role="status">No matching fixtures</div>
+          <div class="g-search__footer"><span class="g-search__kbd">↑</span><span class="g-search__kbd">↓</span> navigate · <span class="g-search__kbd">Enter</span> select · <span class="g-search__kbd">Esc</span> close</div>
+        </div>
+      </div>
+      <div class="command-bar__actions" id="ctaRow">
+        <button type="button" class="btn btn--primary" id="runBtn" onclick="runWarRoom()">Run war room</button>
+        <button type="button" class="btn btn--ghost" id="resetBtn" onclick="resetWarRoom()" style="display:none">Reset</button>
+        <span class="status-pill" id="runningLabel" style="display:none" aria-live="polite"></span>
+      </div>
+    </section>
+
+    <main class="dashboard" id="main-content">
+      <aside class="dash-col dash-col--agents" aria-labelledby="agents-heading">
+        <h2 class="dash-col__label" id="agents-heading">Intel agents</h2>
+        <div class="surface surface--agents" id="agentsCard">
+          <div id="agentsList"></div>
+        </div>
+        <div class="pipeline" role="list" aria-label="Pipeline">
+          <span class="pipeline__step">Data</span>
+          <span class="pipeline__arrow" aria-hidden="true">→</span>
+          <span class="pipeline__step">5 agents</span>
+          <span class="pipeline__arrow" aria-hidden="true">→</span>
+          <span class="pipeline__step">Debate</span>
+          <span class="pipeline__arrow" aria-hidden="true">→</span>
+          <span class="pipeline__step">Judge</span>
+        </div>
+      </aside>
+
+      <section class="dash-col dash-col--stage" aria-labelledby="stage-heading">
+        <div class="dash-col__head">
+          <h2 class="dash-col__label" id="stage-heading">Debate &amp; verdict</h2>
+        </div>
+        <div class="surface surface--stage" id="debateCard">
+          <div id="phaseBanner" class="phase-banner" style="display:none"></div>
+          <div class="stage-fixture-verdict" id="stageFixtureVerdict" hidden>
+            <div class="match-bar match-bar--in-summary" id="matchBar" hidden aria-label="Fixture">
+              <div class="match-bar__league" id="matchBarLeague"></div>
+              <div class="match-bar__row">
+                <div class="match-bar__pill" id="matchBarTeamA">
+                  <img class="match-bar__logo" id="matchBarImgA" alt="" width="44" height="44" loading="lazy" decoding="async" hidden />
+                  <span class="match-bar__code" id="matchBarCodeA"></span>
+                </div>
+                <span class="match-bar__vs" aria-hidden="true">vs</span>
+                <div class="match-bar__pill" id="matchBarTeamB">
+                  <img class="match-bar__logo" id="matchBarImgB" alt="" width="44" height="44" loading="lazy" decoding="async" hidden />
+                  <span class="match-bar__code" id="matchBarCodeB"></span>
+                </div>
+              </div>
+              <div class="match-bar__venue" id="matchBarVenue"></div>
+            </div>
+            <div id="verdictArea" class="verdict-slot"></div>
+          </div>
+          <div class="debate-scroller" id="debateScroller">
+            <div class="debate-area" id="debateArea">
+              <div class="empty-state" id="emptyState">
+                <div class="empty-state__icon" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                </div>
+                <p class="empty-state__title">Ready</p>
+                <p class="empty-state__desc">Pick a fixture above, then <strong>Run war room</strong> for live intel, Bull vs Bear, and a judge verdict.</p>
+              </div>
+            </div>
+            <div class="bubble bull typing-bubble" id="typingBubble" style="display:none">
+              <div class="typing-row"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog class="info-sheet" id="infoSheet" aria-labelledby="info-sheet-title">
+    <div class="info-sheet__header">
+      <h2 id="info-sheet-title" class="info-sheet__title">Reference</h2>
+      <button type="button" class="icon-close" id="infoSheetClose" aria-label="Close">×</button>
+    </div>
+    <div class="info-sheet__tabs" role="tablist">
+      <button type="button" class="info-tab active" role="tab" id="tabBtnArch" aria-selected="true" aria-controls="panelArch">Architecture</button>
+      <button type="button" class="info-tab" role="tab" id="tabBtnHowto" aria-selected="false" aria-controls="panelHowto">Build guide</button>
+    </div>
+    <div class="info-sheet__body">
+      <div id="panelArch" class="info-panel" role="tabpanel" aria-labelledby="tabBtnArch">
+        <p class="info-panel__lede">Five-layer system design</p>
+        <div class="arch-list" id="archList"></div>
+      </div>
+      <div id="panelHowto" class="info-panel" hidden role="tabpanel" aria-labelledby="tabBtnHowto">
+        <p class="info-panel__lede">Four-sprint build roadmap</p>
+        <div class="howto-grid" id="howtoGrid"></div>
+        <div class="tip-box tip-box--dialog">
+          <div class="tip-label">Monetisation angles</div>
+          <div class="tip-text">
+            Freemium: 3 free predictions/month → ₹299/mo unlimited<br>
+            Fantasy partnerships: referral revenue with Dream11, My11Circle<br>
+            B2B API: sell prediction endpoint to cricket news portals<br>
+            Launch timing: 2 weeks before IPL 2026 for peak traffic
+          </div>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+<script src="ai_cricket_war_room.js"></script>
+</body>
+</html>
