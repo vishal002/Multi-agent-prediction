@@ -711,22 +711,218 @@ function showTyping(side) {
 }
 function hideTyping() { document.getElementById('typingBubble').style.display='none'; }
 
-/** Shared match payload for both debaters — same data, opposite directives in system prompts. */
-function buildMatchContextBlock(match, insights, teams) {
+const INTEL_FALLBACK = "Insufficient data; neutral read.";
+
+const INTEL_SYSTEM =
+  "Reply with exactly one sentence of 15–20 words. No preamble, labels, or quotation marks. " +
+  "Use ONLY facts stated in the Evidence section; do not invent statistics, scores, or events. " +
+  `If the evidence does not support a substantive claim for your specialty, say exactly: ${INTEL_FALLBACK}`;
+
+/**
+ * @param {string} reason
+ * @returns {Record<string, unknown>}
+ */
+function emptyMatchContext(reason) {
+  return {
+    news_bullets: [],
+    stats_tables: {},
+    pitch_note: "",
+    weather_note: "",
+    sources: [],
+    fetched_at: "",
+    _ingestion_error: reason,
+  };
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
+function normalizeNewsBullets(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((x) => String(x).trim()).filter(Boolean);
+}
+
+/**
+ * @param {string} match
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @returns {Promise<Record<string, unknown>>}
+ */
+async function fetchMatchContextFromServer(match, teams) {
+  const base = apiBase();
+  if (!base) return emptyMatchContext("offline_or_file_origin");
+
+  let venue = "";
+  let date = "";
+  let teamsParam =
+    teams.teamA !== "Team A" && teams.teamB !== "Team B"
+      ? `${teams.codeA},${teams.codeB}`
+      : "";
+
+  try {
+    const rowR = await fetch(`${base}/api/match-by-label?label=${encodeURIComponent(match)}`);
+    if (rowR.ok) {
+      const data = await rowR.json();
+      const m = data && data.match;
+      if (m && typeof m === "object") {
+        if (m.venue != null) venue = String(m.venue).trim();
+        if (m.date != null) date = String(m.date).trim();
+        if (Array.isArray(m.teams) && m.teams.length >= 2) {
+          teamsParam = m.teams.map((t) => String(t).trim()).filter(Boolean).join(",");
+        }
+      }
+    }
+  } catch {
+    /* use label-only query */
+  }
+
+  const u = new URL(`${base}/api/match-context`);
+  u.searchParams.set("label", match);
+  if (teamsParam) u.searchParams.set("teams", teamsParam);
+  if (venue) u.searchParams.set("venue", venue);
+  if (date) u.searchParams.set("date", date);
+
+  try {
+    const r = await fetch(u.toString());
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`;
+      try {
+        const err = await r.json();
+        if (err && err.message != null) msg = String(err.message);
+      } catch {
+        /* ignore */
+      }
+      return emptyMatchContext(msg);
+    }
+    return await r.json();
+  } catch (e) {
+    return emptyMatchContext(e instanceof Error ? e.message : "fetch_failed");
+  }
+}
+
+/**
+ * @param {Record<string, unknown>} ctx
+ * @returns {string}
+ */
+function formatIngestedBlockForDebate(ctx) {
+  if (!ctx || ctx._ingestion_error) {
+    const reason =
+      ctx && ctx._ingestion_error != null ? String(ctx._ingestion_error) : "unknown";
+    return `(No ingested evidence — ${reason}. Do not invent match-specific numbers or insider facts.)`;
+  }
+  const parts = [];
+  if (ctx.fetched_at) parts.push(`Fetched: ${ctx.fetched_at}`);
+  const src = ctx.sources;
+  if (Array.isArray(src) && src.length) {
+    const names = src
+      .map((s) => (s && typeof s === "object" && s.name != null ? String(s.name) : ""))
+      .filter(Boolean);
+    if (names.length) parts.push(`Sources: ${names.join(", ")}`);
+  }
+  if (ctx.pitch_note != null && String(ctx.pitch_note).trim())
+    parts.push(`Pitch note: ${String(ctx.pitch_note).trim()}`);
+  if (ctx.weather_note != null && String(ctx.weather_note).trim())
+    parts.push(`Weather note: ${String(ctx.weather_note).trim()}`);
+  const st = ctx.stats_tables;
+  if (st && typeof st === "object" && Object.keys(st).length) {
+    try {
+      parts.push(`Stats tables:\n${JSON.stringify(st, null, 2)}`);
+    } catch {
+      parts.push(`Stats tables: ${String(st)}`);
+    }
+  }
+  const bullets = normalizeNewsBullets(ctx.news_bullets);
+  if (bullets.length) {
+    parts.push(`News bullets:\n${bullets.map((b, i) => `  ${i + 1}. ${b}`).join("\n")}`);
+  }
+  if (!parts.length) {
+    return "(Evidence bundle empty. Do not invent match-specific numbers or insider facts.)";
+  }
+  return parts.join("\n\n");
+}
+
+const SCOUT_RX =
+  /\b(form|fitness|injury|injured|recover|bench|playing\s*xi|squad|available|unavailable|ruled\s+out|doubtful|return|comeback|rested)\b/i;
+const WEATHER_RX =
+  /\b(rain|dew|humid|hot|cold|weather|forecast|thunder|overcast|heat|cool|wind)\b/i;
+const PITCH_RX =
+  /\b(pitch|wicket|spin|seam|bounce|turn|crack|rough|grass|surface)\b/i;
+
+/**
+ * @param {string} agentId
+ * @param {Record<string, unknown>} ctx
+ * @returns {string}
+ */
+function buildAgentEvidenceString(agentId, ctx) {
+  const bullets = normalizeNewsBullets(ctx.news_bullets);
+
+  if (agentId === "news") {
+    if (!bullets.length) return "";
+    return bullets.join("\n");
+  }
+
+  if (agentId === "stats") {
+    const st = ctx.stats_tables;
+    if (st && typeof st === "object" && Object.keys(st).length) {
+      try {
+        return JSON.stringify(st, null, 2);
+      } catch {
+        return String(st);
+      }
+    }
+    return "";
+  }
+
+  if (agentId === "weather") {
+    const note = ctx.weather_note != null ? String(ctx.weather_note).trim() : "";
+    const hit = bullets.filter((b) => WEATHER_RX.test(b));
+    const lines = [];
+    if (note) lines.push(note);
+    if (hit.length) lines.push(...hit);
+    return lines.join("\n").trim();
+  }
+
+  if (agentId === "pitch") {
+    const note = ctx.pitch_note != null ? String(ctx.pitch_note).trim() : "";
+    const hit = bullets.filter((b) => PITCH_RX.test(b));
+    const lines = [];
+    if (note) lines.push(note);
+    if (hit.length) lines.push(...hit);
+    return lines.join("\n").trim();
+  }
+
+  if (agentId === "scout") {
+    const hit = bullets.filter((b) => SCOUT_RX.test(b));
+    if (hit.length) return hit.join("\n");
+    return "";
+  }
+
+  return "";
+}
+
+/**
+ * Shared match payload for both debaters — ingested evidence plus specialist lines; evidence-only discipline in system prompts.
+ * @param {string} match
+ * @param {Record<string, string>} insights
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @param {Record<string, unknown>} ingestedCtx
+ */
+function buildMatchContextBlock(match, insights, teams, ingestedCtx) {
   const teamLine = `Teams: **${teams.teamA}** vs **${teams.teamB}** (Bull argues for ${teams.teamA}; Bear argues for ${teams.teamB}).\n`;
+  const ingested = formatIngestedBlockForDebate(ingestedCtx);
   const lines = AGENTS.map(
     (a) => `- ${a.name} (${a.role}): ${insights[a.id]?.trim() || "—"}`
   ).join("\n");
-  return `${teamLine}Fixture: ${match}\n\nSpecialist agent signals:\n${lines}`;
+  return `${teamLine}Fixture: ${match}\n\nIngested evidence (only treat as factual what appears here):\n${ingested}\n\nSpecialist agent signals:\n${lines}`;
 }
 
-/** Bull: team A; Bear: team B; ≤60 words. */
+/** Bull: team A; Bear: team B; ≤60 words; evidence-bound. */
 function debateSystemBull(teams) {
-  return `You are an aggressive cricket analyst who always argues **${teams.teamA}** beats **${teams.teamB}**. You have access to match data in the conversation. Name both teams when it helps clarity. Be confident, cite specific stats, player form, and conditions. Stay at or under 60 words per response.`;
+  return `You are an aggressive cricket analyst who always argues **${teams.teamA}** beats **${teams.teamB}**. You may ONLY use claims supported by the "Ingested evidence" and "Specialist agent signals" in the thread (from the first user message). Do not invent statistics or facts not grounded there; if evidence is thin, say so briefly and argue cautiously. Name both teams when it helps clarity. Stay at or under 60 words per response.`;
 }
 
 function debateSystemBear(teams) {
-  return `You are a skeptical analyst who always argues **${teams.teamB}** beats **${teams.teamA}**. Counter the previous argument directly. Name both teams when it helps clarity. Cite different angles — historical record, opponent weaknesses, conditions. Stay at or under 60 words per response.`;
+  return `You are a skeptical analyst who always argues **${teams.teamB}** beats **${teams.teamA}**. Counter the previous argument directly, using ONLY the ingested evidence and specialist signals from the first user message. Do not invent numbers or unverifiable claims; if the record is thin, acknowledge it. Name both teams when it helps clarity. Stay at or under 60 words per response.`;
 }
 
 const DEBATE_MAX_TOKENS = 220;
@@ -812,6 +1008,8 @@ async function runWarRoom() {
   setPhase('Gathering intelligence…', true);
   document.getElementById('runningLabel').textContent = 'Agents live…';
 
+  const ingestedCtx = await fetchMatchContextFromServer(match, teams);
+
   const insights = {};
   const agentPromises = [];
 
@@ -820,15 +1018,27 @@ async function runWarRoom() {
     document.getElementById('icon-'+agent.id).classList.add('on');
     document.getElementById('dot-'+agent.id).classList.add('live');
 
+    const evidenceBlock = buildAgentEvidenceString(agent.id, ingestedCtx).trim();
+    if (!evidenceBlock) {
+      const el = document.getElementById('insight-' + agent.id);
+      el.textContent = INTEL_FALLBACK;
+      el.classList.add('show');
+      insights[agent.id] = INTEL_FALLBACK;
+      continue;
+    }
+
     agentPromises.push(
       callClaude(
         [
           {
             role: 'user',
-            content: `You are the ${agent.name} for a cricket AI. Match: "${match}". Contest: ${teams.teamA} vs ${teams.teamB}. Give ONE sharp data insight (15–20 words) from your specialty: ${agent.role}. No intro words.`,
+            content:
+              `Match: "${match}". Contest: ${teams.teamA} vs ${teams.teamB}.\n` +
+              `You are the ${agent.name}. Specialty: ${agent.role}.\n\n` +
+              `Evidence (use ONLY the following; do not use outside knowledge):\n---\n${evidenceBlock}\n---`,
           },
         ],
-        'Reply with exactly one insight sentence. No preamble, no labels.'
+        INTEL_SYSTEM
       )
         .then((text) => {
           const el = document.getElementById('insight-' + agent.id);
@@ -848,7 +1058,7 @@ async function runWarRoom() {
   try {
     await Promise.all(agentPromises);
 
-    const matchContext = buildMatchContextBlock(match, insights, teams);
+    const matchContext = buildMatchContextBlock(match, insights, teams, ingestedCtx);
     setPhase('Debate in progress…', true);
     document.getElementById('runningLabel').textContent = `${teams.codeA} vs ${teams.codeB} · debate`;
 
@@ -860,28 +1070,28 @@ async function runWarRoom() {
         teamCode: teams.codeA,
         roundLabel: 'Round 1 · Opening',
         userContent:
-          `${matchContext}\n\n---\nOpen the debate: argue why **${teams.teamA}** wins this fixture. Ground your case in the match data above (stats, form, conditions). Max 60 words.`,
+          `${matchContext}\n\n---\nOpen the debate: argue why **${teams.teamA}** wins this fixture using ONLY the ingested evidence and specialist signals above—no outside facts or invented stats. If evidence is weak, say so briefly. Max 60 words.`,
       },
       {
         side: 'bear',
         who: `Bear · ${teams.teamB}`,
         teamCode: teams.codeB,
         roundLabel: 'Round 1 · Counter',
-        userContent: `Counter the Bull directly: argue why **${teams.teamB}** wins. Use different angles — historical record, opponent weaknesses, conditions. Max 60 words.`,
+        userContent: `Counter the Bull directly: argue why **${teams.teamB}** wins using ONLY the ingested evidence and specialist signals from the first message—different angles allowed only when supported there. Max 60 words.`,
       },
       {
         side: 'bull',
         who: `Bull · ${teams.teamA}`,
         teamCode: teams.codeA,
         roundLabel: 'Round 2 · Rebuttal',
-        userContent: `Rebut the Bear. Strengthen **${teams.teamA}**’s case with one angle they ignored or misread. Max 60 words.`,
+        userContent: `Rebut the Bear. Strengthen **${teams.teamA}**’s case with one angle grounded only in that same evidence bundle; if you cannot, concede thin data. Max 60 words.`,
       },
       {
         side: 'bear',
         who: `Bear · ${teams.teamB}`,
         teamCode: teams.codeB,
         roundLabel: 'Round 2 · Final',
-        userContent: `Final round: your strongest line for **${teams.teamB}** — still countering the Bull’s last point. Max 60 words.`,
+        userContent: `Final round: your strongest line for **${teams.teamB}**—still countering the Bull’s last point—using only the ingested evidence and specialist signals. Max 60 words.`,
       },
     ];
 
