@@ -1143,6 +1143,79 @@ body {
   line-height: 1.4;
 }
 
+/* Ingestion provenance on verdict card */
+.verdict-ingestion-meta {
+  margin-top: 0.55rem;
+  padding: 0.45rem 0.5rem;
+  font-size: 0.65rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.verdict-ingestion-meta--muted {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.verdict-ingestion-meta__row {
+  margin-bottom: 0.2rem;
+}
+
+.verdict-ingestion-meta__row:last-child {
+  margin-bottom: 0;
+}
+
+.verdict-ingestion-meta__k {
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.58rem;
+  color: rgba(174, 203, 250, 0.95);
+  margin-right: 0.35rem;
+}
+
+.verdict-ingestion-meta__v {
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict-ingestion-meta__sources {
+  margin: 0.25rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.verdict-ingestion-meta__sources li {
+  margin-bottom: 0.15rem;
+}
+
+.verdict-ingestion-meta__link {
+  color: #c5d9ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.verdict-ingestion-meta__link:hover {
+  color: #fff;
+}
+
+.verdict-ingestion-meta__warn {
+  color: #fdd663;
+  font-weight: 500;
+}
+
+.verdict-ingestion-meta__note {
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.62rem;
+}
+
+.verdict-ingestion-meta--warn {
+  color: #fdd663;
+}
+
 /* Win probability strip (dual team + split bar) */
 .verdict-win-prob {
   margin-top: 0.65rem;
@@ -1236,6 +1309,14 @@ body {
   flex-shrink: 0;
 }
 
+.verdict-win-prob__caption {
+  margin: 0.45rem 0 0;
+  font-size: 0.58rem;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.72);
+  text-align: center;
+}
+
 .verdict-conf-label {
   font-size: 0.625rem;
   color: rgba(255, 255, 255, 0.72);
@@ -1297,6 +1378,16 @@ body {
   font-weight: 600;
   color: var(--color-text-primary);
   line-height: 1.3;
+}
+
+.verdict-card .stat-sublabel {
+  display: block;
+  margin-top: 0.12rem;
+  font-size: 0.55rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .verdict-card .stat-val {

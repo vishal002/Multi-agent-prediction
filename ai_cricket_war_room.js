@@ -453,18 +453,32 @@ function escapeHtml(s) {
 }
 
 /**
- * Split win-probability row (team A left / coral, team B right / blue). Percentages always sum to 100.
+ * Split bar: team A left / coral, team B right / blue. Percentages always sum to 100.
  * @param {{ teamA: string, teamB: string }} teams
- * @param {number} pctForTeamA implied win chance for team A (0–100)
+ * @param {number} pctForTeamA
+ * @param {{ variant?: 'judge' | 'final' }} [opts] — judge: model-confidence semantics; final: recorded result bar
  * @returns {{ html: string, pctA: number, pctB: number }}
  */
-function renderVerdictWinProbabilityBlock(teams, pctForTeamA) {
+function renderVerdictWinProbabilityBlock(teams, pctForTeamA, opts = {}) {
+  const variant = opts.variant === "final" ? "final" : "judge";
   const pctA = Math.min(100, Math.max(0, Math.round(Number(pctForTeamA) || 0)));
   const pctB = 100 - pctA;
+  let title;
+  let captionHtml;
+  let ariaLabel;
+  if (variant === "final") {
+    title = "Match result";
+    captionHtml = "";
+    ariaLabel = `Match result: ${escapeHtml(teams.teamA)} ${pctA} percent, ${escapeHtml(teams.teamB)} ${pctB} percent`;
+  } else {
+    title = "Model confidence split";
+    captionHtml = `<p class="verdict-win-prob__caption">Reflects how strongly the Judge backs its pick. Not a calibrated win probability or betting line.</p>`;
+    ariaLabel = `Model confidence split (not win probability): ${escapeHtml(teams.teamA)} ${pctA} percent, ${escapeHtml(teams.teamB)} ${pctB} percent`;
+  }
   const html = `
-      <div class="verdict-win-prob" aria-label="Win probability: ${escapeHtml(teams.teamA)} ${pctA} percent, ${escapeHtml(teams.teamB)} ${pctB} percent">
+      <div class="verdict-win-prob" aria-label="${ariaLabel}">
         <div class="verdict-win-prob__divider" aria-hidden="true"></div>
-        <div class="verdict-win-prob__title">Win probability</div>
+        <div class="verdict-win-prob__title">${title}</div>
         <div class="verdict-win-prob__teams">
           <div class="verdict-win-prob__side verdict-win-prob__side--left">
             <div class="verdict-win-prob__name">${escapeHtml(teams.teamA)}</div>
@@ -479,6 +493,7 @@ function renderVerdictWinProbabilityBlock(teams, pctForTeamA) {
           <div class="verdict-win-prob__seg verdict-win-prob__seg--a" style="width:0%"></div>
           <div class="verdict-win-prob__seg verdict-win-prob__seg--b" style="width:0%"></div>
         </div>
+        ${captionHtml}
       </div>`;
   return { html, pctA, pctB };
 }
@@ -554,10 +569,75 @@ Fixture label: ${match}`;
 }
 
 /**
+ * @param {Record<string, unknown>|null|undefined} ctx
+ * @returns {string} safe HTML
+ */
+function formatVerdictIngestionMetaHtml(ctx) {
+  if (!ctx || typeof ctx !== "object") {
+    return `<div class="verdict-ingestion-meta verdict-ingestion-meta--muted">Evidence metadata not available.</div>`;
+  }
+  const errRaw = ctx._ingestion_error != null ? String(ctx._ingestion_error).trim() : "";
+  const fetchedRaw = ctx.fetched_at != null ? String(ctx.fetched_at).trim() : "";
+  const rows = [];
+
+  if (fetchedRaw) {
+    rows.push(
+      `<div class="verdict-ingestion-meta__row"><span class="verdict-ingestion-meta__k">Evidence fetched</span> <time class="verdict-ingestion-meta__v" datetime="${escapeHtml(fetchedRaw)}">${escapeHtml(fetchedRaw)}</time></div>`
+    );
+  }
+
+  const src = ctx.sources;
+  if (Array.isArray(src) && src.length) {
+    const lis = [];
+    for (const s of src) {
+      if (!s || typeof s !== "object") continue;
+      const name = s.name != null ? String(s.name).trim() : "";
+      const url = s.url != null ? String(s.url).trim() : "";
+      const ok = s.ok !== false;
+      if (!name && !url) continue;
+      const warn = ok ? "" : ` <span class="verdict-ingestion-meta__warn">(unavailable)</span>`;
+      let inner;
+      if (url && name) {
+        inner = `<a class="verdict-ingestion-meta__link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(name)}</a>`;
+      } else if (url) {
+        inner = `<a class="verdict-ingestion-meta__link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
+      } else {
+        inner = escapeHtml(name);
+      }
+      lis.push(`<li>${inner}${warn}</li>`);
+    }
+    if (lis.length) {
+      rows.push(
+        `<div class="verdict-ingestion-meta__row"><span class="verdict-ingestion-meta__k">Sources</span></div><ul class="verdict-ingestion-meta__sources">${lis.join("")}</ul>`
+      );
+    }
+  }
+
+  const hasSourceList = rows.some((r) => r.includes("verdict-ingestion-meta__sources"));
+  if (!fetchedRaw && !hasSourceList) {
+    if (errRaw) {
+      const msg =
+        errRaw === "offline_or_file_origin"
+          ? "Evidence not loaded — use http://localhost:3333 (or your Node server URL), not a file:// page."
+          : errRaw;
+      rows.push(`<div class="verdict-ingestion-meta__row verdict-ingestion-meta--warn">${escapeHtml(msg)}</div>`);
+    } else {
+      rows.push(
+        `<div class="verdict-ingestion-meta__row verdict-ingestion-meta--muted">No evidence timestamp or source list (offline or ingestion skipped).</div>`
+      );
+    }
+  } else if (errRaw) {
+    rows.push(`<div class="verdict-ingestion-meta__note">${escapeHtml(errRaw)}</div>`);
+  }
+
+  return `<div class="verdict-ingestion-meta">${rows.join("")}</div>`;
+}
+
+/**
  * @param {HTMLElement} verdictRootEl
  * @param {WarRoomVerdict} v
  * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
- * @param {{ source: 'service' | 'browser', predictionId?: number }} meta
+ * @param {{ source: 'service' | 'browser', predictionId?: number, ingestionCtx?: Record<string, unknown> }} meta
  */
 function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
   const winDisplay = resolveWinnerDisplay(teams, v.winner);
@@ -575,7 +655,8 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
   const confRaw = Number(v.confidence);
   const conf = Number.isFinite(confRaw) ? Math.min(100, Math.max(0, confRaw)) : 55;
   const pctForTeamA = pickedA ? conf : 100 - conf;
-  const winProb = renderVerdictWinProbabilityBlock(teams, pctForTeamA);
+  const winProb = renderVerdictWinProbabilityBlock(teams, pctForTeamA, { variant: "judge" });
+  const ingestionBlock = formatVerdictIngestionMetaHtml(meta.ingestionCtx);
   const sub =
     meta.source === "service" && meta.predictionId != null
       ? `<p class="verdict-subkicker">Saved · prediction #${escapeHtml(String(meta.predictionId))} (Judge service)</p>`
@@ -588,12 +669,13 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
       ${sub}
       <div class="verdict-winner-row">${verdictLogoHtml}<div class="verdict-winner">${escapeHtml(String(winDisplay).toUpperCase())} WINS</div></div>
       <div class="verdict-summary">${escapeHtml(v.summary || "")}</div>
+      ${ingestionBlock}
       ${winProb.html}
       <div class="stat-grid">
         <div class="stat-cell"><div class="stat-label">PROJECTED SCORE</div><div class="stat-val">${escapeHtml(String(v.score_range || "—"))}</div></div>
         <div class="stat-cell"><div class="stat-label">KEY PLAYER</div><div class="stat-val">${escapeHtml(String(v.key_player || "—"))}</div></div>
         <div class="stat-cell"><div class="stat-label">SWING FACTOR</div><div class="stat-val">${escapeHtml(String(v.swing_factor || "—"))}</div></div>
-        <div class="stat-cell"><div class="stat-label">CONFIDENCE</div><div class="stat-val">${escapeHtml(String(v.confidence ?? "—"))}%</div></div>
+        <div class="stat-cell"><div class="stat-label">MODEL CONFIDENCE</div><div class="stat-val">${escapeHtml(String(v.confidence ?? "—"))}% <span class="stat-sublabel">not win probability</span></div></div>
       </div>
     </div>`;
   scheduleVerdictWinProbabilityAnimation(verdictRootEl, winProb.pctA, winProb.pctB);
@@ -1190,7 +1272,9 @@ async function runWarRoom() {
       const verdictLogoHtml = winnerLogoUrl
         ? `<img class="verdict-winner-logo" src="${escapeHtml(winnerLogoUrl)}" width="44" height="44" alt="" decoding="async" loading="lazy" />`
         : "";
-      const winProbFinal = renderVerdictWinProbabilityBlock(teams, pickedA ? 100 : 0);
+      const winProbFinal = renderVerdictWinProbabilityBlock(teams, pickedA ? 100 : 0, {
+        variant: "final",
+      });
       const verdictEl = document.getElementById('verdictArea');
       verdictEl.innerHTML = `
     <div class="verdict-card verdict-card--final">
@@ -1358,6 +1442,7 @@ async function runWarRoom() {
       mountJudgeVerdictCard(vDiv, v, teams, {
         source: 'service',
         predictionId: svc.prediction_id,
+        ingestionCtx: ingestedCtx,
       });
       if (svc.accuracy && typeof svc.accuracy === 'object') {
         updateJudgeAccuracyFooterFromStats({
@@ -1401,7 +1486,7 @@ async function runWarRoom() {
         },
         teams
       );
-      mountJudgeVerdictCard(vDiv, v, teams, { source: 'browser' });
+      mountJudgeVerdictCard(vDiv, v, teams, { source: 'browser', ingestionCtx: ingestedCtx });
     }
 
     scrollDebateEnd();
