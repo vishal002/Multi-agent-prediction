@@ -494,6 +494,225 @@ function scheduleVerdictWinProbabilityAnimation(verdictRoot, pctA, pctB) {
   }, 200);
 }
 
+/**
+ * Aligns with `judge_service.models.Verdict`: winner, confidence (int 0–100), score_range, key_player, swing_factor, summary.
+ * @typedef {{ winner: string, confidence: number, score_range: string, key_player: string, swing_factor: string, summary: string }} WarRoomVerdict
+ */
+
+/** @param {string} text */
+function extractJudgeJsonObject(text) {
+  let s = String(text || "").trim();
+  const fence = s.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) s = fence[1].trim();
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
+  if (start !== -1 && end > start) return s.slice(start, end + 1);
+  return s;
+}
+
+/**
+ * @param {unknown} raw
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @returns {WarRoomVerdict}
+ */
+function normalizeVerdictPartial(raw, teams) {
+  const fallbackWinner = teams.teamB;
+  const w = raw && typeof raw === "object" ? /** @type {Record<string, unknown>} */ (raw) : {};
+  const confRaw = Number(w.confidence);
+  const confidence = Number.isFinite(confRaw) ? Math.min(100, Math.max(0, Math.round(confRaw))) : 55;
+  return {
+    winner: String(w.winner ?? fallbackWinner).trim() || fallbackWinner,
+    confidence,
+    score_range: String(w.score_range ?? "").trim() || "—",
+    key_player: String(w.key_player ?? "").trim() || "—",
+    swing_factor: String(w.swing_factor ?? "").trim() || "—",
+    summary:
+      String(w.summary ?? "").trim() ||
+      `Close contest — ${fallbackWinner} shaded on current read.`,
+  };
+}
+
+/**
+ * Browser-side judge prompt — same field contract as `judge_service.judge.JUDGE_SYSTEM_PROMPT` (winner constrained to displayed teams).
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @param {string} match
+ */
+function buildBrowserJudgeSystemPrompt(teams, match) {
+  return `You are the Judge for an AI cricket war room. Read the ENTIRE debate transcript and output a single JSON object ONLY — no markdown fences, no commentary before or after.
+
+The JSON must have exactly these keys and types (matches the server Verdict schema):
+- "winner": MUST be exactly "${teams.teamA}" or "${teams.teamB}" (those exact strings).
+- "confidence": integer from 0 to 100 (model confidence in that winner, not a betting line).
+- "score_range": one short phrase — plausible score band or margin for the format (e.g. "15–25 runs", "2–4 wickets", "innings victory" for Tests).
+- "key_player": one player name who most shifts the outcome if they perform.
+- "swing_factor": one short phrase for the main uncertainty or match-defining variable.
+- "summary": 2–4 sentences explaining why the winner edges it, grounded in points both sides raised.
+
+Rules: base your verdict only on the transcript; do not invent live data not implied there. Output must be valid JSON with double-quoted keys and strings.
+
+Fixture label: ${match}`;
+}
+
+/**
+ * @param {HTMLElement} verdictRootEl
+ * @param {WarRoomVerdict} v
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @param {{ source: 'service' | 'browser', predictionId?: number }} meta
+ */
+function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
+  const winDisplay = resolveWinnerDisplay(teams, v.winner);
+  const winNorm = String(v.winner || "").trim().toLowerCase();
+  const pickedA =
+    winNorm === String(teams.teamA).trim().toLowerCase() ||
+    winNorm === String(teams.codeA).trim().toLowerCase();
+  const winnerLogoUrl = resolveTeamLogoUrl(
+    pickedA ? teams.codeA : teams.codeB,
+    pickedA ? teams.teamA : teams.teamB
+  );
+  const verdictLogoHtml = winnerLogoUrl
+    ? `<img class="verdict-winner-logo" src="${escapeHtml(winnerLogoUrl)}" width="44" height="44" alt="" decoding="async" loading="lazy" />`
+    : "";
+  const confRaw = Number(v.confidence);
+  const conf = Number.isFinite(confRaw) ? Math.min(100, Math.max(0, confRaw)) : 55;
+  const pctForTeamA = pickedA ? conf : 100 - conf;
+  const winProb = renderVerdictWinProbabilityBlock(teams, pctForTeamA);
+  const sub =
+    meta.source === "service" && meta.predictionId != null
+      ? `<p class="verdict-subkicker">Saved · prediction #${escapeHtml(String(meta.predictionId))} (Judge service)</p>`
+      : meta.source === "browser"
+        ? `<p class="verdict-subkicker">Browser judge — start Judge service on port 8000 to persist picks via the Node proxy.</p>`
+        : "";
+  verdictRootEl.innerHTML = `
+    <div class="verdict-card">
+      <div class="verdict-kicker">Judge verdict</div>
+      ${sub}
+      <div class="verdict-winner-row">${verdictLogoHtml}<div class="verdict-winner">${escapeHtml(String(winDisplay).toUpperCase())} WINS</div></div>
+      <div class="verdict-summary">${escapeHtml(v.summary || "")}</div>
+      ${winProb.html}
+      <div class="stat-grid">
+        <div class="stat-cell"><div class="stat-label">PROJECTED SCORE</div><div class="stat-val">${escapeHtml(String(v.score_range || "—"))}</div></div>
+        <div class="stat-cell"><div class="stat-label">KEY PLAYER</div><div class="stat-val">${escapeHtml(String(v.key_player || "—"))}</div></div>
+        <div class="stat-cell"><div class="stat-label">SWING FACTOR</div><div class="stat-val">${escapeHtml(String(v.swing_factor || "—"))}</div></div>
+        <div class="stat-cell"><div class="stat-label">CONFIDENCE</div><div class="stat-val">${escapeHtml(String(v.confidence ?? "—"))}%</div></div>
+      </div>
+    </div>`;
+  scheduleVerdictWinProbabilityAnimation(verdictRootEl, winProb.pctA, winProb.pctB);
+}
+
+/**
+ * @param {string} matchId
+ * @param {string} debateTranscript
+ * @returns {Promise<{ prediction_id: number, verdict: WarRoomVerdict, accuracy: { total_settled: number, correct: number, accuracy: number | null } } | null>}
+ */
+async function postJudgePredict(matchId, debateTranscript) {
+  try {
+    const r = await fetch(`${apiBase()}/api/judge/predict`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ match_id: matchId, debate_transcript: debateTranscript }),
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (!data || typeof data !== "object" || !data.verdict) return null;
+    return /** @type {any} */ (data);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @returns {Promise<{ total_settled: number, correct: number, accuracy: number | null } | null>}
+ */
+async function fetchJudgeAccuracyStats() {
+  try {
+    const r = await fetch(`${apiBase()}/api/judge/accuracy`, { headers: { Accept: "application/json" } });
+    if (!r.ok) return null;
+    const data = await r.json();
+    if (!data || typeof data !== "object") return null;
+    return {
+      total_settled: Number(data.total_settled) || 0,
+      correct: Number(data.correct) || 0,
+      accuracy: data.accuracy != null && Number.isFinite(Number(data.accuracy)) ? Number(data.accuracy) : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {{ total_settled: number, correct: number, accuracy: number | null } | null} stats
+ * @param {{ proxyUnreachable?: boolean, fileProtocol?: boolean }} [opts]
+ */
+function updateJudgeAccuracyFooterFromStats(stats, opts = {}) {
+  const el = document.getElementById("judgeAccuracyFooter");
+  if (!el) return;
+  el.classList.remove("app-footer__line--muted");
+  if (opts.fileProtocol) {
+    el.classList.add("app-footer__line--muted");
+    el.textContent =
+      "Judge accuracy: open this app via node server (http://localhost:3333) to use the Judge API proxy.";
+    return;
+  }
+  if (opts.proxyUnreachable) {
+    el.classList.add("app-footer__line--muted");
+    el.textContent =
+      "Judge accuracy: service unreachable — start uvicorn (judge_service) on port 8000, or set JUDGE_SERVICE_URL for node.";
+    return;
+  }
+  if (!stats) {
+    el.classList.add("app-footer__line--muted");
+    el.textContent = "Judge accuracy: could not load stats.";
+    return;
+  }
+  if (stats.total_settled <= 0) {
+    el.textContent =
+      "Judge accuracy: no settled predictions yet (record results in judge_service to track).";
+    return;
+  }
+  const pct =
+    stats.accuracy != null && Number.isFinite(stats.accuracy)
+      ? `${Math.round(stats.accuracy * 1000) / 10}%`
+      : "—";
+  el.textContent = `Judge accuracy: ${stats.correct}/${stats.total_settled} correct (${pct})`;
+}
+
+async function refreshJudgeAccuracyFooter() {
+  const fileProtocol = typeof location !== "undefined" && location.protocol === "file:";
+  if (fileProtocol) {
+    updateJudgeAccuracyFooterFromStats(null, { fileProtocol: true });
+    return;
+  }
+  let r;
+  try {
+    r = await fetch(`${apiBase()}/api/judge/accuracy`, { headers: { Accept: "application/json" } });
+  } catch {
+    updateJudgeAccuracyFooterFromStats(null, { proxyUnreachable: true });
+    return;
+  }
+  if (r.status === 503) {
+    updateJudgeAccuracyFooterFromStats(null, { proxyUnreachable: true });
+    return;
+  }
+  if (!r.ok) {
+    updateJudgeAccuracyFooterFromStats(null, {});
+    return;
+  }
+  try {
+    const data = await r.json();
+    if (!data || typeof data !== "object") {
+      updateJudgeAccuracyFooterFromStats(null, {});
+      return;
+    }
+    updateJudgeAccuracyFooterFromStats({
+      total_settled: Number(data.total_settled) || 0,
+      correct: Number(data.correct) || 0,
+      accuracy: data.accuracy != null && Number.isFinite(Number(data.accuracy)) ? Number(data.accuracy) : null,
+    });
+  } catch {
+    updateJudgeAccuracyFooterFromStats(null, {});
+  }
+}
+
 function mergeSuggestIntervals(intervals) {
   if (!intervals.length) return [];
   const s = [...intervals].sort((a, b) => a[0] - b[0]);
@@ -1129,59 +1348,61 @@ async function runWarRoom() {
     const debateStr = debateLog
       .map((d) => `[${d.roundLabel || d.side}] ${d.who}: ${d.text}`)
       .join('\n\n');
-    const judgeReply = await callClaude(
-      [{ role: 'user', content: `Match: "${match}"\nTeams: ${teams.teamA} vs ${teams.teamB}\n\nDebate transcript:\n${debateStr}\n\nProvide verdict as JSON only.` }],
-      `You are a neutral cricket prediction judge. Read the debate and return ONLY this JSON (no markdown, no extra text). The "winner" field MUST be exactly "${teams.teamA}" or "${teams.teamB}" (those exact strings).
-{"winner":"${teams.teamA}","confidence":65,"score_range":"170-185","key_player":"Name + 5-word reason","swing_factor":"one critical variable","summary":"one punchy verdict sentence max 18 words"}`
-    );
+
+    const vDiv = document.getElementById('verdictArea');
+    const svc = await postJudgePredict(match, debateStr);
     hideTyping();
 
-    let v;
-    try {
-      v = JSON.parse(judgeReply.replace(/```json|```/g, '').trim());
-    } catch {
-      v = {
-        winner: teams.teamB,
-        confidence: 61,
-        score_range: '168–182',
-        key_player: 'Top-order batter in form',
-        swing_factor: 'Toss & dew',
-        summary: `Close contest — ${teams.teamB} hold the edge on current conditions.`,
-      };
+    if (svc && svc.verdict) {
+      const v = normalizeVerdictPartial(svc.verdict, teams);
+      mountJudgeVerdictCard(vDiv, v, teams, {
+        source: 'service',
+        predictionId: svc.prediction_id,
+      });
+      if (svc.accuracy && typeof svc.accuracy === 'object') {
+        updateJudgeAccuracyFooterFromStats({
+          total_settled: Number(svc.accuracy.total_settled) || 0,
+          correct: Number(svc.accuracy.correct) || 0,
+          accuracy:
+            svc.accuracy.accuracy != null && Number.isFinite(Number(svc.accuracy.accuracy))
+              ? Number(svc.accuracy.accuracy)
+              : null,
+        });
+      } else {
+        void refreshJudgeAccuracyFooter();
+      }
+    } else {
+      showTyping('bull');
+      await sleep(400);
+      const judgeReply = await callClaude(
+        [
+          {
+            role: 'user',
+            content: `Match: "${match}"\nTeams: ${teams.teamA} vs ${teams.teamB}\n\nDebate transcript:\n${debateStr}\n\nRespond with ONLY the JSON object described in your instructions.`,
+          },
+        ],
+        buildBrowserJudgeSystemPrompt(teams, match)
+      );
+      hideTyping();
+      let parsed;
+      try {
+        parsed = JSON.parse(extractJudgeJsonObject(judgeReply));
+      } catch {
+        parsed = null;
+      }
+      const v = normalizeVerdictPartial(
+        parsed ?? {
+          winner: teams.teamB,
+          confidence: 61,
+          score_range: '168–182',
+          key_player: 'Top-order batter in form',
+          swing_factor: 'Toss & dew',
+          summary: `Close contest — ${teams.teamB} hold the edge on current conditions.`,
+        },
+        teams
+      );
+      mountJudgeVerdictCard(vDiv, v, teams, { source: 'browser' });
     }
-
-    const winName = String(v.winner || teams.teamB);
-    const winNorm = winName.trim().toLowerCase();
-    const pickedA =
-      winNorm === String(teams.teamA).trim().toLowerCase() ||
-      winNorm === String(teams.codeA).trim().toLowerCase();
-    const winnerLogoUrl = resolveTeamLogoUrl(
-      pickedA ? teams.codeA : teams.codeB,
-      pickedA ? teams.teamA : teams.teamB
-    );
-    const verdictLogoHtml = winnerLogoUrl
-      ? `<img class="verdict-winner-logo" src="${escapeHtml(winnerLogoUrl)}" width="44" height="44" alt="" decoding="async" loading="lazy" />`
-      : "";
-    const confRaw = Number(v.confidence);
-    const conf = Number.isFinite(confRaw) ? Math.min(100, Math.max(0, confRaw)) : 55;
-    const pctForTeamA = pickedA ? conf : 100 - conf;
-    const winProb = renderVerdictWinProbabilityBlock(teams, pctForTeamA);
-    const vDiv = document.getElementById('verdictArea');
-    vDiv.innerHTML = `
-    <div class="verdict-card">
-      <div class="verdict-kicker">Judge verdict</div>
-      <div class="verdict-winner-row">${verdictLogoHtml}<div class="verdict-winner">${escapeHtml(winName.toUpperCase())} WINS</div></div>
-      <div class="verdict-summary">${escapeHtml(v.summary || '')}</div>
-      ${winProb.html}
-      <div class="stat-grid">
-        <div class="stat-cell"><div class="stat-label">PROJECTED SCORE</div><div class="stat-val">${escapeHtml(String(v.score_range || '—'))}</div></div>
-        <div class="stat-cell"><div class="stat-label">KEY PLAYER</div><div class="stat-val">${escapeHtml(String(v.key_player || '—'))}</div></div>
-        <div class="stat-cell"><div class="stat-label">SWING FACTOR</div><div class="stat-val">${escapeHtml(String(v.swing_factor || '—'))}</div></div>
-        <div class="stat-cell"><div class="stat-label">CONFIDENCE</div><div class="stat-val">${escapeHtml(String(v.confidence ?? '—'))}%</div></div>
-      </div>
-    </div>`;
-
-    scheduleVerdictWinProbabilityAnimation(vDiv, winProb.pctA, winProb.pctB);
 
     scrollDebateEnd();
     setPhase(null);
@@ -1436,3 +1657,4 @@ renderArch();
 renderHowto();
 initMatchAutocomplete();
 initInfoSheet();
+void refreshJudgeAccuracyFooter();

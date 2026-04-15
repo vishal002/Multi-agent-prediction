@@ -24,6 +24,13 @@
  *   python -m uvicorn ingestion_service.app:app --host 127.0.0.1 --port 3334
  * Override upstream URL: INGESTION_SERVICE_URL=http://127.0.0.1:3334
  *
+ * Judge service (FastAPI predictions + accuracy): proxied for same-origin browser calls.
+ *   pip install -r requirements-judge.txt
+ *   python -m uvicorn judge_service.app:app --host 127.0.0.1 --port 8000
+ * Override upstream URL: JUDGE_SERVICE_URL=http://127.0.0.1:8000
+ *   POST /api/judge/predict → POST {JUDGE_SERVICE_URL}/predict
+ *   GET /api/judge/accuracy → GET {JUDGE_SERVICE_URL}/accuracy
+ *
  * Match autocomplete: GET /api/match-suggest?q=&limit=10 (reads match_suggestions.json).
  * Completed fixtures: optional { completed: true, result: { winner, summary } } — winner is a team code (e.g. CSK).
  * GET /api/match-by-label?label=… returns the full row for an exact label (404 if unknown).
@@ -167,6 +174,8 @@ const INGESTION_SERVICE_URL = (process.env.INGESTION_SERVICE_URL || "http://127.
   ""
 );
 
+const JUDGE_SERVICE_URL = (process.env.JUDGE_SERVICE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
+
 function resolveProvider() {
   if (LLM_PROVIDER === "groq") return GROQ_KEY ? "groq" : null;
   if (LLM_PROVIDER === "anthropic") return ANTHROPIC_KEY ? "anthropic" : null;
@@ -301,7 +310,9 @@ const server = http.createServer(async (req, res) => {
     (url.pathname === "/api/messages" ||
       url.pathname === "/api/match-suggest" ||
       url.pathname === "/api/match-by-label" ||
-      url.pathname === "/api/match-context")
+      url.pathname === "/api/match-context" ||
+      url.pathname === "/api/judge/predict" ||
+      url.pathname === "/api/judge/accuracy")
   ) {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
@@ -370,6 +381,84 @@ const server = http.createServer(async (req, res) => {
           error: "ingestion_unreachable",
           message: e instanceof Error ? e.message : "Ingestion service unreachable",
           hint: "pip install -r requirements-ingestion.txt && python -m uvicorn ingestion_service.app:app --host 127.0.0.1 --port 3334",
+        })
+      );
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/judge/predict") {
+    const target = `${JUDGE_SERVICE_URL}/predict`;
+    let body;
+    try {
+      body = await readBody(req);
+    } catch {
+      res.writeHead(400, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(JSON.stringify({ error: "invalid_body" }));
+      return;
+    }
+    const ctrl = AbortSignal.timeout(120_000);
+    try {
+      const r = await fetch(target, {
+        method: "POST",
+        signal: ctrl,
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: body && body.trim() ? body : "{}",
+      });
+      const text = await r.text();
+      res.writeHead(r.status, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
+      });
+      res.end(text);
+    } catch (e) {
+      res.writeHead(503, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
+      });
+      res.end(
+        JSON.stringify({
+          error: "judge_service_unreachable",
+          message: e instanceof Error ? e.message : "Judge service unreachable",
+          hint: "pip install -r requirements-judge.txt && python -m uvicorn judge_service.app:app --host 127.0.0.1 --port 8000",
+        })
+      );
+    }
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/judge/accuracy") {
+    const target = `${JUDGE_SERVICE_URL}/accuracy`;
+    const ctrl = AbortSignal.timeout(15_000);
+    try {
+      const r = await fetch(target, {
+        method: "GET",
+        signal: ctrl,
+        headers: { Accept: "application/json" },
+      });
+      const text = await r.text();
+      res.writeHead(r.status, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
+      });
+      res.end(text);
+    } catch (e) {
+      res.writeHead(503, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
+      });
+      res.end(
+        JSON.stringify({
+          error: "judge_service_unreachable",
+          message: e instanceof Error ? e.message : "Judge service unreachable",
+          hint: "pip install -r requirements-judge.txt && python -m uvicorn judge_service.app:app --host 127.0.0.1 --port 8000",
         })
       );
     }
