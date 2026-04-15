@@ -1,7 +1,7 @@
 /* ─── Design tokens (Google dark / scorecard-inspired) ───────────── */
 :root {
   --gap: 12px;
-  --font-sans: Roboto, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", "Helvetica Neue", Arial, "Noto Sans", sans-serif;
 
   --color-text-primary: #e8eaed;
@@ -125,6 +125,10 @@ body {
   padding-bottom: 0.65rem;
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
+  background: linear-gradient(180deg, rgba(138, 180, 248, 0.055) 0%, transparent 100%);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  margin: -0.65rem -0.75rem 0;
+  padding: 0.75rem 0.75rem 0.65rem;
 }
 
 .app-header__main {
@@ -227,10 +231,12 @@ body {
   gap: 0.5rem;
   padding: 0.5rem 0.65rem;
   margin: 0.6rem 0 0.5rem;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
+  background: rgba(48, 49, 52, 0.9);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-sm), 0 0 0 1px rgba(138, 180, 248, 0.04) inset;
   flex-shrink: 0;
 }
 
@@ -1072,27 +1078,25 @@ body {
 .verdict-card {
   margin-top: 0;
   margin-bottom: 0;
-  background: linear-gradient(
-    145deg,
-    var(--color-verdict-blue-mid) 0%,
-    var(--color-verdict-blue-deep) 48%,
-    #152a6e 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(31, 60, 145, 0.45);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: var(--radius-md);
   padding: 0.85rem 1rem;
   animation: fadeUp 0.55s var(--ease-out);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45),
+              0 1px 0 rgba(255, 255, 255, 0.1) inset,
+              0 0 0 1px rgba(138, 180, 248, 0.1) inset;
 }
 
 .verdict-card--final {
-  background: linear-gradient(
-    145deg,
-    rgba(52, 168, 83, 0.28) 0%,
-    var(--color-verdict-blue-deep) 52%,
-    #152a6e 100%
-  );
-  border-color: rgba(129, 201, 149, 0.35);
+  background: rgba(30, 100, 60, 0.35);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-color: rgba(129, 201, 149, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45),
+              0 1px 0 rgba(129, 201, 149, 0.15) inset;
 }
 
 .verdict-card--final .verdict-kicker {
@@ -1872,5 +1876,214 @@ body {
 @media (max-width: 380px) {
   .stat-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ─── Agents col: toggle button + collapse ────────────────────────── */
+.agents-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 0.35rem;
+}
+
+.agents-col-head .dash-col__label {
+  margin: 0;
+}
+
+.agents-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-muted);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.2s var(--ease-out);
+}
+
+.agents-toggle:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+}
+
+.agents-toggle svg {
+  transition: transform 0.2s var(--ease-out);
+}
+
+.agents-toggle[aria-expanded="false"] svg {
+  transform: rotate(180deg);
+}
+
+@media (max-width: 760px) {
+  .agents-toggle {
+    display: flex;
+  }
+
+  .dash-col--agents .surface--agents {
+    overflow: hidden;
+    transition: max-height 0.3s var(--ease-out), opacity 0.2s ease, padding 0.2s ease;
+  }
+
+  .dash-col--agents.agents-collapsed .surface--agents {
+    max-height: 0 !important;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-color: transparent;
+  }
+
+  .dash-col--agents.agents-collapsed .pipeline {
+    display: none;
+  }
+}
+
+/* ─── Phase stepper ──────────────────────────────────────────────── */
+.stage-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.phase-stepper {
+  display: none;
+  align-items: center;
+  gap: 0.2rem;
+  flex-shrink: 0;
+}
+
+.phase-stepper.visible {
+  display: flex;
+}
+
+.phase-step {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  padding: 0.18rem 0.4rem;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.phase-step.active {
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  border-color: rgba(138, 180, 248, 0.25);
+}
+
+.phase-step.done {
+  color: var(--color-success);
+}
+
+.phase-stepper__sep {
+  font-size: 0.6rem;
+  color: var(--color-text-tertiary);
+  opacity: 0.5;
+  user-select: none;
+}
+
+/* ─── Skeleton shimmer for agents ────────────────────────────────── */
+@keyframes shimmer {
+  0% { background-position: -300% 0; }
+  100% { background-position: 300% 0; }
+}
+
+.agent-row--skeleton .agent-name,
+.agent-row--skeleton .agent-role {
+  border-radius: 4px;
+  color: transparent;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-muted) 25%,
+    var(--color-bg-subtle) 50%,
+    var(--color-bg-muted) 75%
+  );
+  background-size: 300% 100%;
+  animation: shimmer 1.6s ease infinite;
+  pointer-events: none;
+  user-select: none;
+}
+
+.agent-row--skeleton .agent-name {
+  width: 80%;
+  display: block;
+}
+
+.agent-row--skeleton .agent-role {
+  width: 60%;
+  display: block;
+  margin-top: 0.25rem;
+}
+
+.agent-row--skeleton .agent-icon {
+  background: var(--color-bg-muted);
+  color: transparent;
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-muted) 25%,
+    var(--color-bg-subtle) 50%,
+    var(--color-bg-muted) 75%
+  );
+  background-size: 300% 100%;
+  animation: shimmer 1.6s ease infinite;
+}
+
+/* ─── Bubble avatars ─────────────────────────────────────────────── */
+.bubble-avatar {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+}
+
+.bubble-avatar--bull {
+  background: rgba(129, 201, 149, 0.15);
+  border-color: var(--color-success-border);
+}
+
+.bubble-avatar--bear {
+  background: rgba(242, 139, 130, 0.15);
+  border-color: var(--color-danger-border);
+}
+
+/* ─── Button: Run war room — slight glow on hover ────────────────── */
+.btn--primary {
+  letter-spacing: 0.01em;
+}
+
+.btn--primary:hover {
+  filter: brightness(1.07);
+  box-shadow: 0 0 14px rgba(138, 180, 248, 0.35), var(--shadow-md);
+}
+
+/* ─── Responsive refinements (additions) ─────────────────────────── */
+@media (max-width: 760px) {
+  .stage-head-row {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .phase-stepper {
+    gap: 0.15rem;
+  }
+  .phase-step {
+    font-size: 0.55rem;
+    padding: 0.14rem 0.3rem;
   }
 }

@@ -194,7 +194,7 @@ const HOWTO = [
 
 function renderAgents() {
   document.getElementById('agentsList').innerHTML = AGENTS.map(a => `
-    <div class="agent-row agent-row--compact" id="row-${a.id}">
+    <div class="agent-row agent-row--compact agent-row--skeleton" id="row-${a.id}">
       <div class="agent-icon" id="icon-${a.id}">${a.sym}</div>
       <div class="agent-meta">
         <div class="agent-name">${a.name}</div>
@@ -204,6 +204,11 @@ function renderAgents() {
       <div class="status-dot" id="dot-${a.id}"></div>
     </div>
   `).join('');
+}
+
+function removeAgentSkeleton(agentId) {
+  const row = document.getElementById('row-' + agentId);
+  if (row) row.classList.remove('agent-row--skeleton');
 }
 
 function renderArch() {
@@ -1014,15 +1019,44 @@ async function callClaude(messages, system, maxTokens = 1000) {
   return (d.content || []).map((b) => (b && b.text != null ? b.text : '')).join('');
 }
 
+function setPhaseStep(step) {
+  const stepper = document.getElementById('phaseStepper');
+  const steps = { intel: 'stepIntel', debate: 'stepDebate', judge: 'stepJudge' };
+  const order = ['intel', 'debate', 'judge'];
+  if (!stepper) return;
+  if (!step) {
+    stepper.classList.remove('visible');
+    Object.values(steps).forEach(id => {
+      const el = document.getElementById(id);
+      if (el) { el.classList.remove('active', 'done'); }
+    });
+    return;
+  }
+  stepper.classList.add('visible');
+  const activeIdx = order.indexOf(step);
+  order.forEach((s, i) => {
+    const el = document.getElementById(steps[s]);
+    if (!el) return;
+    el.classList.remove('active', 'done');
+    if (i < activeIdx) el.classList.add('done');
+    else if (i === activeIdx) el.classList.add('active');
+  });
+}
+
 function setPhase(text, spinning = false) {
   const b = document.getElementById('phaseBanner');
   b.classList.remove('phase-banner--error');
   if (!text) {
     b.style.display = 'none';
+    setPhaseStep(null);
     return;
   }
   b.style.display = 'flex';
   b.innerHTML = (spinning ? '<div class="phase-spinner"></div>' : '') + `<span>${escapeHtml(text)}</span>`;
+  const tl = text.toLowerCase();
+  if (tl.includes('intel') || tl.includes('gathering')) setPhaseStep('intel');
+  else if (tl.includes('debate')) setPhaseStep('debate');
+  else if (tl.includes('judge') || tl.includes('deliberat')) setPhaseStep('judge');
 }
 
 function showApiError(msg) {
@@ -1053,7 +1087,9 @@ function addBubble(side, who, text, meta = {}) {
     : teamCode
       ? `<span class="team-chip">${escapeHtml(teamCode)}</span>`
       : "";
-  div.innerHTML = `${kicker}<div class="bubble-head">${mark}<div class="bubble-who">${escapeHtml(who)}</div></div><div class="bubble-text">${escapeHtml(text)}</div>`;
+  const avatarEmoji = side === 'bull' ? '🐂' : '🐻';
+  const avatar = `<div class="bubble-avatar bubble-avatar--${side}" aria-hidden="true">${avatarEmoji}</div>`;
+  div.innerHTML = `${kicker}<div class="bubble-head">${avatar}${mark}<div class="bubble-who">${escapeHtml(who)}</div></div><div class="bubble-text">${escapeHtml(text)}</div>`;
   area.appendChild(div);
   scrollDebateEnd();
 }
@@ -1296,6 +1332,7 @@ async function runWarRoom() {
       const winDisplay = resolveWinnerDisplay(teams, winCode);
 
       AGENTS.forEach((a) => {
+        removeAgentSkeleton(a.id);
         document.getElementById("icon-" + a.id).classList.remove("on");
         document.getElementById("dot-" + a.id).classList.remove("live");
         const ins = document.getElementById("insight-" + a.id);
@@ -1372,6 +1409,7 @@ async function runWarRoom() {
 
   for (const agent of AGENTS) {
     await sleep(550);
+    removeAgentSkeleton(agent.id);
     document.getElementById('icon-'+agent.id).classList.add('on');
     document.getElementById('dot-'+agent.id).classList.add('live');
 
@@ -1574,6 +1612,8 @@ function resetWarRoom() {
   AGENTS.forEach(a => {
     document.getElementById('icon-'+a.id).classList.remove('on');
     document.getElementById('dot-'+a.id).classList.remove('live');
+    const row = document.getElementById('row-'+a.id);
+    if (row) row.classList.add('agent-row--skeleton');
     const ins = document.getElementById('insight-'+a.id);
     ins.textContent=''; ins.classList.remove('show');
   });
@@ -1794,9 +1834,35 @@ function initMatchAutocomplete() {
   updateClearBtn();
 }
 
+function initAgentsToggle() {
+  const btn = document.getElementById('agentsToggle');
+  const col = btn?.closest('.dash-col--agents');
+  if (!btn || !col) return;
+
+  function setExpanded(open) {
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    col.classList.toggle('agents-collapsed', !open);
+  }
+
+  btn.addEventListener('click', () => {
+    const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+    setExpanded(!isExpanded);
+  });
+
+  const mq = window.matchMedia('(max-width: 760px)');
+  function onMq(e) {
+    if (!e.matches) {
+      setExpanded(true);
+      col.classList.remove('agents-collapsed');
+    }
+  }
+  mq.addEventListener('change', onMq);
+}
+
 renderAgents();
 renderArch();
 renderHowto();
 initMatchAutocomplete();
 initInfoSheet();
+initAgentsToggle();
 void refreshJudgeAccuracyFooter();

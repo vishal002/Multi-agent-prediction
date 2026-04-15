@@ -7,7 +7,7 @@
   <title>AI Cricket War Room</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="ai_cricket_war_room.css" />
 </head>
 <body>
@@ -54,7 +54,12 @@
 
     <main class="dashboard" id="main-content">
       <aside class="dash-col dash-col--agents" aria-labelledby="agents-heading">
-        <h2 class="dash-col__label" id="agents-heading">Intel agents</h2>
+        <div class="agents-col-head">
+          <h2 class="dash-col__label" id="agents-heading">Intel agents</h2>
+          <button type="button" class="agents-toggle" id="agentsToggle" aria-expanded="true" aria-controls="agentsCard" aria-label="Toggle agents panel">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 15l-6-6-6 6"/></svg>
+          </button>
+        </div>
         <div class="surface surface--agents" id="agentsCard">
           <div id="agentsList"></div>
         </div>
@@ -71,7 +76,16 @@
 
       <section class="dash-col dash-col--stage" aria-labelledby="stage-heading">
         <div class="dash-col__head">
-          <h2 class="dash-col__label" id="stage-heading">Debate &amp; verdict</h2>
+          <div class="stage-head-row">
+            <h2 class="dash-col__label" id="stage-heading">Debate &amp; verdict</h2>
+            <div class="phase-stepper" id="phaseStepper" aria-hidden="true">
+              <span class="phase-step" id="stepIntel">Intel</span>
+              <span class="phase-stepper__sep">›</span>
+              <span class="phase-step" id="stepDebate">Debate</span>
+              <span class="phase-stepper__sep">›</span>
+              <span class="phase-step" id="stepJudge">Judge</span>
+            </div>
+          </div>
         </div>
         <div class="surface surface--stage" id="debateCard">
           <div id="phaseBanner" class="phase-banner" style="display:none"></div>
