@@ -452,6 +452,48 @@ function escapeHtml(s) {
   return d.innerHTML;
 }
 
+/**
+ * Split win-probability row (team A left / coral, team B right / blue). Percentages always sum to 100.
+ * @param {{ teamA: string, teamB: string }} teams
+ * @param {number} pctForTeamA implied win chance for team A (0–100)
+ * @returns {{ html: string, pctA: number, pctB: number }}
+ */
+function renderVerdictWinProbabilityBlock(teams, pctForTeamA) {
+  const pctA = Math.min(100, Math.max(0, Math.round(Number(pctForTeamA) || 0)));
+  const pctB = 100 - pctA;
+  const html = `
+      <div class="verdict-win-prob" aria-label="Win probability: ${escapeHtml(teams.teamA)} ${pctA} percent, ${escapeHtml(teams.teamB)} ${pctB} percent">
+        <div class="verdict-win-prob__divider" aria-hidden="true"></div>
+        <div class="verdict-win-prob__title">Win probability</div>
+        <div class="verdict-win-prob__teams">
+          <div class="verdict-win-prob__side verdict-win-prob__side--left">
+            <div class="verdict-win-prob__name">${escapeHtml(teams.teamA)}</div>
+            <div class="verdict-win-prob__pct verdict-win-prob__pct--a">${pctA}%</div>
+          </div>
+          <div class="verdict-win-prob__side verdict-win-prob__side--right">
+            <div class="verdict-win-prob__name">${escapeHtml(teams.teamB)}</div>
+            <div class="verdict-win-prob__pct verdict-win-prob__pct--b">${pctB}%</div>
+          </div>
+        </div>
+        <div class="verdict-win-prob__bar">
+          <div class="verdict-win-prob__seg verdict-win-prob__seg--a" style="width:0%"></div>
+          <div class="verdict-win-prob__seg verdict-win-prob__seg--b" style="width:0%"></div>
+        </div>
+      </div>`;
+  return { html, pctA, pctB };
+}
+
+function scheduleVerdictWinProbabilityAnimation(verdictRoot, pctA, pctB) {
+  setTimeout(() => {
+    const bar = verdictRoot?.querySelector?.('.verdict-win-prob__bar');
+    if (!bar) return;
+    const segA = bar.querySelector('.verdict-win-prob__seg--a');
+    const segB = bar.querySelector('.verdict-win-prob__seg--b');
+    if (segA) segA.style.width = `${pctA}%`;
+    if (segB) segB.style.width = `${pctB}%`;
+  }, 200);
+}
+
 function mergeSuggestIntervals(intervals) {
   if (!intervals.length) return [];
   const s = [...intervals].sort((a, b) => a[0] - b[0]);
@@ -733,12 +775,16 @@ async function runWarRoom() {
       const verdictLogoHtml = winnerLogoUrl
         ? `<img class="verdict-winner-logo" src="${escapeHtml(winnerLogoUrl)}" width="44" height="44" alt="" decoding="async" loading="lazy" />`
         : "";
-      document.getElementById('verdictArea').innerHTML = `
+      const winProbFinal = renderVerdictWinProbabilityBlock(teams, pickedA ? 100 : 0);
+      const verdictEl = document.getElementById('verdictArea');
+      verdictEl.innerHTML = `
     <div class="verdict-card verdict-card--final">
       <div class="verdict-kicker">Final result</div>
       <div class="verdict-winner-row">${verdictLogoHtml}<div class="verdict-winner">${escapeHtml(winDisplay.toUpperCase())} WINS</div></div>
       <div class="verdict-summary">${escapeHtml(completedRow.result.summary || '')}</div>
+      ${winProbFinal.html}
     </div>`;
+      scheduleVerdictWinProbabilityAnimation(verdictEl, winProbFinal.pctA, winProbFinal.pctB);
 
       scrollDebateEnd();
     } catch (e) {
@@ -906,14 +952,17 @@ async function runWarRoom() {
     const verdictLogoHtml = winnerLogoUrl
       ? `<img class="verdict-winner-logo" src="${escapeHtml(winnerLogoUrl)}" width="44" height="44" alt="" decoding="async" loading="lazy" />`
       : "";
+    const confRaw = Number(v.confidence);
+    const conf = Number.isFinite(confRaw) ? Math.min(100, Math.max(0, confRaw)) : 55;
+    const pctForTeamA = pickedA ? conf : 100 - conf;
+    const winProb = renderVerdictWinProbabilityBlock(teams, pctForTeamA);
     const vDiv = document.getElementById('verdictArea');
     vDiv.innerHTML = `
     <div class="verdict-card">
       <div class="verdict-kicker">Judge verdict</div>
       <div class="verdict-winner-row">${verdictLogoHtml}<div class="verdict-winner">${escapeHtml(winName.toUpperCase())} WINS</div></div>
       <div class="verdict-summary">${escapeHtml(v.summary || '')}</div>
-      <div class="verdict-conf-label">Confidence: ${escapeHtml(String(v.confidence ?? ''))}%</div>
-      <div class="conf-track"><div class="conf-fill" id="confFill"></div></div>
+      ${winProb.html}
       <div class="stat-grid">
         <div class="stat-cell"><div class="stat-label">PROJECTED SCORE</div><div class="stat-val">${escapeHtml(String(v.score_range || '—'))}</div></div>
         <div class="stat-cell"><div class="stat-label">KEY PLAYER</div><div class="stat-val">${escapeHtml(String(v.key_player || '—'))}</div></div>
@@ -922,10 +971,7 @@ async function runWarRoom() {
       </div>
     </div>`;
 
-    setTimeout(() => {
-      const f = document.getElementById('confFill');
-      if (f) f.style.width = v.confidence + '%';
-    }, 200);
+    scheduleVerdictWinProbabilityAnimation(vDiv, winProb.pctA, winProb.pctB);
 
     scrollDebateEnd();
     setPhase(null);

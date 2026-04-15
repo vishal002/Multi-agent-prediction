@@ -18,6 +18,12 @@
  *
  * Open: http://localhost:3333/
  *
+ * Match context (grounding): GET /api/match-context?label=&teams=&venue=&date= proxies to the Python
+ * ingestion service (ESPNcricinfo + Cricbuzz RSS). Start ingestion:
+ *   pip install -r requirements-ingestion.txt
+ *   python -m uvicorn ingestion_service.app:app --host 127.0.0.1 --port 3334
+ * Override upstream URL: INGESTION_SERVICE_URL=http://127.0.0.1:3334
+ *
  * Match autocomplete: GET /api/match-suggest?q=&limit=10 (reads match_suggestions.json).
  * Completed fixtures: optional { completed: true, result: { winner, summary } } — winner is a team code (e.g. CSK).
  * GET /api/match-by-label?label=… returns the full row for an exact label (404 if unknown).
@@ -156,6 +162,11 @@ const LLM_PROVIDER = process.env.LLM_PROVIDER?.toLowerCase();
 
 const GROQ_MODEL = process.env.GROQ_MODEL?.trim() || "llama-3.3-70b-versatile";
 
+const INGESTION_SERVICE_URL = (process.env.INGESTION_SERVICE_URL || "http://127.0.0.1:3334").replace(
+  /\/$/,
+  ""
+);
+
 function resolveProvider() {
   if (LLM_PROVIDER === "groq") return GROQ_KEY ? "groq" : null;
   if (LLM_PROVIDER === "anthropic") return ANTHROPIC_KEY ? "anthropic" : null;
@@ -289,7 +300,8 @@ const server = http.createServer(async (req, res) => {
     req.method === "OPTIONS" &&
     (url.pathname === "/api/messages" ||
       url.pathname === "/api/match-suggest" ||
-      url.pathname === "/api/match-by-label")
+      url.pathname === "/api/match-by-label" ||
+      url.pathname === "/api/match-context")
   ) {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
@@ -328,6 +340,39 @@ const server = http.createServer(async (req, res) => {
       "Cache-Control": "public, max-age=60",
     });
     res.end(JSON.stringify({ suggestions }));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/match-context") {
+    const target = `${INGESTION_SERVICE_URL}/api/match-context${url.search}`;
+    const ctrl = AbortSignal.timeout(25_000);
+    try {
+      const r = await fetch(target, {
+        method: "GET",
+        signal: ctrl,
+        headers: { Accept: "application/json" },
+      });
+      const text = await r.text();
+      res.writeHead(r.status, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
+      });
+      res.end(text);
+    } catch (e) {
+      res.writeHead(503, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
+      });
+      res.end(
+        JSON.stringify({
+          error: "ingestion_unreachable",
+          message: e instanceof Error ? e.message : "Ingestion service unreachable",
+          hint: "pip install -r requirements-ingestion.txt && python -m uvicorn ingestion_service.app:app --host 127.0.0.1 --port 3334",
+        })
+      );
+    }
     return;
   }
 

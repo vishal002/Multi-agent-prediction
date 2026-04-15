@@ -301,11 +301,11 @@ body {
   display: flex;
   flex-direction: column;
   margin-bottom: 0.5rem;
-  background: var(--color-bg-muted);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
   min-height: 0;
 }
 
@@ -315,7 +315,8 @@ body {
   border: none;
   border-radius: 0;
   box-shadow: none;
-  border-bottom: 1px solid var(--color-border);
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .stage-fixture-verdict .verdict-slot:not(:empty) {
@@ -402,6 +403,25 @@ body {
   letter-spacing: 0.04em;
   color: var(--color-text-primary);
   line-height: 1.2;
+}
+
+/* Bright gradient pills: light page text fails WCAG on yellow / pink / etc. */
+.match-bar__pill--yellow .match-bar__code,
+.match-bar__pill--blue .match-bar__code,
+.match-bar__pill--blue2 .match-bar__code,
+.match-bar__pill--red .match-bar__code,
+.match-bar__pill--red2 .match-bar__code,
+.match-bar__pill--purple .match-bar__code,
+.match-bar__pill--pink .match-bar__code,
+.match-bar__pill--orange .match-bar__code,
+.match-bar__pill--teal .match-bar__code,
+.match-bar__pill--green .match-bar__code,
+.match-bar__pill--green2 .match-bar__code,
+.match-bar__pill--gold .match-bar__code,
+.match-bar__pill--navy .match-bar__code,
+.match-bar__pill--black .match-bar__code {
+  color: #111827;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .match-bar__pill--yellow {
@@ -1095,6 +1115,99 @@ body {
   color: rgba(255, 255, 255, 0.88);
   margin-top: 0.25rem;
   line-height: 1.4;
+}
+
+/* Win probability strip (dual team + split bar) */
+.verdict-win-prob {
+  margin-top: 0.65rem;
+  padding: 0.55rem 0.45rem 0.45rem;
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.verdict-win-prob__divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.14);
+  margin: 0 0 0.45rem;
+}
+
+.verdict-win-prob__title {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.92);
+  margin-bottom: 0.45rem;
+}
+
+.verdict-win-prob__teams {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.verdict-win-prob__side {
+  min-width: 0;
+  flex: 1;
+}
+
+.verdict-win-prob__side--right {
+  text-align: right;
+}
+
+.verdict-win-prob__name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #fff;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.verdict-win-prob__pct {
+  font-size: clamp(0.95rem, 0.8rem + 0.8vw, 1.15rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-top: 0.15rem;
+  line-height: 1.1;
+}
+
+.verdict-win-prob__pct--a {
+  color: #f6aea9;
+}
+
+.verdict-win-prob__pct--b {
+  color: #9ec9ff;
+}
+
+.verdict-win-prob__bar {
+  display: flex;
+  height: 7px;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.verdict-win-prob__seg {
+  height: 100%;
+  width: 0;
+  transition: width 1.15s var(--ease-out);
+}
+
+.verdict-win-prob__seg--a {
+  background: linear-gradient(90deg, #e89892, #f6aea9);
+  border-radius: var(--radius-full) 0 0 var(--radius-full);
+  flex-shrink: 0;
+}
+
+.verdict-win-prob__seg--b {
+  background: linear-gradient(90deg, #7eb0eb, #9ec9ff);
+  border-radius: 0 var(--radius-full) var(--radius-full) 0;
+  flex-shrink: 0;
 }
 
 .verdict-conf-label {
