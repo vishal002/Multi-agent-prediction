@@ -71,6 +71,7 @@ Restart **`node server.mjs`** after changing the JSON file so the server reloads
 | `server.mjs` | Static host + LLM proxy + match APIs |
 | `match_suggestions.json` | Fixture catalog |
 | `judge_service/` | Separate Python FastAPI service (predictions / accuracy) — optional to this static PoC |
+| `openclaw/README.md` | Optional: how to re-home ingestion / intel / debate / judge as OpenClaw tool nodes while keeping this UI as a thin client |
 
 ## License / assets
 
