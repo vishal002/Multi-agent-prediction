@@ -45,10 +45,98 @@
           <div class="g-search__footer"><span class="g-search__kbd">↑</span><span class="g-search__kbd">↓</span> navigate · <span class="g-search__kbd">Enter</span> select · <span class="g-search__kbd">Esc</span> close</div>
         </div>
       </div>
+      <!-- ── Live score quick-paste ─────────────────────────────────────── -->
+      <div class="live-score-bar" id="liveScoreBar">
+        <label class="live-score-bar__label" for="liveScoreInput">
+          <span class="live-dot" aria-hidden="true"></span>
+          Live score
+        </label>
+        <input class="live-score-bar__input" id="liveScoreInput" type="text" autocomplete="off" spellcheck="false"
+          placeholder="Paste current score — e.g. LSG 109/2 (11.1 ov), chasing 255, RRR 16.5 · gives accurate verdict" />
+        <button type="button" class="live-score-bar__clear" id="liveScoreClear" aria-label="Clear live score" hidden>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
       <div class="command-bar__actions" id="ctaRow">
         <button type="button" class="btn btn--primary" id="runBtn" onclick="runWarRoom()">Run war room</button>
         <button type="button" class="btn btn--ghost" id="resetBtn" onclick="resetWarRoom()" style="display:none">Reset</button>
         <span class="status-pill" id="runningLabel" style="display:none" aria-live="polite"></span>
+      </div>
+    </section>
+
+    <!-- ── Live match over-by-over prediction panel ──────────────────── -->
+    <section class="live-panel" id="livePanel" aria-label="Live match — over-by-over prediction">
+      <div class="live-panel__head">
+        <div class="live-panel__title-row">
+          <span class="live-dot" aria-hidden="true"></span>
+          <span class="live-panel__title">Live match · Current score</span>
+        </div>
+        <button type="button" class="text-btn live-panel__toggle" id="livePanelToggle" aria-expanded="false" aria-controls="livePanelBody">
+          Expand
+        </button>
+      </div>
+      <p class="live-panel__hint">Fill in the current score before running the war room — it becomes <strong>ground truth</strong> for the debate &amp; verdict.</p>
+
+      <div class="live-panel__body" id="livePanelBody" hidden>
+        <div class="live-form">
+          <div class="live-form__row">
+            <div class="live-form__field">
+              <label class="live-form__label" for="lfBatTeam">Batting team</label>
+              <input class="live-form__input" id="lfBatTeam" type="text" placeholder="e.g. PBKS" autocomplete="off" />
+            </div>
+            <div class="live-form__field">
+              <label class="live-form__label" for="lfBowlTeam">Bowling team</label>
+              <input class="live-form__input" id="lfBowlTeam" type="text" placeholder="e.g. LSG" autocomplete="off" />
+            </div>
+            <div class="live-form__field live-form__field--sm">
+              <label class="live-form__label" for="lfFormat">Format</label>
+              <select class="live-form__input" id="lfFormat">
+                <option value="T20">T20</option>
+                <option value="ODI">ODI</option>
+                <option value="Test">Test</option>
+              </select>
+            </div>
+            <div class="live-form__field live-form__field--sm">
+              <label class="live-form__label" for="lfInnings">Innings</label>
+              <select class="live-form__input" id="lfInnings">
+                <option value="1">1st innings</option>
+                <option value="2">2nd innings</option>
+              </select>
+            </div>
+          </div>
+          <div class="live-form__row">
+            <div class="live-form__field live-form__field--sm">
+              <label class="live-form__label" for="lfRuns">Current runs</label>
+              <input class="live-form__input" id="lfRuns" type="number" min="0" placeholder="e.g. 82" />
+            </div>
+            <div class="live-form__field live-form__field--sm">
+              <label class="live-form__label" for="lfWickets">Wickets lost</label>
+              <input class="live-form__input" id="lfWickets" type="number" min="0" max="9" placeholder="e.g. 2" />
+            </div>
+            <div class="live-form__field live-form__field--sm">
+              <label class="live-form__label" for="lfOvers">Overs completed</label>
+              <input class="live-form__input" id="lfOvers" type="number" min="0" step="0.1" placeholder="e.g. 9.3" />
+            </div>
+            <div class="live-form__field live-form__field--sm" id="lfTargetWrap">
+              <label class="live-form__label" for="lfTarget">Target (2nd inn.)</label>
+              <input class="live-form__input" id="lfTarget" type="number" min="0" placeholder="e.g. 175" />
+            </div>
+            <div class="live-form__field live-form__field--sm">
+              <label class="live-form__label" for="lfVenue">Venue (optional)</label>
+              <input class="live-form__input" id="lfVenue" type="text" placeholder="e.g. IS Bindra" autocomplete="off" />
+            </div>
+            <div class="live-form__field">
+              <label class="live-form__label" for="lfNotes">Situation notes (optional)</label>
+              <input class="live-form__input" id="lfNotes" type="text" placeholder="e.g. Batters set, last 5 power-hitting overs" autocomplete="off" />
+            </div>
+          </div>
+          <div class="live-form__actions">
+            <button type="button" class="btn btn--primary" id="overPredictBtn" onclick="runOverPrediction()">Predict remaining overs</button>
+            <span class="status-pill" id="overPredictLabel" style="display:none" aria-live="polite"></span>
+          </div>
+        </div>
+
+        <div id="overPredictResult" class="over-predict-result" hidden></div>
       </div>
     </section>
 

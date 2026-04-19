@@ -610,9 +610,16 @@ function normalizeVerdictPartial(raw, teams) {
  * Browser-side judge prompt — same field contract as `judge_service.judge.JUDGE_SYSTEM_PROMPT` (winner constrained to displayed teams).
  * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
  * @param {string} match
+ * @param {{ text: string } | null} [liveState]
  */
-function buildBrowserJudgeSystemPrompt(teams, match) {
-  return `You are the Judge for an AI cricket war room. Read the ENTIRE debate transcript and output a single JSON object ONLY — no markdown fences, no commentary before or after.
+function buildBrowserJudgeSystemPrompt(teams, match, liveState) {
+  const liveBlock = liveState
+    ? `\n\nCRITICAL — LIVE IN-GAME STATE (verified ground truth, supersedes all pre-match arguments):\n${liveState.text}\n`
+    : "";
+  const liveRule = liveState
+    ? `The LIVE IN-GAME STATE above is verified real-time data — it is THE primary input for your verdict. Derive "winner" and "confidence" directly from the live situation. If the required run rate is above 14 the chasing team has near-zero chance; set confidence ≥ 88 for the bowling/fielding team. If RRR is above 12, confidence ≥ 78. The debate transcript provides context but cannot override actual live scores.`
+    : "base your verdict only on the transcript; do not invent live data not implied there.";
+  return `You are the Judge for an AI cricket war room. Read the ENTIRE debate transcript and output a single JSON object ONLY — no markdown fences, no commentary before or after.${liveBlock}
 
 The JSON must have exactly these keys and types (matches the server Verdict schema):
 - "winner": MUST be exactly "${teams.teamA}" or "${teams.teamB}" (those exact strings).
@@ -622,7 +629,7 @@ The JSON must have exactly these keys and types (matches the server Verdict sche
 - "swing_factor": one short phrase for the main uncertainty or match-defining variable.
 - "summary": 2–4 sentences explaining why the winner edges it, grounded in points both sides raised.
 
-Rules: base your verdict only on the transcript; do not invent live data not implied there. Output must be valid JSON with double-quoted keys and strings.
+Rules: ${liveRule} Output must be valid JSON with double-quoted keys and strings.
 
 Fixture label: ${match}`;
 }
@@ -1292,19 +1299,93 @@ function buildAgentEvidenceString(agentId, ctx) {
 }
 
 /**
+ * Reads the live panel form fields and builds a compact "ground truth" state string.
+ * Returns null when the panel has insufficient data (no runs or overs entered).
+ * @returns {{ text: string } | null}
+ */
+function readLivePanelState() {
+  // Priority 1: quick-paste text input (accepts any free-text score)
+  const quickText = /** @type {HTMLInputElement|null} */ (document.getElementById("liveScoreInput"))?.value.trim() || "";
+  if (quickText) {
+    return { text: quickText };
+  }
+
+  // Priority 2: structured live panel form fields
+  const runsRaw    = /** @type {HTMLInputElement|null} */ (document.getElementById("lfRuns"))?.value.trim() || "";
+  const wicketsRaw = /** @type {HTMLInputElement|null} */ (document.getElementById("lfWickets"))?.value.trim() || "";
+  const oversRaw   = /** @type {HTMLInputElement|null} */ (document.getElementById("lfOvers"))?.value.trim() || "";
+  const targetRaw  = /** @type {HTMLInputElement|null} */ (document.getElementById("lfTarget"))?.value.trim() || "";
+  const bat        = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBatTeam"))?.value.trim() || "";
+  const bowl       = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBowlTeam"))?.value.trim() || "";
+  const inn        = /** @type {HTMLSelectElement|null} */ (document.getElementById("lfInnings"))?.value || "1";
+  const fmt        = /** @type {HTMLSelectElement|null} */ (document.getElementById("lfFormat"))?.value || "T20";
+  const notes      = /** @type {HTMLInputElement|null} */ (document.getElementById("lfNotes"))?.value.trim() || "";
+
+  if (!runsRaw || !oversRaw) return null;
+
+  const runsNum  = parseInt(runsRaw, 10);
+  const wktsNum  = parseInt(wicketsRaw || "0", 10);
+  const oversNum = parseFloat(oversRaw);
+
+  if (!Number.isFinite(runsNum) || !Number.isFinite(oversNum)) return null;
+
+  const parts = [];
+  const innLabel = inn === "2" ? "2nd innings" : "1st innings";
+  const batLabel = bat || "Batting team";
+  const bowlLabel = bowl || "Bowling team";
+  parts.push(`${fmt} ${innLabel} — ${batLabel} batting, ${bowlLabel} bowling`);
+  parts.push(`Score: ${runsNum}/${wktsNum} (${oversNum} overs completed)`);
+
+  if (inn === "2" && targetRaw) {
+    const targetNum = parseInt(targetRaw, 10);
+    if (Number.isFinite(targetNum) && targetNum > 0) {
+      const totalBalls = fmt === "ODI" ? 300 : fmt === "Test" ? null : 120;
+      const completedBalls = Math.floor(oversNum) * 6 + Math.round((oversNum % 1) * 10);
+      const ballsLeft = totalBalls != null ? totalBalls - completedBalls : null;
+      const runsRequired = targetNum - runsNum;
+      const rrr = ballsLeft != null && ballsLeft > 0
+        ? ((runsRequired / ballsLeft) * 6).toFixed(2) : null;
+      const crr = oversNum > 0 ? (runsNum / oversNum).toFixed(2) : null;
+
+      parts.push(`Target: ${targetNum} | Requires: ${runsRequired} runs`);
+      if (ballsLeft != null) parts.push(`Balls left: ${ballsLeft}`);
+      if (crr) parts.push(`CRR: ${crr}`);
+      if (rrr) parts.push(`RRR: ${rrr}`);
+
+      if (rrr != null) {
+        const rrrNum = parseFloat(rrr);
+        if (rrrNum > 14) parts.push(`Situation: near-impossible chase — ${bowlLabel} overwhelming favourites`);
+        else if (rrrNum > 12) parts.push(`Situation: very difficult chase — ${bowlLabel} strong favourites`);
+        else if (rrrNum > 10) parts.push(`Situation: tough chase — ${bowlLabel} favourites`);
+        else if (rrrNum > 8)  parts.push(`Situation: competitive chase`);
+        else                  parts.push(`Situation: ${batLabel} in control of the chase`);
+      }
+    }
+  }
+
+  if (notes) parts.push(`Match notes: ${notes}`);
+
+  return { text: parts.join(" | ") };
+}
+
+/**
  * Shared match payload for both debaters — ingested evidence plus specialist lines; evidence-only discipline in system prompts.
  * @param {string} match
  * @param {Record<string, string>} insights
  * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
  * @param {Record<string, unknown>} ingestedCtx
+ * @param {{ text: string } | null} [liveState]
  */
-function buildMatchContextBlock(match, insights, teams, ingestedCtx) {
+function buildMatchContextBlock(match, insights, teams, ingestedCtx, liveState) {
   const teamLine = `Teams: **${teams.teamA}** vs **${teams.teamB}** (Bull argues for ${teams.teamA}; Bear argues for ${teams.teamB}).\n`;
   const ingested = formatIngestedBlockForDebate(ingestedCtx);
   const lines = AGENTS.map(
     (a) => `- ${a.name} (${a.role}): ${insights[a.id]?.trim() || "—"}`
   ).join("\n");
-  return `${teamLine}Fixture: ${match}\n\nIngested evidence (only treat as factual what appears here):\n${ingested}\n\nSpecialist agent signals:\n${lines}`;
+  const liveBlock = liveState
+    ? `\n\n⚡ LIVE IN-GAME STATE (GROUND TRUTH — argue from this reality, not pre-match expectations):\n${liveState.text}\n`
+    : "";
+  return `${teamLine}Fixture: ${match}${liveBlock}\n\nIngested evidence (only treat as factual what appears here):\n${ingested}\n\nSpecialist agent signals:\n${lines}`;
 }
 
 /** Bull: team A; Bear: team B; ≤60 words; evidence-bound. */
@@ -1391,6 +1472,7 @@ async function runWarRoom() {
   debateAreaPre.classList.remove('debate-area--final-only');
 
   const teams = parseTeamsFromMatch(match);
+  const liveState = readLivePanelState();
 
   document.getElementById('runBtn').style.display='none';
   document.getElementById('resetBtn').style.display='';
@@ -1453,7 +1535,7 @@ async function runWarRoom() {
   try {
     await Promise.all(agentPromises);
 
-    const matchContext = buildMatchContextBlock(match, insights, teams, ingestedCtx);
+    const matchContext = buildMatchContextBlock(match, insights, teams, ingestedCtx, liveState);
     setPhase('Debate in progress…', true);
     document.getElementById('runningLabel').textContent = `${teams.codeA} vs ${teams.codeB} · debate`;
 
@@ -1555,10 +1637,10 @@ async function runWarRoom() {
         [
           {
             role: 'user',
-            content: `Match: "${match}"\nTeams: ${teams.teamA} vs ${teams.teamB}\n\nDebate transcript:\n${debateStr}\n\nRespond with ONLY the JSON object described in your instructions.`,
+            content: `Match: "${match}"\nTeams: ${teams.teamA} vs ${teams.teamB}${liveState ? `\n\nLIVE IN-GAME STATE:\n${liveState.text}` : ""}\n\nDebate transcript:\n${debateStr}\n\nRespond with ONLY the JSON object described in your instructions.`,
           },
         ],
-        buildBrowserJudgeSystemPrompt(teams, match)
+        buildBrowserJudgeSystemPrompt(teams, match, liveState)
       );
       hideTyping();
       let parsed;
@@ -1859,10 +1941,514 @@ function initAgentsToggle() {
   mq.addEventListener('change', onMq);
 }
 
+// ─── Live match: over-by-over prediction ───────────────────────────────────
+
+/**
+ * @typedef {{
+ *   over: number,
+ *   projected_runs: number,
+ *   wicket_risk: "low"|"medium"|"high",
+ *   wicket_probability: number,
+ *   key_event: string,
+ *   win_probability: number|null
+ * }} OverPrediction
+ *
+ * @typedef {{
+ *   summary: string,
+ *   projected_total: string,
+ *   win_probability: number|null,
+ *   overs: OverPrediction[]
+ * }} OverPredictionResult
+ */
+
+/** @returns {string} */
+function buildOverPredictionPrompt() {
+  const bat   = (document.getElementById("lfBatTeam").value || "").trim() || "Batting team";
+  const bowl  = (document.getElementById("lfBowlTeam").value || "").trim() || "Bowling team";
+  const fmt   = document.getElementById("lfFormat").value || "T20";
+  const inn   = document.getElementById("lfInnings").value || "1";
+  const runs  = (document.getElementById("lfRuns").value || "").trim();
+  const wkts  = (document.getElementById("lfWickets").value || "").trim();
+  const overs = (document.getElementById("lfOvers").value || "").trim();
+  const target= (document.getElementById("lfTarget").value || "").trim();
+  const venue = (document.getElementById("lfVenue").value || "").trim();
+  const notes = (document.getElementById("lfNotes").value || "").trim();
+
+  const totalOvers = fmt === "T20" ? 20 : fmt === "ODI" ? 50 : 90;
+  const oversNum   = parseFloat(overs) || 0;
+  const oversCompletedFull = Math.floor(oversNum);
+  const remaining  = Math.max(0, totalOvers - oversCompletedFull);
+
+  const matchInput = (document.getElementById("matchInput")?.value || "").trim();
+  const matchLine  = matchInput ? `Fixture: ${matchInput}\n` : "";
+  const targetLine = inn === "2" && target ? `Target: ${target} runs (${bat} is chasing).\n` : "";
+  const venueLine  = venue ? `Venue: ${venue}.\n` : "";
+  const notesLine  = notes ? `Additional situation: ${notes}.\n` : "";
+
+  return (
+    `${matchLine}Format: ${fmt} — ${inn === "1" ? "1st" : "2nd"} innings.\n` +
+    `${bat} batting vs ${bowl}.\n` +
+    `Current score: ${runs || "?"}/${wkts || "?"} after ${overs || "?"} overs.\n` +
+    `${targetLine}${venueLine}${notesLine}` +
+    `Remaining overs to predict: ${remaining} (overs ${oversCompletedFull + 1} to ${totalOvers}).\n\n` +
+    `Predict every remaining over. Return ONLY a JSON object with this exact shape:\n` +
+    `{\n` +
+    `  "summary": "2-3 sentences on match situation and innings trajectory",\n` +
+    `  "projected_total": "e.g. 168-182 or \\"Wins with 2 overs to spare\\"",\n` +
+    `  "win_probability": <integer 0-100 for ${bat} at current moment, or null if 1st innings>,\n` +
+    `  "overs": [\n` +
+    `    { "over": <number>, "projected_runs": <integer>, "wicket_risk": "low"|"medium"|"high", "wicket_probability": <integer 0-100, chance a wicket falls IN this over>, "key_event": "<≤10 words>", "win_probability": <integer 0-100 for ${bat} AFTER this over completes, or null if 1st innings> },\n` +
+    `    ...\n` +
+    `  ]\n` +
+    `}\n` +
+    `Rules:\n` +
+    `- One entry per remaining over.\n` +
+    `- wicket_risk "high" only for genuine danger overs.\n` +
+    `- wicket_probability: realistic per-over chance (0-100) of AT LEAST ONE wicket in that over. T20 avg ~17%, powerplay ~12%, death ~22%. High-risk spinners/swing overs can be 30-45%.\n` +
+    `- key_event must be ≤10 words and specific (e.g. "Spinner likely; consolidation expected", "Death over — 6s likely").\n` +
+    `- win_probability per over: show how ${bat}'s chances EVOLVE over by over — it should drift naturally as runs accumulate or wickets fall. For 1st innings use null.\n` +
+    `- No markdown fences, no extra keys.`
+  );
+}
+
+const OVER_PREDICT_SYSTEM =
+  "You are an expert cricket analyst with deep knowledge of T20, ODI, and Test match dynamics. " +
+  "Given the current live match state, you predict how each remaining over will unfold based on " +
+  "typical run rates, wicket fall patterns, phase-of-innings dynamics, and common match scenarios. " +
+  "Be realistic and phase-aware (powerplay / middle / death). Output ONLY valid JSON — no preamble, no fences.";
+
+/** @param {string} risk */
+function riskClass(risk) {
+  if (risk === "high")   return "over-card--high-risk";
+  if (risk === "medium") return "over-card--medium-risk";
+  return "";
+}
+
+/** @param {string} risk */
+function riskLabel(risk) {
+  if (risk === "high")   return '<span class="over-card__risk over-card__risk--high">⚠ High</span>';
+  if (risk === "medium") return '<span class="over-card__risk over-card__risk--medium">~ Medium</span>';
+  return '<span class="over-card__risk over-card__risk--low">✓ Low</span>';
+}
+
+/**
+ * Build an SVG sparkline for win-probability trend across overs.
+ * @param {OverPrediction[]} overs
+ * @param {number|null} startProb  current win prob before any new over
+ * @param {string} bat
+ * @param {string} bowl
+ * @returns {string} HTML string
+ */
+function buildWinProbSparkline(overs, startProb, bat, bowl) {
+  const points = overs
+    .map((o) => (o.win_probability != null ? Number(o.win_probability) : null))
+    .filter((p) => p !== null);
+
+  if (!points.length) return "";
+
+  const allPts = startProb != null ? [startProb, ...points] : points;
+  const W = 500, H = 80, PAD_L = 36, PAD_R = 12, PAD_T = 10, PAD_B = 24;
+  const chartW = W - PAD_L - PAD_R;
+  const chartH = H - PAD_T - PAD_B;
+
+  const xStep = allPts.length > 1 ? chartW / (allPts.length - 1) : chartW;
+  const toX = (i) => PAD_L + i * xStep;
+  const toY = (p) => PAD_T + chartH - (p / 100) * chartH;
+
+  // Filled area path
+  const linePoints = allPts.map((p, i) => `${toX(i).toFixed(1)},${toY(p).toFixed(1)}`).join(" L ");
+  const areaPath =
+    `M ${toX(0).toFixed(1)},${toY(allPts[0]).toFixed(1)} L ${linePoints} ` +
+    `L ${toX(allPts.length - 1).toFixed(1)},${(PAD_T + chartH).toFixed(1)} ` +
+    `L ${toX(0).toFixed(1)},${(PAD_T + chartH).toFixed(1)} Z`;
+
+  // 50% reference line
+  const refY = toY(50).toFixed(1);
+
+  // Y-axis labels
+  const yLabels = [0, 25, 50, 75, 100].map((pct) => {
+    const y = toY(pct).toFixed(1);
+    return `<text x="${(PAD_L - 4).toFixed(1)}" y="${y}" text-anchor="end" dominant-baseline="middle" class="spark-label">${pct}</text>`;
+  }).join("");
+
+  // X-axis labels (show over numbers, sparse)
+  const overNums = overs.map((o) => o.over);
+  const xLabels = allPts.map((_, i) => {
+    if (i === 0 && startProb != null) return `<text x="${toX(0).toFixed(1)}" y="${(PAD_T + chartH + 13).toFixed(1)}" text-anchor="middle" class="spark-label">Now</text>`;
+    const overIdx = startProb != null ? i - 1 : i;
+    const overNum = overNums[overIdx];
+    if (overNum == null) return "";
+    const step = Math.max(1, Math.floor(allPts.length / 6));
+    if (i % step !== 0 && i !== allPts.length - 1) return "";
+    return `<text x="${toX(i).toFixed(1)}" y="${(PAD_T + chartH + 13).toFixed(1)}" text-anchor="middle" class="spark-label">Ov ${overNum}</text>`;
+  }).join("");
+
+  // Last point circle + label
+  const lastX = toX(allPts.length - 1).toFixed(1);
+  const lastY = toY(allPts[allPts.length - 1]).toFixed(1);
+  const lastPct = allPts[allPts.length - 1];
+
+  return `
+    <div class="win-trend">
+      <div class="win-trend__head">
+        <span class="win-trend__title">Win % trajectory — ${escapeHtml(bat)} <span class="win-trend__vs">vs ${escapeHtml(bowl)}</span></span>
+        <span class="win-trend__now">Final: <strong>${lastPct}%</strong></span>
+      </div>
+      <svg class="win-trend__svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="wpGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#8ab4f8" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="#8ab4f8" stop-opacity="0.03"/>
+          </linearGradient>
+        </defs>
+        <!-- 50% reference line -->
+        <line x1="${PAD_L}" y1="${refY}" x2="${(W - PAD_R).toFixed(1)}" y2="${refY}" stroke="rgba(255,255,255,0.09)" stroke-width="1" stroke-dasharray="4 4"/>
+        <text x="${(PAD_L + 4).toFixed(1)}" y="${(Number(refY) - 3).toFixed(1)}" class="spark-label spark-label--ref">50%</text>
+        <!-- Area fill -->
+        <path d="${areaPath}" fill="url(#wpGrad)"/>
+        <!-- Line -->
+        <polyline points="${allPts.map((p, i) => `${toX(i).toFixed(1)},${toY(p).toFixed(1)}`).join(" ")}" fill="none" stroke="#8ab4f8" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+        <!-- Y-axis labels -->
+        ${yLabels}
+        <!-- X-axis labels -->
+        ${xLabels}
+        <!-- End point -->
+        <circle cx="${lastX}" cy="${lastY}" r="3.5" fill="#8ab4f8"/>
+        <text x="${(Number(lastX) + 5).toFixed(1)}" y="${(Number(lastY) + 1).toFixed(1)}" dominant-baseline="middle" class="spark-label spark-label--end">${lastPct}%</text>
+      </svg>
+    </div>`;
+}
+
+/**
+ * Build an SVG sparkline for wicket-probability across overs.
+ * @param {OverPrediction[]} overs
+ * @returns {string} HTML string
+ */
+function buildWicketProbSparkline(overs) {
+  const pts = overs
+    .map((o) => (o.wicket_probability != null ? Math.min(100, Math.max(0, Number(o.wicket_probability))) : null))
+    .filter((p) => p !== null);
+
+  if (!pts.length) return "";
+
+  const W = 500, H = 72, PAD_L = 36, PAD_R = 12, PAD_T = 8, PAD_B = 22;
+  const chartW = W - PAD_L - PAD_R;
+  const chartH = H - PAD_T - PAD_B;
+
+  // Use 0–60 as the y-axis ceiling (most values will be 5–45)
+  const Y_MAX = 60;
+  const toX = (i) => PAD_L + (pts.length > 1 ? (i / (pts.length - 1)) * chartW : chartW / 2);
+  const toY = (p) => PAD_T + chartH - Math.min(1, p / Y_MAX) * chartH;
+
+  const areaPath =
+    `M ${toX(0).toFixed(1)},${toY(pts[0]).toFixed(1)} ` +
+    pts.map((p, i) => `L ${toX(i).toFixed(1)},${toY(p).toFixed(1)}`).join(" ") +
+    ` L ${toX(pts.length - 1).toFixed(1)},${(PAD_T + chartH).toFixed(1)} L ${toX(0).toFixed(1)},${(PAD_T + chartH).toFixed(1)} Z`;
+
+  const avgRef = Math.round(pts.reduce((s, p) => s + p, 0) / pts.length);
+  const refY   = toY(avgRef).toFixed(1);
+
+  const yLabels = [0, 20, 40, Y_MAX].map((pct) => {
+    const y = toY(pct).toFixed(1);
+    return `<text x="${(PAD_L - 4).toFixed(1)}" y="${y}" text-anchor="end" dominant-baseline="middle" class="spark-label">${pct}</text>`;
+  }).join("");
+
+  const overNums = overs.map((o) => o.over);
+  const xLabels = pts.map((_, i) => {
+    const overNum = overNums[i];
+    if (overNum == null) return "";
+    const step = Math.max(1, Math.floor(pts.length / 6));
+    if (i % step !== 0 && i !== pts.length - 1) return "";
+    return `<text x="${toX(i).toFixed(1)}" y="${(PAD_T + chartH + 13).toFixed(1)}" text-anchor="middle" class="spark-label">Ov ${overNum}</text>`;
+  }).join("");
+
+  // Mark high-risk overs (>30%)
+  const dangerDots = pts
+    .map((p, i) => p > 30
+      ? `<circle cx="${toX(i).toFixed(1)}" cy="${toY(p).toFixed(1)}" r="3" fill="#f28b82" opacity="0.85"/>`
+      : "")
+    .join("");
+
+  const lastX = toX(pts.length - 1).toFixed(1);
+  const lastY = toY(pts[pts.length - 1]).toFixed(1);
+  const lastPct = pts[pts.length - 1];
+  const maxPct  = Math.max(...pts);
+
+  return `
+    <div class="wicket-trend">
+      <div class="win-trend__head">
+        <span class="win-trend__title wicket-trend__title">Wicket fall probability % <span class="win-trend__vs">per over</span></span>
+        <span class="win-trend__now">Avg <strong>${avgRef}%</strong> · Peak <strong class="wicket-trend__peak">${maxPct}%</strong></span>
+      </div>
+      <svg class="win-trend__svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="wkGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#f28b82" stop-opacity="0.38"/>
+            <stop offset="100%" stop-color="#f28b82" stop-opacity="0.03"/>
+          </linearGradient>
+        </defs>
+        <!-- average reference line -->
+        <line x1="${PAD_L}" y1="${refY}" x2="${(W - PAD_R).toFixed(1)}" y2="${refY}" stroke="rgba(255,255,255,0.09)" stroke-width="1" stroke-dasharray="4 4"/>
+        <text x="${(PAD_L + 4).toFixed(1)}" y="${(Number(refY) - 3).toFixed(1)}" class="spark-label spark-label--ref">avg</text>
+        <!-- Area fill -->
+        <path d="${areaPath}" fill="url(#wkGrad)"/>
+        <!-- Line -->
+        <polyline points="${pts.map((p, i) => `${toX(i).toFixed(1)},${toY(p).toFixed(1)}`).join(" ")}" fill="none" stroke="#f28b82" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+        <!-- High-risk dots -->
+        ${dangerDots}
+        <!-- Y-axis labels -->
+        ${yLabels}
+        <!-- X-axis labels -->
+        ${xLabels}
+        <!-- End point -->
+        <circle cx="${lastX}" cy="${lastY}" r="3" fill="#f28b82"/>
+        <text x="${(Number(lastX) + 5).toFixed(1)}" y="${(Number(lastY) + 1).toFixed(1)}" dominant-baseline="middle" class="spark-label spark-label--wk-end">${lastPct}%</text>
+      </svg>
+    </div>`;
+}
+
+/**
+ * @param {HTMLElement} container
+ * @param {OverPredictionResult} result
+ * @param {{ bat: string, bowl: string, fmt: string, inn: string }} ctx
+ */
+function renderOverPredictionResult(container, result, ctx) {
+  const winProb = result.win_probability != null && Number.isFinite(Number(result.win_probability))
+    ? Number(result.win_probability)
+    : null;
+  const winProbCell = winProb !== null
+    ? `<div class="over-predict-summary__cell">
+        <div class="over-predict-summary__label">Win prob now (${escapeHtml(ctx.bat)})</div>
+        <div class="over-predict-summary__val">${winProb}%</div>
+       </div>`
+    : "";
+
+  const totalRuns = (result.overs || []).reduce((s, o) => s + (Number(o.projected_runs) || 0), 0);
+
+  // Wicket probability stats
+  const wkPts = (result.overs || [])
+    .map((o) => (o.wicket_probability != null ? Number(o.wicket_probability) : null))
+    .filter((p) => p !== null);
+  const avgWkPct = wkPts.length ? Math.round(wkPts.reduce((s, p) => s + p, 0) / wkPts.length) : null;
+  const wkSummaryCell = avgWkPct !== null
+    ? `<div class="over-predict-summary__cell">
+        <div class="over-predict-summary__label">Avg wicket% / over</div>
+        <div class="over-predict-summary__val over-predict-summary__val--danger">${avgWkPct}%</div>
+       </div>`
+    : "";
+
+  // Build sparklines
+  const hasWinProbData = (result.overs || []).some((o) => o.win_probability != null);
+  const sparklineHtml = hasWinProbData
+    ? buildWinProbSparkline(result.overs || [], winProb, ctx.bat, ctx.bowl)
+    : "";
+  const wicketSparkHtml = wkPts.length
+    ? buildWicketProbSparkline(result.overs || [])
+    : "";
+
+  container.innerHTML = `
+    <div class="over-predict-summary">
+      <div class="over-predict-summary__cell">
+        <div class="over-predict-summary__label">Projected score</div>
+        <div class="over-predict-summary__val">${escapeHtml(String(result.projected_total || "—"))}</div>
+      </div>
+      <div class="over-predict-summary__cell">
+        <div class="over-predict-summary__label">Runs remaining (est.)</div>
+        <div class="over-predict-summary__val">+${totalRuns}</div>
+      </div>
+      ${winProbCell}
+      <div class="over-predict-summary__cell">
+        <div class="over-predict-summary__label">Overs predicted</div>
+        <div class="over-predict-summary__val">${(result.overs || []).length}</div>
+      </div>
+      ${wkSummaryCell}
+      ${result.summary ? `<div class="over-predict-summary__caption">${escapeHtml(result.summary)}</div>` : ""}
+    </div>
+    ${sparklineHtml}
+    ${wicketSparkHtml}
+    <div class="over-predict-heading">Over-by-over forecast — ${escapeHtml(ctx.bat)} vs ${escapeHtml(ctx.bowl)} · ${escapeHtml(ctx.fmt)}</div>
+    <div class="over-grid">
+      ${(result.overs || []).map((o, i) => {
+        const wp  = o.win_probability != null ? Number(o.win_probability) : null;
+        const wkp = o.wicket_probability != null ? Math.min(100, Math.max(0, Number(o.wicket_probability))) : null;
+        const wpBar = wp !== null
+          ? `<div class="over-card__wp">
+               <div class="over-card__wp-row">
+                 <span class="over-card__wp-label">Win%</span>
+                 <span class="over-card__wp-val">${wp}%</span>
+               </div>
+               <div class="over-card__wp-track">
+                 <div class="over-card__wp-fill" data-pct="${wp}" style="width:0%"></div>
+               </div>
+             </div>`
+          : "";
+        const wkpBar = wkp !== null
+          ? `<div class="over-card__wp over-card__wkp">
+               <div class="over-card__wp-row">
+                 <span class="over-card__wp-label">Wkt%</span>
+                 <span class="over-card__wp-val over-card__wkp-val">${wkp}%</span>
+               </div>
+               <div class="over-card__wp-track">
+                 <div class="over-card__wkp-fill" data-pct="${wkp}" style="width:0%"></div>
+               </div>
+             </div>`
+          : "";
+        return `
+        <div class="over-card ${riskClass(o.wicket_risk)}" style="animation-delay:${i * 28}ms">
+          <div class="over-card__num">Over ${o.over}</div>
+          <div class="over-card__runs">${o.projected_runs ?? "?"}</div>
+          <div class="over-card__runs-label">proj. runs</div>
+          ${riskLabel(o.wicket_risk)}
+          ${wkpBar}
+          ${wpBar}
+          <div class="over-card__event">${escapeHtml(o.key_event || "")}</div>
+        </div>`;
+      }).join("")}
+    </div>
+  `;
+  container.hidden = false;
+
+  // Animate win-probability and wicket-probability bars after paint
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      container.querySelectorAll(".over-card__wp-fill[data-pct], .over-card__wkp-fill[data-pct]").forEach((el) => {
+        const pct = Math.min(100, Math.max(0, Number(el.getAttribute("data-pct"))));
+        el.style.transition = "width 0.55s cubic-bezier(0.33,1,0.68,1)";
+        el.style.width = `${pct}%`;
+      });
+    });
+  });
+}
+
+let overPredicting = false;
+
+async function runOverPrediction() {
+  if (overPredicting) return;
+  overPredicting = true;
+
+  const btn   = document.getElementById("overPredictBtn");
+  const label = document.getElementById("overPredictLabel");
+  const result= document.getElementById("overPredictResult");
+
+  if (btn)   btn.disabled = true;
+  if (label) { label.style.display = ""; label.textContent = "Predicting…"; }
+  if (result) result.hidden = true;
+
+  const bat  = (document.getElementById("lfBatTeam")?.value  || "Batting team").trim();
+  const bowl = (document.getElementById("lfBowlTeam")?.value || "Bowling team").trim();
+  const fmt  = document.getElementById("lfFormat")?.value || "T20";
+  const inn  = document.getElementById("lfInnings")?.value || "1";
+
+  try {
+    const prompt = buildOverPredictionPrompt();
+    const raw = await callClaude(
+      [{ role: "user", content: prompt }],
+      OVER_PREDICT_SYSTEM,
+      3200
+    );
+
+    let parsed;
+    try {
+      const cleaned = extractJudgeJsonObject(raw);
+      parsed = JSON.parse(cleaned);
+    } catch (_err) {
+      throw new Error("Claude returned invalid JSON. Try again or add more match details.");
+    }
+
+    if (!Array.isArray(parsed.overs) || !parsed.overs.length) {
+      throw new Error("No over-by-over data in response. Try providing clearer match state.");
+    }
+
+    renderOverPredictionResult(result, parsed, { bat, bowl, fmt, inn });
+  } catch (e) {
+    if (result) {
+      result.innerHTML = `<div style="color:var(--color-danger);font-size:.82rem;padding:10px 0;">${escapeHtml(e instanceof Error ? e.message : String(e))}</div>`;
+      result.hidden = false;
+    }
+  } finally {
+    if (btn)   btn.disabled = false;
+    if (label) label.style.display = "none";
+    overPredicting = false;
+  }
+}
+
+function initLivePanel() {
+  const head   = document.querySelector(".live-panel__head");
+  const toggle = document.getElementById("livePanelToggle");
+  const body   = document.getElementById("livePanelBody");
+  const innSel = /** @type {HTMLSelectElement|null} */ (document.getElementById("lfInnings"));
+  const targetWrap = document.getElementById("lfTargetWrap");
+
+  function setOpen(open) {
+    if (!body || !toggle) return;
+    body.hidden = !open;
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    toggle.textContent = open ? "Collapse" : "Expand";
+  }
+
+  if (head) {
+    head.addEventListener("click", () => {
+      const isOpen = toggle?.getAttribute("aria-expanded") === "true";
+      setOpen(!isOpen);
+    });
+  }
+
+  if (innSel && targetWrap) {
+    const updateTargetVisibility = () => {
+      targetWrap.style.display = innSel.value === "2" ? "" : "none";
+    };
+    innSel.addEventListener("change", updateTargetVisibility);
+    updateTargetVisibility();
+  }
+
+  // Pre-fill batting/bowling teams from the main match input if it looks like a fixture
+  const matchInput = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+  const batEl  = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBatTeam"));
+  const bowlEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBowlTeam"));
+  const venueEl= /** @type {HTMLInputElement|null} */ (document.getElementById("lfVenue"));
+  if (matchInput && batEl && bowlEl) {
+    const syncFromMatchInput = () => {
+      const val = matchInput.value.trim();
+      try {
+        const t = parseTeamsFromMatch(val);
+        if (t.codeA !== "TM1" && t.codeB !== "TM2") {
+          if (!batEl.value) batEl.value = t.codeA;
+          if (!bowlEl.value) bowlEl.value = t.codeB;
+        }
+      } catch (_e) { /* ignore */ }
+      if (venueEl && !venueEl.value) {
+        const m = val.match(/,\s*([^,]+)$/);
+        if (m) venueEl.value = m[1].trim();
+      }
+    };
+    matchInput.addEventListener("change", syncFromMatchInput);
+  }
+}
+
 renderAgents();
 renderArch();
 renderHowto();
 initMatchAutocomplete();
 initInfoSheet();
 initAgentsToggle();
+initLivePanel();
+initLiveScoreBar();
 void refreshJudgeAccuracyFooter();
+
+function initLiveScoreBar() {
+  const input = /** @type {HTMLInputElement|null} */ (document.getElementById("liveScoreInput"));
+  const clearBtn = document.getElementById("liveScoreClear");
+  if (!input || !clearBtn) return;
+
+  const sync = () => {
+    clearBtn.hidden = !input.value.trim();
+  };
+
+  input.addEventListener("input", sync);
+  clearBtn.addEventListener("click", () => {
+    input.value = "";
+    clearBtn.hidden = true;
+    input.focus();
+  });
+  sync();
+}
