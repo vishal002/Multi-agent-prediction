@@ -311,6 +311,7 @@ const server = http.createServer(async (req, res) => {
       url.pathname === "/api/match-suggest" ||
       url.pathname === "/api/match-by-label" ||
       url.pathname === "/api/match-context" ||
+      url.pathname === "/api/live-score" ||
       url.pathname === "/api/judge/predict" ||
       url.pathname === "/api/judge/accuracy")
   ) {
@@ -351,6 +352,67 @@ const server = http.createServer(async (req, res) => {
       "Cache-Control": "public, max-age=60",
     });
     res.end(JSON.stringify({ suggestions }));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/live-score") {
+    // Fresh fetch (nocache=1) from the ingestion service so we always get latest RSS data.
+    const teamsParam = url.searchParams.get("teams") || "";
+    const labelParam = url.searchParams.get("label") || "";
+    const target =
+      `${INGESTION_SERVICE_URL}/api/match-context` +
+      `?nocache=1&teams=${encodeURIComponent(teamsParam)}&label=${encodeURIComponent(labelParam)}`;
+    const ctrl = AbortSignal.timeout(20_000);
+    try {
+      const r = await fetch(target, { method: "GET", signal: ctrl, headers: { Accept: "application/json" } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+
+      // Score / RRR patterns
+      const SCORE_RX  = /\b\d{1,3}\/\d{1,2}\s*\([\d.]+/i;
+      const RRR_RX    = /\b(RRR|req(?:uired)?\s*(?:run\s*)?rate)\s*[:\-]?\s*[\d.]+/i;
+      const NEED_RX   = /\bneed\s+\d+\s+(runs?|more|in\s+\d+)/i;
+      const CHASE_RX  = /\b(chasing|target\s*[:\-]?)\s*\d+/i;
+
+      function scoreRichness(text) {
+        let s = 0;
+        if (SCORE_RX.test(text)) s += 4;
+        if (RRR_RX.test(text))   s += 3;
+        if (NEED_RX.test(text))  s += 3;
+        if (CHASE_RX.test(text)) s += 2;
+        if (/\b(live|score|update|inning|over)\b/i.test(text)) s += 1;
+        return s;
+      }
+
+      // Use pre-extracted snippet from ingestion service if present
+      const preExtracted = data.live_score_snippet || "";
+
+      let best = preExtracted;
+      let bestScore = preExtracted ? scoreRichness(preExtracted) : 0;
+
+      // Also scan all news bullets ourselves (full text, not stripped)
+      const bullets = Array.isArray(data.news_bullets) ? data.news_bullets : [];
+      for (const b of bullets) {
+        const plain = String(b).replace(/^\[[^\]]+\]\s*/, "").trim();
+        const s = scoreRichness(plain);
+        if (s > bestScore) { bestScore = s; best = plain; }
+      }
+
+      const snippet = bestScore >= 5 ? best.slice(0, 400) : "";
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
+      });
+      res.end(JSON.stringify({ snippet, richness: bestScore, fetched_at: data.fetched_at || null }));
+    } catch (e) {
+      res.writeHead(503, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
+      });
+      res.end(JSON.stringify({ snippet: "", error: e instanceof Error ? e.message : String(e) }));
+    }
     return;
   }
 

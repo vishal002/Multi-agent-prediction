@@ -243,6 +243,7 @@ body {
 .command-bar__match {
   flex: 1 1 200px;
   min-width: 0;
+  position: relative;
 }
 
 /* ── Live score quick-paste bar ──────────────────────────────────── */
@@ -300,6 +301,35 @@ body {
   flex-shrink: 0;
 }
 .live-score-bar__clear:hover { color: var(--color-text); }
+
+.live-score-bar__fetch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 45%, transparent);
+  border-radius: var(--radius-sm);
+  color: var(--color-accent);
+  font-size: .68rem;
+  font-weight: 600;
+  padding: 2px 8px 2px 5px;
+  cursor: pointer;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  transition: background .15s, border-color .15s;
+}
+.live-score-bar__fetch:hover {
+  background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+  border-color: var(--color-accent);
+}
+.live-score-bar__fetch:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.live-score-bar__fetch svg {
+  flex-shrink: 0;
+}
 
 .command-bar__row {
   min-height: 2rem;
@@ -2571,4 +2601,220 @@ body {
     font-size: 0.55rem;
     padding: 0.14rem 0.3rem;
   }
+}
+
+/* ─── No-live-data alert banner ─────────────────────────────────────── */
+.no-live-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  background: rgba(242, 139, 130, 0.1);
+  border: 1px solid rgba(242, 139, 130, 0.32);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  margin-bottom: 10px;
+  animation: fadeUp 0.35s var(--ease-out);
+}
+
+.no-live-alert__icon {
+  color: var(--color-danger);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.no-live-alert__text {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  flex: 1;
+}
+
+.no-live-alert__text strong {
+  color: var(--color-text-primary);
+}
+
+.no-live-alert__text em {
+  color: var(--color-text-tertiary);
+  font-style: normal;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.7rem;
+}
+
+.no-live-alert__close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 2px;
+  flex-shrink: 0;
+}
+
+.no-live-alert__close:hover {
+  color: var(--color-text-primary);
+}
+
+/* Highlight the live score bar when the no-live-data alert is visible */
+#noLiveDataAlert:not([hidden]) ~ * .live-score-bar,
+.no-live-alert:not([hidden]) ~ .live-score-bar {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 2px rgba(242, 139, 130, 0.18);
+  animation: liveBarPulse 2s ease-in-out 3;
+}
+
+@keyframes liveBarPulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(242, 139, 130, 0.18); }
+  50%       { box-shadow: 0 0 0 5px rgba(242, 139, 130, 0.08); }
+}
+
+/* ─── Auto-populate badge ───────────────────────────────────────────── */
+.auto-populate-badge {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--color-live);
+  letter-spacing: 0.03em;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+  opacity: 0;
+  white-space: nowrap;
+}
+
+.auto-populate-badge::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-live);
+  flex-shrink: 0;
+}
+
+.auto-populate-badge--fade {
+  animation: autoBadgeFadeInOut 3.2s var(--ease-out) forwards;
+}
+
+@keyframes autoBadgeFadeInOut {
+  0%   { opacity: 0; transform: translateY(4px); }
+  15%  { opacity: 1; transform: translateY(0); }
+  75%  { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+
+/* ─── Live Monitor agent — real-time prediction update cards ───────── */
+.live-updates-area {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.live-update-card {
+  background: rgba(129, 201, 149, 0.07);
+  border: 1px solid rgba(129, 201, 149, 0.22);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.9rem;
+  animation: fadeUp 0.4s var(--ease-out);
+}
+
+.live-update-card__header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 7px;
+  flex-wrap: wrap;
+}
+
+.live-update-card__label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-live);
+}
+
+.live-update-card__time {
+  font-size: 0.68rem;
+  color: var(--color-text-tertiary);
+}
+
+.live-update-card__situation {
+  margin-left: auto;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-muted);
+  border-radius: var(--radius-full);
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.live-update-card__score {
+  font-size: 0.78rem;
+  color: var(--color-text-primary);
+  line-height: 1.45;
+  margin-bottom: 10px;
+}
+
+.live-update-card__prob {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.live-update-card__team-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.live-update-card__team-name {
+  font-size: 0.71rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.live-update-card__team-pct {
+  font-size: 0.73rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.live-update-card__bar {
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-muted);
+  overflow: hidden;
+  display: flex;
+  margin: 2px 0;
+}
+
+.live-update-card__bar-fill--a {
+  background: var(--color-accent);
+  height: 100%;
+  transition: width 0.55s var(--ease-out);
+}
+
+.live-update-card__bar-fill--b {
+  background: var(--color-danger);
+  height: 100%;
+  transition: width 0.55s var(--ease-out);
+}
+
+.live-update-card__reasoning {
+  margin-top: 8px;
+  font-size: 0.71rem;
+  color: var(--color-text-secondary);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* Live Monitor icon symbol — smaller emoji needs alignment */
+.agent-icon {
+  font-size: 0.85rem;
 }
