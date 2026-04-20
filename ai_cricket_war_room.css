@@ -3067,3 +3067,471 @@ body {
     padding-bottom: env(safe-area-inset-bottom, 0);
   }
 }
+
+/* ── Hide live-panel section (over-by-over prediction) ───────────── */
+.live-panel {
+  display: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   VISUAL POLISH & THEME SYSTEM
+   Light mode tokens · Plus Jakarta Sans · Gradient title · Toggle btn
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── Plus Jakarta Sans applied to headings ───────────────────────── */
+.brand__title,
+.verdict-winner,
+.arch-title,
+.howto-title,
+.info-sheet__title,
+.over-card__runs {
+  font-family: "Plus Jakarta Sans", var(--font-sans);
+  font-optical-sizing: auto;
+}
+
+/* ── Brand title — gradient text in dark mode ────────────────────── */
+.brand__title {
+  background: linear-gradient(125deg, #aecbfa 0%, #c084fc 50%, #f472b6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  /* Ensure the eyebrow above isn't clipped */
+  padding-bottom: 0.05em;
+}
+
+/* ── App header nav: always visible now that toggle is present ───── */
+.app-header__nav {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* ── Theme toggle button ─────────────────────────────────────────── */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  background: var(--color-bg-muted);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Show moon in dark mode, sun in light mode */
+.theme-toggle__sun  { display: none; }
+.theme-toggle__moon { display: block; }
+[data-theme="light"] .theme-toggle__sun  { display: block; }
+[data-theme="light"] .theme-toggle__moon { display: none; }
+
+/* ── Light mode: html color-scheme ──────────────────────────────── */
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+/* ── Light mode: design tokens ───────────────────────────────────── */
+[data-theme="light"] {
+  --color-text-primary:   #111827;
+  --color-text-secondary: #374151;
+  --color-text-tertiary:  #6b7280;
+
+  --color-bg-page:     #f1f5f9;
+  --color-bg-elevated: #ffffff;
+  --color-bg-muted:    #f8fafc;
+  --color-bg-subtle:   #e2e8f0;
+
+  --color-border:       rgba(0, 0, 0, 0.08);
+  --color-border-strong: rgba(0, 0, 0, 0.14);
+
+  --color-accent:      #2563eb;
+  --color-accent-soft: rgba(37, 99, 235, 0.10);
+
+  --color-success:        #16a34a;
+  --color-success-soft:   rgba(22, 163, 74, 0.10);
+  --color-success-border: rgba(22, 163, 74, 0.30);
+  --color-danger:         #dc2626;
+  --color-danger-soft:    rgba(220, 38, 38, 0.10);
+  --color-danger-border:  rgba(220, 38, 38, 0.30);
+
+  --color-info-bg:     rgba(37, 99, 235, 0.07);
+  --color-info-border: rgba(37, 99, 235, 0.22);
+  --color-info-text:   #2563eb;
+  --color-live:        #16a34a;
+
+  --color-verdict-blue-mid:  #1d4ed8;
+  --color-verdict-blue-deep: #1e40af;
+  --color-tab-active-border: #111827;
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 20px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06);
+}
+
+/* ── Light mode: body & scrollbar ────────────────────────────────── */
+[data-theme="light"] body {
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+/* ── Light mode: brand title gradient ────────────────────────────── */
+[data-theme="light"] .brand__title {
+  background: linear-gradient(125deg, #1d4ed8 0%, #7c3aed 50%, #db2777 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Light mode: app header ──────────────────────────────────────── */
+[data-theme="light"] .app-header {
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.06) 0%, transparent 100%);
+}
+
+/* ── Light mode: command bar ─────────────────────────────────────── */
+[data-theme="light"] .command-bar {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(0, 0, 0, 0.09);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.07);
+}
+
+/* ── Light mode: search shell ────────────────────────────────────── */
+[data-theme="light"] .g-search__shell {
+  background: #fff;
+  border-color: rgba(0, 0, 0, 0.13);
+}
+
+[data-theme="light"] .g-search__shell:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.09);
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+[data-theme="light"] .g-search__shell:focus-within {
+  border-color: rgba(37, 99, 235, 0.55);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+/* ── Light mode: search results ─────────────────────────────────── */
+[data-theme="light"] .g-search__result-title .g-search__hl {
+  background: rgba(234, 179, 8, 0.22);
+}
+
+[data-theme="light"] .g-search__result:hover,
+[data-theme="light"] .g-search__result--active {
+  background: rgba(37, 99, 235, 0.07);
+}
+
+[data-theme="light"] .g-search__result--active .g-search__result-title {
+  color: var(--color-accent);
+}
+
+/* ── Light mode: debate bubbles ──────────────────────────────────── */
+[data-theme="light"] .bubble.bull {
+  background: linear-gradient(165deg, rgba(22, 163, 74, 0.08) 0%, rgba(22, 163, 74, 0.03) 100%);
+}
+
+[data-theme="light"] .bubble.bear {
+  background: linear-gradient(165deg, rgba(220, 38, 38, 0.08) 0%, rgba(220, 38, 38, 0.03) 100%);
+}
+
+/* ── Light mode: verdict card ────────────────────────────────────── */
+[data-theme="light"] .verdict-card {
+  background: linear-gradient(145deg, rgba(219, 234, 254, 0.97) 0%, rgba(196, 219, 254, 0.90) 100%);
+  border-color: rgba(37, 99, 235, 0.22);
+  box-shadow: 0 4px 28px rgba(37, 99, 235, 0.12),
+              0 1px 0 rgba(255, 255, 255, 0.95) inset;
+}
+
+[data-theme="light"] .verdict-card--final {
+  background: linear-gradient(145deg, rgba(220, 252, 231, 0.97) 0%, rgba(187, 247, 208, 0.90) 100%);
+  border-color: rgba(22, 163, 74, 0.25);
+  box-shadow: 0 4px 28px rgba(22, 163, 74, 0.10),
+              0 1px 0 rgba(255, 255, 255, 0.95) inset;
+}
+
+[data-theme="light"] .verdict-winner      { color: #1e3a8a; }
+[data-theme="light"] .verdict-summary     { color: rgba(15, 23, 42, 0.82); }
+[data-theme="light"] .verdict-kicker      { color: #1d4ed8; }
+[data-theme="light"] .verdict-card--final .verdict-kicker { color: #15803d; }
+[data-theme="light"] .verdict-subkicker   { color: #374151; }
+
+[data-theme="light"] .verdict-win-prob {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .verdict-win-prob__title  { color: rgba(15, 23, 42, 0.85); }
+[data-theme="light"] .verdict-win-prob__name   { color: #1e3a8a; }
+[data-theme="light"] .verdict-win-prob__caption { color: rgba(15, 23, 42, 0.60); }
+
+[data-theme="light"] .verdict-win-prob__bar {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .verdict-conf-label { color: rgba(15, 23, 42, 0.65); }
+
+[data-theme="light"] .conf-track {
+  background: rgba(0, 0, 0, 0.07);
+  border-color: rgba(0, 0, 0, 0.10);
+}
+
+[data-theme="light"] .conf-fill {
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
+}
+
+[data-theme="light"] .verdict-card .stat-cell {
+  background: rgba(255, 255, 255, 0.65);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .verdict-card .stat-label { color: rgba(15, 23, 42, 0.55); }
+[data-theme="light"] .verdict-card .stat-val   { color: #1e3a8a; }
+
+[data-theme="light"] .verdict-ingestion-meta {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(15, 23, 42, 0.75);
+}
+
+[data-theme="light"] .verdict-ingestion-meta__k    { color: #1d4ed8; }
+[data-theme="light"] .verdict-ingestion-meta__link  { color: #2563eb; }
+[data-theme="light"] .verdict-ingestion-meta__link:hover { color: #1d4ed8; }
+
+[data-theme="light"] .verdict-ingestion-meta__note {
+  color: rgba(15, 23, 42, 0.60);
+  border-top-color: rgba(0, 0, 0, 0.10);
+}
+
+[data-theme="light"] .verdict-ingestion-meta__warn { color: #b45309; }
+[data-theme="light"] .verdict-ingestion-meta--warn { color: #b45309; }
+
+/* ── Light mode: primary button ──────────────────────────────────── */
+[data-theme="light"] .btn--primary {
+  color: #fff;
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+  border-color: rgba(37, 99, 235, 0.45);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, var(--shadow-sm);
+}
+
+[data-theme="light"] .btn--primary:hover {
+  box-shadow: 0 0 14px rgba(37, 99, 235, 0.30), var(--shadow-md);
+  filter: brightness(1.04);
+}
+
+/* ── Light mode: ghost button ────────────────────────────────────── */
+[data-theme="light"] .btn--ghost {
+  background: #fff;
+}
+
+/* ── Light mode: text-btn ────────────────────────────────────────── */
+[data-theme="light"] .text-btn:hover {
+  color: #1d4ed8;
+}
+
+/* ── Light mode: phase spinner ───────────────────────────────────── */
+[data-theme="light"] .phase-spinner {
+  border-color: rgba(0, 0, 0, 0.12);
+  border-top-color: var(--color-accent);
+}
+
+/* ── Light mode: info-sheet backdrop ─────────────────────────────── */
+[data-theme="light"] .info-sheet::backdrop {
+  background: rgba(0, 0, 0, 0.40);
+}
+
+/* ── Light mode: live panel hint ─────────────────────────────────── */
+[data-theme="light"] .live-panel__hint {
+  background: color-mix(in srgb, var(--color-accent) 5%, transparent);
+}
+
+/* ── Light mode: live update cards ──────────────────────────────── */
+[data-theme="light"] .live-update-card {
+  background: rgba(22, 163, 74, 0.05);
+  border-color: rgba(22, 163, 74, 0.20);
+}
+
+/* ── Light mode: over prediction summary ────────────────────────── */
+[data-theme="light"] .over-predict-summary {
+  background: rgba(37, 99, 235, 0.06);
+  border-color: rgba(37, 99, 235, 0.18);
+}
+
+/* ── Light mode: spark labels in SVG ────────────────────────────── */
+[data-theme="light"] .spark-label--ref {
+  fill: rgba(0, 0, 0, 0.20);
+}
+
+/* ── Light mode: live-score bar ──────────────────────────────────── */
+[data-theme="light"] .live-score-bar {
+  background: color-mix(in srgb, var(--color-accent) 6%, transparent);
+  border-color: color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+
+[data-theme="light"] .live-score-bar__input {
+  color: var(--color-text-primary);
+}
+
+/* ── Light mode: no-live-data alert ─────────────────────────────── */
+[data-theme="light"] .no-live-alert {
+  background: rgba(220, 38, 38, 0.07);
+  border-color: rgba(220, 38, 38, 0.25);
+}
+
+/* ── Smooth background/border/color transition on theme switch ────── */
+html, body, .app-header, .command-bar, .surface, .verdict-card,
+.bubble, .btn, .agent-icon, .status-dot, .live-panel__head,
+.info-sheet, .g-search__shell, .g-search__dropdown,
+.over-card, .win-trend, .wicket-trend, .live-update-card,
+.arch-item, .howto-card, .tip-box {
+  transition: background-color 0.22s ease, border-color 0.22s ease,
+    color 0.22s ease, box-shadow 0.22s ease;
+}
+
+/* ── Glassmorphism: command-bar already has it; reinforce verdict ─── */
+.verdict-card {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* ── Enlarged live dot pulse ring ────────────────────────────────── */
+@keyframes livePulseRing {
+  0%   { box-shadow: 0 0 0 0 rgba(129, 201, 149, 0.60); }
+  70%  { box-shadow: 0 0 0 7px rgba(129, 201, 149, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(129, 201, 149, 0); }
+}
+
+[data-theme="light"] .live-dot {
+  animation: livePulseRing 1.8s ease-in-out infinite;
+}
+
+/* ── Agent icon: subtle ring glow when active ────────────────────── */
+.agent-icon.on {
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+/* ── Over card: lift + glow on hover ─────────────────────────────── */
+.over-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+}
+
+[data-theme="light"] .over-card:hover {
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.12);
+}
+
+/* ── Architecture items: accent border on hover ──────────────────── */
+.arch-item:hover {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft), var(--shadow-md);
+}
+
+/* ── Phase step: active glow ─────────────────────────────────────── */
+.phase-step.active {
+  box-shadow: 0 0 8px var(--color-accent-soft);
+}
+
+/* ── Empty state icon: accent ring ──────────────────────────────── */
+.empty-state__icon {
+  box-shadow: 0 0 0 4px var(--color-accent-soft);
+}
+
+/* ── Surface: very subtle inner highlight ────────────────────────── */
+.surface {
+  box-shadow: var(--shadow-sm), 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+}
+
+[data-theme="light"] .surface {
+  box-shadow: var(--shadow-sm), 0 1px 0 rgba(255, 255, 255, 0.95) inset;
+}
+
+/* ── Tags: accent tint for primary tags ──────────────────────────── */
+.arch-tags .tag:first-child {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  border-color: rgba(138, 180, 248, 0.22);
+}
+
+[data-theme="light"] .arch-tags .tag:first-child {
+  border-color: rgba(37, 99, 235, 0.22);
+}
+
+/* ── Verdict win-prob bar: animated fill on load ─────────────────── */
+.verdict-win-prob__seg {
+  transition: width 1.25s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+/* ── Win-probability chart line: accent colour in light mode ─────── */
+[data-theme="light"] .over-card__wp-fill {
+  background: linear-gradient(90deg, #1d4ed8, #60a5fa);
+}
+
+/* ── Pipeline steps: slight gradient in light mode ───────────────── */
+[data-theme="light"] .pipeline {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.05) 0%, rgba(124, 58, 237, 0.04) 100%);
+  border-color: rgba(37, 99, 235, 0.12);
+}
+
+/* ── Phase stepper separator: colour in light mode ───────────────── */
+[data-theme="light"] .phase-stepper__sep { color: #6b7280; opacity: 0.6; }
+
+/* ── Live Monitor agent icon: green glow ─────────────────────────── */
+.agent-row:has([data-id="live"]) .agent-icon.on {
+  background: rgba(129, 201, 149, 0.16);
+  color: var(--color-success);
+  box-shadow: 0 0 0 3px var(--color-success-soft);
+}
+
+/* ── Mobile header: centered brand + pinned theme toggle ─────────── */
+@media (max-width: 760px) {
+  .app-header {
+    position: relative;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    padding-top: 0.85rem;
+    padding-right: 3rem; /* prevent text from hiding under toggle */
+    padding-left: 0.75rem;
+  }
+
+  .app-header__main {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .brand__eyebrow {
+    display: block;
+    text-align: center;
+  }
+
+  .brand__tagline {
+    text-align: center;
+    max-width: none;
+  }
+
+  /* Nav is invisible — toggle is now absolutely placed */
+  .app-header__nav {
+    display: none;
+  }
+
+  /* Theme toggle pinned to top-right corner */
+  #themeToggle {
+    display: inline-flex;
+    position: absolute;
+    top: 0.65rem;
+    right: 0.75rem;
+  }
+}

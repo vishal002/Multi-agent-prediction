@@ -1,14 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#202124" />
+  <meta name="theme-color" content="#202124" id="metaThemeColor" />
   <title>AI Cricket War Room</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="ai_cricket_war_room.css" />
+  <script>
+    (function () {
+      var saved = localStorage.getItem('acwr-theme');
+      var theme = saved || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      document.documentElement.setAttribute('data-theme', theme);
+    })();
+  </script>
 </head>
 <body>
   <div class="app">
@@ -21,10 +28,11 @@
         <p class="brand__tagline">Intel → debate → judge verdict in one flow.</p>
       </div>
       <nav class="app-header__nav" aria-label="Reference">
-        <button type="button" class="text-btn" id="btnOpenArch">Architecture</button>
-        <span class="app-header__sep" aria-hidden="true">·</span>
-        <button type="button" class="text-btn" id="btnOpenHowto">Build guide</button>
       </nav>
+      <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark theme" title="Toggle theme">
+        <svg class="theme-toggle__moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="theme-toggle__sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
     </header>
 
     <section class="command-bar" aria-label="Match and run">
@@ -254,5 +262,24 @@
   </dialog>
 
 <script src="ai_cricket_war_room.js"></script>
+<script>
+  (function () {
+    var btn = document.getElementById('themeToggle');
+    var metaTheme = document.getElementById('metaThemeColor');
+    var COLORS = { dark: '#202124', light: '#f1f5f9' };
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('acwr-theme', theme);
+      if (metaTheme) metaTheme.setAttribute('content', COLORS[theme] || COLORS.dark);
+    }
+    if (btn) {
+      btn.addEventListener('click', function () {
+        var cur = document.documentElement.getAttribute('data-theme') || 'dark';
+        applyTheme(cur === 'dark' ? 'light' : 'dark');
+      });
+    }
+    applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+  })();
+</script>
 </body>
 </html>
