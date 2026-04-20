@@ -2,25 +2,33 @@
 
 A dark-themed web demo for **multi-agent cricket match analysis**: specialist agents gather intel, two adversarial debaters argue the fixture, and a **Judge** produces a structured verdict (winner, confidence, projected score band, key player, swing factor).
 
-![AI Cricket War Room v2 — SRH vs CSK: intel agents, debate rounds, and judge verdict](image/war-room-v2-latest.png)
+---
 
-*Latest (v2): full prediction flow for SRH vs CSK — five intel agents, multi-round Bull vs Bear debate, and the Judge verdict card (CSK 60% confidence, key player Overton).*
+### Latest — v3
+
+![AI Cricket War Room v3 — full prediction flow: intel agents, judge verdict, and multi-round debate (SRH vs DC)](image/war-room-v3-demo.png)
+
+**v3 highlights:**
+- **End-to-end prediction flow** — fixture search → five parallel intel agents → Judge verdict card → multi-round Bull vs Bear debate, all in a single dark-themed canvas.
+- **Judge verdict card** (SRH vs DC): SRH predicted winner at **55% confidence**, with projected score band, key player call-out, and primary swing factor.
+- **Three-round debate** — Bull (SRH) and Bear (DC) each respond to the prior round's argument, converging on a final recommendation before the Judge delivers the structured JSON verdict.
+- **Completed-match shortcut** — if a fixture is marked `completed` in `match_suggestions.json`, agents and debate are skipped and only the **Final result** card is rendered.
 
 ---
+
+### Earlier screenshots
+
+![AI Cricket War Room v2 — SRH vs CSK: intel agents, debate rounds, and judge verdict](image/war-room-v2-latest.png)
+
+*v2: full prediction flow for SRH vs CSK — five intel agents, multi-round Bull vs Bear debate, and the Judge verdict card (CSK 60% confidence, key player Overton).*
 
 ![AI Cricket War Room — RCB vs LSG prediction with intel agents, debate flow, and judge verdict](image/war-room-screenshot.jpg)
 
-*Example: full prediction flow for an upcoming fixture — search, five intel agents, debate stage, and judge verdict card.*
+*v1 example: full prediction flow for an upcoming fixture — search, five intel agents, debate stage, and judge verdict card.*
 
 ![AI Cricket War Room — completed fixture shows Final result only (CSK vs KKR)](image/war-room-final-result.jpg)
 
-*Example: a **completed** match from `match_suggestions.json` — agents and debate are skipped; only the **Final result** card is shown.*
-
----
-
-![AI Cricket War Room — full prediction flow: intel agents, judge verdict, and multi-round debate (SRH vs DC)](image/war-room-v3-demo.png)
-
-*End-to-end demo: search → intel agents → judge verdict (SRH 55% confidence) → Bull vs Bear debate across three rounds.*
+*Completed-match mode: a fixture marked `completed: true` in `match_suggestions.json` — agents and debate are skipped; only the **Final result** card is shown.*
 
 ## What it does
 
