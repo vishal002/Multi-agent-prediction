@@ -1,5 +1,7 @@
 # AI Cricket War Room
 
+**Live demo:** [cricket-war-room.onrender.com](https://cricket-war-room.onrender.com)
+
 A dark-themed web demo for **multi-agent cricket match analysis**: specialist agents gather intel, two adversarial debaters argue the fixture, and a **Judge** produces a structured verdict (winner, confidence, projected score band, key player, swing factor).
 
 ---
