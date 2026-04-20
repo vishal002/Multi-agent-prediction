@@ -1,12 +1,17 @@
 """
-Judge agent: one Claude call over the full debate transcript → structured Verdict.
+Judge agent: one LLM call over the full debate transcript → structured Verdict.
+
+Provider priority:
+  1. Anthropic Claude  — if ANTHROPIC_API_KEY is set
+  2. Groq (OpenAI-compatible) — if GROQ_API_KEY is set
 """
 
 import json
 import os
 import re
+from typing import Any
 
-from anthropic import Anthropic
+import httpx
 from pydantic import ValidationError
 
 from judge_service.models import Verdict
@@ -42,40 +47,82 @@ def _extract_json_object(text: str) -> str:
     return s
 
 
-def run_judge(debate_transcript: str, *, client: Anthropic | None = None) -> Verdict:
-    """
-    Call Claude once with the full debate, return a validated Verdict.
+def _call_anthropic(debate_transcript: str, api_key: str) -> str:
+    """Call Anthropic Claude and return raw text response."""
+    from anthropic import Anthropic  # imported lazily so Groq path works without anthropic
 
-    Environment: ANTHROPIC_API_KEY must be set unless `client` is injected (tests).
-    """
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
-    if client is None and not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY is required for the Judge (Claude).")
-
-    anthropic = client or Anthropic(api_key=api_key)
     model = os.environ.get("ANTHROPIC_JUDGE_MODEL", "claude-sonnet-4-20250514").strip()
-
+    client = Anthropic(api_key=api_key)
     user_content = (
         "DEBATE TRANSCRIPT (complete):\n\n"
-        + (debate_transcript or "").strip()
+        + debate_transcript.strip()
         + "\n\nRespond with ONLY the JSON object described in your instructions."
     )
-
-    message = anthropic.messages.create(
+    message = client.messages.create(
         model=model,
         max_tokens=1024,
         temperature=0.2,
         system=JUDGE_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": user_content}],
     )
-
-    text_parts: list[str] = []
+    parts: list[str] = []
     for block in message.content:
         if hasattr(block, "text"):
-            text_parts.append(block.text)
+            parts.append(block.text)
         elif isinstance(block, dict) and block.get("type") == "text":
-            text_parts.append(str(block.get("text", "")))
-    raw = "".join(text_parts)
+            parts.append(str(block.get("text", "")))
+    return "".join(parts)
+
+
+def _call_groq(debate_transcript: str, api_key: str) -> str:
+    """Call Groq via its OpenAI-compatible endpoint and return raw text response."""
+    model = os.environ.get("GROQ_JUDGE_MODEL", os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")).strip()
+    user_content = (
+        "DEBATE TRANSCRIPT (complete):\n\n"
+        + debate_transcript.strip()
+        + "\n\nRespond with ONLY the JSON object described in your instructions."
+    )
+    payload: dict[str, Any] = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": JUDGE_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        "max_tokens": 1024,
+        "temperature": 0.2,
+    }
+    with httpx.Client(timeout=60.0) as client:
+        r = client.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+        )
+        r.raise_for_status()
+    data = r.json()
+    return str(data["choices"][0]["message"]["content"])
+
+
+def run_judge(debate_transcript: str) -> Verdict:
+    """
+    Call the best available LLM (Anthropic → Groq fallback) with the full debate.
+    Returns a validated Verdict.
+
+    Requires ANTHROPIC_API_KEY or GROQ_API_KEY to be set in the environment.
+    """
+    anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+    groq_key = os.environ.get("GROQ_API_KEY", "").strip()
+
+    if not anthropic_key and not groq_key:
+        raise RuntimeError(
+            "No LLM key found for the Judge. Set ANTHROPIC_API_KEY (Claude) "
+            "or GROQ_API_KEY (Groq — free tier at console.groq.com)."
+        )
+
+    if anthropic_key:
+        raw = _call_anthropic(debate_transcript, anthropic_key)
+    else:
+        raw = _call_groq(debate_transcript, groq_key)
+
     json_str = _extract_json_object(raw)
 
     try:

@@ -19,10 +19,14 @@
  * Open: http://localhost:3333/
  *
  * Match context (grounding): GET /api/match-context?label=&teams=&venue=&date= proxies to the Python
- * ingestion service (ESPNcricinfo + Cricbuzz RSS). Start ingestion:
+ * ingestion service (ESPNcricinfo + Cricbuzz RSS + CricAPI live scores). Start ingestion:
  *   pip install -r requirements-ingestion.txt
  *   python -m uvicorn ingestion_service.app:app --host 127.0.0.1 --port 3334
  * Override upstream URL: INGESTION_SERVICE_URL=http://127.0.0.1:3334
+ *
+ * CricAPI live scores (free tier — https://cricapi.com):
+ *   export CRICAPI_KEY="your_key_here"   # set before starting ingestion service
+ * Without CRICAPI_KEY the ingestion service falls back to RSS-only (ESPNcricinfo + Cricbuzz).
  *
  * Judge service (FastAPI predictions + accuracy): proxied for same-origin browser calls.
  *   pip install -r requirements-judge.txt

@@ -16,6 +16,12 @@ A dark-themed web demo for **multi-agent cricket match analysis**: specialist ag
 
 *Example: a **completed** match from `match_suggestions.json` — agents and debate are skipped; only the **Final result** card is shown.*
 
+---
+
+![AI Cricket War Room — full prediction flow: intel agents, judge verdict, and multi-round debate (SRH vs DC)](image/war-room-v3-demo.png)
+
+*End-to-end demo: search → intel agents → judge verdict (SRH 55% confidence) → Bull vs Bear debate across three rounds.*
+
 ## What it does
 
 - **Search fixtures** via autocomplete backed by `match_suggestions.json` (and `GET /api/match-suggest` when you use the Node server).
@@ -44,11 +50,29 @@ A dark-themed web demo for **multi-agent cricket match analysis**: specialist ag
 
 | Environment variable | Purpose |
 |----------------------|--------|
-| `GROQ_API_KEY` | Groq OpenAI-compatible API (default if present). |
+| `GROQ_API_KEY` | Groq OpenAI-compatible API (default if present). Free tier: [console.groq.com](https://console.groq.com). |
 | `GROQ_MODEL` | Override model (default `llama-3.3-70b-versatile`). |
 | `ANTHROPIC_API_KEY` | Claude via Anthropic API. |
 | `LLM_PROVIDER` | `groq` or `anthropic` to force a provider. |
 | `PORT` | HTTP port (default `3333`). |
+| `CRICAPI_KEY` | **CricAPI** live scores key. Free tier at [cricapi.com](https://cricapi.com) (~100 calls/day). Set on the ingestion service process. Without it, the ingestion service falls back to RSS-only. |
+| `INGESTION_ESPN_RSS_URL` | Override ESPNcricinfo RSS feed URL. |
+| `INGESTION_CRICBUZZ_RSS_URL` | Override Cricbuzz FeedBurner RSS URL. |
+| `INGESTION_FETCH_TIMEOUT_SEC` | Per-source HTTP timeout in seconds (default `8`). |
+| `INGESTION_CACHE_TTL_SEC` | Ingestion cache TTL in seconds (default `900`). Set `0` to disable. |
+| `INGESTION_DISABLE` | Set `1` to disable the ingestion service entirely. |
+
+### Live data setup (CricAPI)
+
+1. Register at [cricapi.com](https://cricapi.com) to get your free API key.
+2. Export it **before** starting the ingestion service:
+
+   ```bash
+   export CRICAPI_KEY="your_key_here"
+   python -m uvicorn ingestion_service.app:app --host 127.0.0.1 --port 3334
+   ```
+
+3. CricAPI live match bullets are prepended to `news_bullets` so all five intel agents see them first. The `live_score_snippet` field (used by the Scout/Stats agents) is populated from CricAPI structured scores when available, falling back to RSS-scraped headlines.
 
 ## API (Node server)
 
