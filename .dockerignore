@@ -1,0 +1,13 @@
+node_modules/
+.ingestion_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.git/
+.gitignore
+image/
+data/
+*.db
+*.md
+*.jsonl

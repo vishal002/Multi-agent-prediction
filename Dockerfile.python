@@ -1,0 +1,19 @@
+# ── Python services base image ─────────────────────────────────────────────────
+# Shared image for both ingestion_service and judge_service.
+# Used by docker-compose.yml; Render uses its native Python runtime instead.
+#
+# docker-compose overrides CMD per service:
+#   ingestion: uvicorn ingestion_service.app:app --host 0.0.0.0 --port 3334
+#   judge:     uvicorn judge_service.app:app     --host 0.0.0.0 --port 8000
+
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements-ingestion.txt requirements-judge.txt ./
+RUN pip install --no-cache-dir \
+        -r requirements-ingestion.txt \
+        -r requirements-judge.txt
+
+COPY ingestion_service/ ./ingestion_service/
+COPY judge_service/     ./judge_service/

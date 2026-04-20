@@ -38,7 +38,40 @@ A dark-themed web demo for **multi-agent cricket match analysis**: specialist ag
 - **Judge** — reads the transcript and returns JSON-style output rendered as the verdict card (winner, confidence bar, stats grid).
 - **Completed matches** — if a fixture is marked `completed: true` with a `result` in `match_suggestions.json`, **Run war room** skips agents, debate, and prediction UI and shows a **Final result** card only.
 
-## Quick start
+## Deploy to Render (free)
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+
+Or manually:
+
+1. Push this repo to GitHub.
+2. Go to [dashboard.render.com](https://dashboard.render.com) → **New** → **Blueprint** → select your repo. Render will read `render.yaml` and create all three services automatically.
+3. After the first deploy, open each service in the dashboard and add your API keys under **Environment**:
+
+   | Service | Variable | Value |
+   |---------|----------|-------|
+   | `cricket-war-room` | `GROQ_API_KEY` | your key from [console.groq.com](https://console.groq.com) (free) |
+   | `cricket-war-room` | `INGESTION_SERVICE_URL` | `https://cricket-ingestion.onrender.com` |
+   | `cricket-war-room` | `JUDGE_SERVICE_URL` | `https://cricket-judge.onrender.com` |
+   | `cricket-ingestion` | `CRICAPI_KEY` | optional live-scores key |
+   | `cricket-judge` | `GROQ_API_KEY` | same key as above |
+
+4. Trigger a redeploy on `cricket-war-room` so it picks up the new env vars. Your app is live at `https://cricket-war-room.onrender.com`.
+
+> **Free-tier note:** services spin down after 15 min of inactivity — the first request takes ~30 s to wake up. The SQLite predictions DB resets on restart (upgrade to a paid plan + disk for persistence).
+
+## Run with Docker (local or self-hosted VPS)
+
+```bash
+cp .env.example .env        # fill in GROQ_API_KEY (minimum)
+docker compose up --build   # http://localhost:3333/
+```
+
+All three services start together. Judge predictions persist in a Docker volume (`judge_data`).
+
+---
+
+## Quick start (local, no Docker)
 
 1. **Recommended:** set an LLM API key and start the local server (avoids CORS and hides keys):
 
@@ -108,8 +141,14 @@ Restart **`node server.mjs`** after changing the JSON file so the server reloads
 | `ai_cricket_war_room.js` | Agents UI, debate, judge, autocomplete, completed-match shortcut |
 | `server.mjs` | Static host + LLM proxy + match APIs |
 | `match_suggestions.json` | Fixture catalog |
-| `judge_service/` | Separate Python FastAPI service (predictions / accuracy) — optional to this static PoC |
-| `openclaw/README.md` | Optional: how to re-home ingestion / intel / debate / judge as OpenClaw tool nodes while keeping this UI as a thin client |
+| `judge_service/` | Python FastAPI — predictions + accuracy (optional) |
+| `ingestion_service/` | Python FastAPI — RSS/CricAPI data ingestion (optional) |
+| `render.yaml` | Render Blueprint — one-click deploy of all 3 services |
+| `Dockerfile` | Node.js production image |
+| `Dockerfile.python` | Shared Python image (ingestion + judge) |
+| `docker-compose.yml` | Local Docker orchestration |
+| `.env.example` | Template for required environment variables |
+| `openclaw/README.md` | Optional: re-home services as OpenClaw tool nodes |
 
 ## License / assets
 

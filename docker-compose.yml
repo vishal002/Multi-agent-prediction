@@ -1,0 +1,53 @@
+# Local Docker Compose — runs all three services together.
+# Usage:
+#   1. Copy .env.example to .env and fill in your API keys
+#   2. docker compose up --build
+#   3. Open http://localhost:3333/
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3333:3333"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-}
+      - INGESTION_SERVICE_URL=http://ingestion:3334
+      - JUDGE_SERVICE_URL=http://judge:8000
+    depends_on:
+      ingestion:
+        condition: service_healthy
+      judge:
+        condition: service_started
+
+  ingestion:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: uvicorn ingestion_service.app:app --host 0.0.0.0 --port 3334
+    environment:
+      - CRICAPI_KEY=${CRICAPI_KEY:-}
+      - INGESTION_CACHE_TTL_SEC=${INGESTION_CACHE_TTL_SEC:-900}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3334/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  judge:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    command: uvicorn judge_service.app:app --host 0.0.0.0 --port 8000
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - WAR_ROOM_DB_PATH=/data/war_room.db
+    volumes:
+      - judge_data:/data
+
+volumes:
+  judge_data:

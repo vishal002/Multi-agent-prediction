@@ -1,1 +1,4 @@
 .ingestion_cache/
+data/
+.env
+
