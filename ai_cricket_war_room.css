@@ -190,6 +190,14 @@ body {
   opacity: 0.88;
 }
 
+.app-footer__disclaimer {
+  margin: 0.4rem 0 0;
+  font-size: 0.625rem;
+  color: var(--color-text-tertiary);
+  line-height: 1.45;
+  opacity: 0.88;
+}
+
 .verdict-subkicker {
   margin: 0.2rem 0 0;
   font-size: 0.65rem;

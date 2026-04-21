@@ -893,30 +893,24 @@ function updateJudgeAccuracyFooterFromStats(stats, opts = {}) {
   if (opts.fileProtocol) {
     el.classList.add("app-footer__line--muted");
     el.textContent =
-      "Judge accuracy: open this app via node server (http://localhost:3333) to use the Judge API proxy.";
+      "Prediction stats need the app server — use http://localhost:3333 instead of opening the file directly.";
     return;
   }
-  if (opts.proxyUnreachable) {
-    el.classList.add("app-footer__line--muted");
-    el.textContent =
-      "Judge accuracy: service unreachable — start uvicorn (judge_service) on port 8000, or set JUDGE_SERVICE_URL for node.";
-    return;
-  }
+
   if (!stats) {
     el.classList.add("app-footer__line--muted");
-    el.textContent = "Judge accuracy: could not load stats.";
     return;
   }
   if (stats.total_settled <= 0) {
     el.textContent =
-      "Judge accuracy: no settled predictions yet (record results in judge_service to track).";
+      "No settled predictions yet — record match outcomes to see accuracy here.";
     return;
   }
   const pct =
     stats.accuracy != null && Number.isFinite(stats.accuracy)
       ? `${Math.round(stats.accuracy * 1000) / 10}%`
       : "—";
-  el.textContent = `Judge accuracy: ${stats.correct}/${stats.total_settled} correct (${pct})`;
+  el.textContent = `Settled predictions: ${stats.correct} of ${stats.total_settled} correct (${pct}).`;
 }
 
 async function refreshJudgeAccuracyFooter() {
