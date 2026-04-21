@@ -243,6 +243,14 @@ body {
   position: relative;
 }
 
+@media (max-width: 480px) {
+  .command-bar__match {
+    flex: 1 1 0;
+    min-width: 0;
+    position: relative;
+  }
+}
+
 /* ── Live score quick-paste bar ──────────────────────────────────── */
 .live-score-bar {
   flex: 1 1 100%;
@@ -1882,11 +1890,12 @@ body {
   }
 
   .dash-col--agents {
-    max-height: min(38vh, 280px);
+    max-height: none;
   }
 
   .surface--agents {
-    max-height: min(32vh, 240px);
+    max-height: min(52vh, 360px);
+    overflow-y: auto;
   }
 
   .app {
@@ -2008,7 +2017,7 @@ body {
   }
 
   .dash-col--agents .surface--agents {
-    overflow: hidden;
+    overflow-y: auto;
     transition: max-height 0.3s var(--ease-out), opacity 0.2s ease, padding 0.2s ease;
   }
 
