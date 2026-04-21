@@ -35,7 +35,25 @@
       </button>
     </header>
 
+    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
+
     <section class="command-bar" aria-label="Match and run">
+      <!-- ── Live score first (ground truth) then fixture search + run ── -->
+      <div class="live-score-bar" id="liveScoreBar">
+        <label class="live-score-bar__label" for="liveScoreInput">
+          <span class="live-dot" aria-hidden="true"></span>
+          Live score
+        </label>
+        <input class="live-score-bar__input" id="liveScoreInput" type="text" autocomplete="off" spellcheck="false"
+          placeholder="e.g. LSG 109/2 (11.1 ov), chasing 255, RRR 16.5" />
+        <button type="button" class="live-score-bar__fetch" id="liveScoreFetch" title="Fetch latest live score from RSS feeds">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.56"/></svg>
+          <span>Fetch live</span>
+        </button>
+        <button type="button" class="live-score-bar__clear" id="liveScoreClear" aria-label="Clear live score" hidden>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
       <div class="command-bar__match match-field g-search">
         <div class="g-search__shell">
           <svg class="g-search__mag" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -52,22 +70,6 @@
           <div class="g-search__empty" id="matchAutocompleteEmpty" hidden role="status">No matching fixtures</div>
           <div class="g-search__footer"><span class="g-search__kbd">↑</span><span class="g-search__kbd">↓</span> navigate · <span class="g-search__kbd">Enter</span> select · <span class="g-search__kbd">Esc</span> close</div>
         </div>
-      </div>
-      <!-- ── Live score quick-paste ─────────────────────────────────────── -->
-      <div class="live-score-bar" id="liveScoreBar">
-        <label class="live-score-bar__label" for="liveScoreInput">
-          <span class="live-dot" aria-hidden="true"></span>
-          Live score
-        </label>
-        <input class="live-score-bar__input" id="liveScoreInput" type="text" autocomplete="off" spellcheck="false"
-          placeholder="e.g. LSG 109/2 (11.1 ov), chasing 255, RRR 16.5" />
-        <button type="button" class="live-score-bar__fetch" id="liveScoreFetch" title="Fetch latest live score from RSS feeds">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.56"/></svg>
-          <span>Fetch live</span>
-        </button>
-        <button type="button" class="live-score-bar__clear" id="liveScoreClear" aria-label="Clear live score" hidden>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
-        </button>
       </div>
       <div class="command-bar__actions" id="ctaRow">
         <button type="button" class="btn btn--primary" id="runBtn" onclick="runWarRoom()">Run war room</button>

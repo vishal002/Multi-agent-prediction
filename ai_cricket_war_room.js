@@ -1162,17 +1162,26 @@ function showApiError(msg) {
   b.innerHTML = `<span class="phase-banner__err-text">${escapeHtml(msg)}</span>`;
 }
 
+function dismissNoLiveDataWarning() {
+  const el = document.getElementById("noLiveDataAlert");
+  if (el) el.hidden = true;
+  const bar = document.getElementById("liveScoreBar");
+  if (bar) bar.classList.remove("live-score-bar--no-data");
+}
+
 /**
- * Show/hide the "no live score" warning banner above the debate area.
- * When visible it prompts the user to paste the current score into the live score bar.
+ * Show/hide the "no live score" warning banner in the debate area.
+ * When visible it prompts the user to paste the current score into the live score field.
  * @param {boolean} show
  */
 function showNoLiveDataWarning(show) {
   const id = "noLiveDataAlert";
+  const bar = document.getElementById("liveScoreBar");
   let el = document.getElementById(id);
 
   if (!show) {
     if (el) el.hidden = true;
+    if (bar) bar.classList.remove("live-score-bar--no-data");
     return;
   }
 
@@ -1186,16 +1195,19 @@ function showNoLiveDataWarning(show) {
       <span class="no-live-alert__text">
         <strong>No live score detected.</strong>
         For an accurate prediction on a live match, paste the current score into the
-        <strong>Live score</strong> bar above (e.g.&nbsp;<em>PBKS 254/7 (20&nbsp;ov) — LSG 192/4 (19&nbsp;ov), need 63 off 6 balls, RRR&nbsp;&gt;36</em>)
+        <strong>Live score</strong> row at the top of the command bar (e.g.&nbsp;<em>PBKS 254/7 (20&nbsp;ov) — LSG 192/4 (19&nbsp;ov), need 63 off 6 balls, RRR&nbsp;&gt;36</em>)
         and re-run.
       </span>
-      <button type="button" class="no-live-alert__close" aria-label="Dismiss" onclick="document.getElementById('noLiveDataAlert').hidden=true">×</button>`;
+      <button type="button" class="no-live-alert__close" aria-label="Dismiss">×</button>`;
     const debateCard = document.getElementById("debateCard");
     if (debateCard) debateCard.prepend(el);
     else return;
+    const closeBtn = el.querySelector(".no-live-alert__close");
+    if (closeBtn) closeBtn.addEventListener("click", dismissNoLiveDataWarning);
   }
 
   el.hidden = false;
+  if (bar) bar.classList.add("live-score-bar--no-data");
 }
 
 /**
@@ -2869,8 +2881,8 @@ async function autoPopulateTodayMatch() {
     else if (best.venue) venueEl.value = best.venue;
   }
 
-  // Show a subtle indicator that the match was auto-detected
-  showAutoPopulateBadge(todayLive.length > 0 ? "Today's match auto-detected" : "Next upcoming match auto-detected");
+  // Subtle toast — keeps the command bar uncluttered
+  showAutoDetectToast(todayLive.length > 0 ? "Today's match auto-detected" : "Next upcoming match auto-detected");
 
   // Auto-fetch live score only for today's matches (not future ones)
   if (todayLive.length > 0) {
@@ -2889,23 +2901,40 @@ async function autoPopulateTodayMatch() {
 }
 
 /**
- * Show a brief auto-detect badge beneath the match search bar, then fade it out.
+ * Show a brief bottom toast when the fixture was auto-filled on load, then fade out.
  * @param {string} text
  */
-function showAutoPopulateBadge(text) {
-  let badge = document.getElementById("autoPopulateBadge");
-  if (!badge) {
-    badge = document.createElement("div");
-    badge.id = "autoPopulateBadge";
-    badge.className = "auto-populate-badge";
-    const matchField = document.querySelector(".command-bar__match");
-    if (matchField) matchField.appendChild(badge);
-    else return;
+function showAutoDetectToast(text) {
+  let region = document.getElementById("toastRegion");
+  if (!region) {
+    region = document.createElement("div");
+    region.id = "toastRegion";
+    region.className = "toast-region";
+    region.setAttribute("aria-live", "polite");
+    region.setAttribute("aria-atomic", "true");
+    document.querySelector(".app")?.appendChild(region) ?? document.body.appendChild(region);
   }
-  badge.textContent = text;
-  badge.classList.remove("auto-populate-badge--fade");
-  void badge.offsetWidth; // force reflow to restart animation
-  badge.classList.add("auto-populate-badge--fade");
+  let toast = document.getElementById("autoDetectToast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "autoDetectToast";
+    toast.className = "toast toast--auto-detect";
+    toast.setAttribute("role", "status");
+    region.appendChild(toast);
+  }
+  toast.classList.remove("toast--dismissed", "toast--animate");
+  toast.textContent = text;
+  void toast.offsetWidth; // force reflow to restart animation
+  toast.classList.add("toast--animate");
+  toast.addEventListener(
+    "animationend",
+    (/** @type {AnimationEvent} */ e) => {
+      if (e.animationName !== "toastAutoDetect") return;
+      toast.classList.remove("toast--animate");
+      toast.classList.add("toast--dismissed");
+    },
+    { once: true },
+  );
 }
 
 function initLiveScoreBar() {
