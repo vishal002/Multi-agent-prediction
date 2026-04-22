@@ -1791,6 +1791,7 @@ function appendLiveUpdate(liveSnippet, prediction, teams) {
 async function runWarRoom() {
   if (running) return;
   running = true;
+  document.getElementById("main-content")?.classList.remove("dashboard--pre-war-room");
   const match =
     (document.getElementById('matchInput').value || MATCH_SUGGESTIONS_FALLBACK_ROWS[0].label).trim();
 
@@ -2149,6 +2150,7 @@ function resetWarRoom() {
   document.getElementById('runBtn').style.display='';
   document.getElementById('resetBtn').style.display='none';
   document.getElementById('runningLabel').style.display='none';
+  document.getElementById("main-content")?.classList.add("dashboard--pre-war-room");
 }
 
 function initMatchAutocomplete() {
