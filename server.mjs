@@ -13,8 +13,9 @@
  *
  * Pick provider explicitly (optional):
  *   LLM_PROVIDER=groq | anthropic
- * Groq model override (if defaults change):
+ * Groq models (defaults: 70B for judge/over JSON, 8B for intel/debate/live — saves TPD):
  *   GROQ_MODEL=llama-3.3-70b-versatile
+ *   GROQ_MODEL_LIGHT=llama-3.1-8b-instant
  *
  * Open: http://localhost:3333/
  *
@@ -172,6 +173,8 @@ const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY?.trim();
 const LLM_PROVIDER = process.env.LLM_PROVIDER?.toLowerCase();
 
 const GROQ_MODEL = process.env.GROQ_MODEL?.trim() || "llama-3.3-70b-versatile";
+/** Smaller/cheaper Groq model for short intel + debate turns (saves TPD vs 70B). */
+const GROQ_MODEL_LIGHT = process.env.GROQ_MODEL_LIGHT?.trim() || "llama-3.1-8b-instant";
 
 const INGESTION_SERVICE_URL = (process.env.INGESTION_SERVICE_URL || "http://127.0.0.1:3334").replace(
   /\/$/,
@@ -200,7 +203,29 @@ function contentToString(content) {
   return String(content);
 }
 
-function anthropicBodyToGroq(anthropicJson) {
+/** @param {string} route */
+function groqModelForRoute(route) {
+  if (route === "judge" || route === "over") return GROQ_MODEL;
+  return GROQ_MODEL_LIGHT;
+}
+
+/** @param {string} route */
+function groqMaxTokensCap(route) {
+  const caps = { intel: 96, debate: 160, judge: 640, live: 140, over: 2200, misc: 1024 };
+  return caps[route] ?? 1024;
+}
+
+/** @param {string} route */
+function groqTemperature(route) {
+  const t = { intel: 0.35, debate: 0.55, judge: 0.25, live: 0.2, over: 0.35, misc: 0.55 };
+  return t[route] ?? 0.55;
+}
+
+/**
+ * @param {Record<string, unknown>} anthropicJson
+ * @param {string} route
+ */
+function anthropicBodyToGroq(anthropicJson, route) {
   const messages = [];
   const sys = anthropicJson.system;
   if (sys != null && String(sys).trim()) {
@@ -210,12 +235,18 @@ function anthropicBodyToGroq(anthropicJson) {
     const role = m.role === "assistant" ? "assistant" : "user";
     messages.push({ role, content: contentToString(m.content) });
   }
-  return {
-    model: GROQ_MODEL,
+  const requested = Math.min(Number(anthropicJson.max_tokens) || 1024, 8192);
+  const cap = groqMaxTokensCap(route);
+  const body = {
+    model: groqModelForRoute(route),
     messages,
-    max_tokens: Math.min(Number(anthropicJson.max_tokens) || 1024, 8192),
-    temperature: 0.7,
+    max_tokens: Math.min(requested, cap),
+    temperature: groqTemperature(route),
   };
+  if (route === "intel") {
+    body.stop = ["\n\n", "\nUser:"];
+  }
+  return body;
 }
 
 function groqResponseToAnthropicShape(groqJson) {
@@ -238,7 +269,10 @@ async function forwardGroq(anthropicBodyString) {
   } catch {
     return { status: 400, body: JSON.stringify({ error: { message: "Invalid JSON body" } }) };
   }
-  const groqBody = anthropicBodyToGroq(anthropicJson);
+  const routeRaw = anthropicJson.groq_route;
+  delete anthropicJson.groq_route;
+  const route = typeof routeRaw === "string" && routeRaw.trim() ? routeRaw.trim() : "misc";
+  const groqBody = anthropicBodyToGroq(anthropicJson, route);
   const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -265,6 +299,16 @@ async function forwardGroq(anthropicBodyString) {
 }
 
 async function forwardAnthropic(body) {
+  let outbound = body;
+  try {
+    const j = JSON.parse(body);
+    if (j && typeof j === "object" && "groq_route" in j) {
+      delete j.groq_route;
+      outbound = JSON.stringify(j);
+    }
+  } catch {
+    /* not JSON — pass through */
+  }
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -272,7 +316,7 @@ async function forwardAnthropic(body) {
       "x-api-key": ANTHROPIC_KEY,
       "anthropic-version": "2023-06-01",
     },
-    body,
+    body: outbound,
   });
   const text = await r.text();
   return { status: r.status, body: text };
@@ -674,7 +718,9 @@ server.listen(PORT, () => {
   console.log(`War room: http://localhost:${PORT}/`);
   activeProvider = resolveProvider();
   if (activeProvider === "groq") {
-    console.log(`LLM: Groq (model ${GROQ_MODEL}) — free tier at console.groq.com`);
+    console.log(
+      `LLM: Groq — heavy ${GROQ_MODEL} / light ${GROQ_MODEL_LIGHT} (set GROQ_MODEL_LIGHT to tune TPD) — console.groq.com`
+    );
   } else if (activeProvider === "anthropic") {
     console.log("LLM: Anthropic Claude");
   } else {

@@ -1150,7 +1150,13 @@ function resolveWinnerDisplay(teams, winnerCodeOrName) {
   return w;
 }
 
-async function callClaude(messages, system, maxTokens = 1000) {
+/**
+ * @param {Array<{role: string, content: string}>} messages
+ * @param {string} system
+ * @param {number} [maxTokens]
+ * @param {'intel'|'debate'|'judge'|'live'|'over'|'misc'} [groqRoute] forwarded to the proxy for Groq model + cap selection (ignored by Anthropic after strip)
+ */
+async function callClaude(messages, system, maxTokens = 1000, groqRoute = 'misc') {
   const r = await fetch(`${apiBase()}/api/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1159,6 +1165,7 @@ async function callClaude(messages, system, maxTokens = 1000) {
       max_tokens: maxTokens,
       system,
       messages,
+      groq_route: groqRoute,
     }),
   });
   let d;
@@ -1402,6 +1409,19 @@ async function fetchMatchContextFromServer(match, teams) {
  * @param {Record<string, unknown>} ctx
  * @returns {string}
  */
+/** Cap ingested bundle size for LLM prompts (tokens ≈ chars/4). */
+const MAX_INGESTED_DEBATE_CHARS = 10_000;
+
+/**
+ * @param {string} s
+ * @param {number} max
+ */
+function clipText(s, max) {
+  const t = String(s);
+  if (t.length <= max) return t;
+  return `${t.slice(0, Math.max(0, max - 20))}\n…[truncated]`;
+}
+
 function formatIngestedBlockForDebate(ctx) {
   if (!ctx || ctx._ingestion_error) {
     const reason =
@@ -1418,25 +1438,30 @@ function formatIngestedBlockForDebate(ctx) {
     if (names.length) parts.push(`Sources: ${names.join(", ")}`);
   }
   if (ctx.pitch_note != null && String(ctx.pitch_note).trim())
-    parts.push(`Pitch note: ${String(ctx.pitch_note).trim()}`);
+    parts.push(`Pitch note: ${clipText(String(ctx.pitch_note).trim(), 600)}`);
   if (ctx.weather_note != null && String(ctx.weather_note).trim())
-    parts.push(`Weather note: ${String(ctx.weather_note).trim()}`);
+    parts.push(`Weather note: ${clipText(String(ctx.weather_note).trim(), 600)}`);
   const st = ctx.stats_tables;
   if (st && typeof st === "object" && Object.keys(st).length) {
     try {
-      parts.push(`Stats tables:\n${JSON.stringify(st, null, 2)}`);
+      parts.push(`Stats tables:\n${clipText(JSON.stringify(st), 4500)}`);
     } catch {
-      parts.push(`Stats tables: ${String(st)}`);
+      parts.push(`Stats tables: ${clipText(String(st), 4500)}`);
     }
   }
-  const bullets = normalizeNewsBullets(ctx.news_bullets);
+  const bullets = normalizeNewsBullets(ctx.news_bullets)
+    .slice(0, 24)
+    .map((b) => {
+      const line = String(b).trim();
+      return line.length > 280 ? `${line.slice(0, 279)}…` : line;
+    });
   if (bullets.length) {
     parts.push(`News bullets:\n${bullets.map((b, i) => `  ${i + 1}. ${b}`).join("\n")}`);
   }
   if (!parts.length) {
     return "(Evidence bundle empty. Do not invent match-specific numbers or insider facts.)";
   }
-  return parts.join("\n\n");
+  return clipText(parts.join("\n\n"), MAX_INGESTED_DEBATE_CHARS);
 }
 
 const SCOUT_RX =
@@ -1456,16 +1481,16 @@ function buildAgentEvidenceString(agentId, ctx) {
 
   if (agentId === "news") {
     if (!bullets.length) return "";
-    return bullets.join("\n");
+    return clipText(bullets.join("\n"), 6000);
   }
 
   if (agentId === "stats") {
     const st = ctx.stats_tables;
     if (st && typeof st === "object" && Object.keys(st).length) {
       try {
-        return JSON.stringify(st, null, 2);
+        return clipText(JSON.stringify(st), 4000);
       } catch {
-        return String(st);
+        return clipText(String(st), 4000);
       }
     }
     return "";
@@ -1491,7 +1516,7 @@ function buildAgentEvidenceString(agentId, ctx) {
 
   if (agentId === "scout") {
     const hit = bullets.filter((b) => SCOUT_RX.test(b));
-    if (hit.length) return hit.join("\n");
+    if (hit.length) return clipText(hit.join("\n"), 3500);
     return "";
   }
 
@@ -1621,25 +1646,26 @@ function readLivePanelState() {
 function buildMatchContextBlock(match, insights, teams, ingestedCtx, liveState) {
   const teamLine = `Teams: **${teams.teamA}** vs **${teams.teamB}** (Bull argues for ${teams.teamA}; Bear argues for ${teams.teamB}).\n`;
   const ingested = formatIngestedBlockForDebate(ingestedCtx);
-  const lines = AGENTS.map(
-    (a) => `- ${a.name} (${a.role}): ${insights[a.id]?.trim() || "—"}`
-  ).join("\n");
+  const lines = AGENTS.map((a) => {
+    const raw = insights[a.id]?.trim() || "—";
+    return `- ${a.name} (${a.role}): ${clipText(raw, 220)}`;
+  }).join("\n");
   const liveBlock = liveState
     ? `\n\n⚡ LIVE IN-GAME STATE (GROUND TRUTH — argue from this reality, not pre-match expectations):\n${enrichLiveStateText(liveState.text)}\n`
     : "";
   return `${teamLine}Fixture: ${match}${liveBlock}\n\nIngested evidence (only treat as factual what appears here):\n${ingested}\n\nSpecialist agent signals:\n${lines}`;
 }
 
-/** Bull: team A; Bear: team B; ≤60 words; evidence-bound. */
+/** Bull: team A; Bear: team B; ≤60 words; evidence-bound (keep short — sent every round). */
 function debateSystemBull(teams) {
-  return `You are an aggressive cricket analyst who always argues **${teams.teamA}** beats **${teams.teamB}**. You may ONLY use claims supported by the "Ingested evidence" and "Specialist agent signals" in the thread (from the first user message). Do not invent statistics or facts not grounded there; if evidence is thin, say so briefly and argue cautiously. Name both teams when it helps clarity. Stay at or under 60 words per response.`;
+  return `Argue **${teams.teamA}** over **${teams.teamB}** using ONLY the first user message’s ingested evidence + specialist signals. No invented stats. If data is thin, say so in one line. ≤60 words; no preamble.`;
 }
 
 function debateSystemBear(teams) {
-  return `You are a skeptical analyst who always argues **${teams.teamB}** beats **${teams.teamA}**. Counter the previous argument directly, using ONLY the ingested evidence and specialist signals from the first user message. Do not invent numbers or unverifiable claims; if the record is thin, acknowledge it. Name both teams when it helps clarity. Stay at or under 60 words per response.`;
+  return `Argue **${teams.teamB}** over **${teams.teamA}**; counter the last assistant turn using ONLY evidence from the first user message. No invented stats. ≤60 words; no preamble.`;
 }
 
-const DEBATE_MAX_TOKENS = 220;
+const DEBATE_MAX_TOKENS = 140;
 
 // ─── Live Monitor state ─────────────────────────────────────────────────────
 let liveMonitorTimer = null;
@@ -1729,7 +1755,8 @@ async function updateLivePrediction(match, teams, liveSnippet) {
     const raw = await callClaude(
       [{ role: "user", content: prompt }],
       "You are a live cricket probability estimator. Given the current match state, return only valid JSON with updated win percentages.",
-      200
+      120,
+      "live"
     );
     let parsed;
     try {
@@ -1954,7 +1981,9 @@ async function runWarRoom() {
               `Evidence (use ONLY the following; do not use outside knowledge):\n---\n${evidenceBlock}\n---`,
           },
         ],
-        INTEL_SYSTEM
+        INTEL_SYSTEM,
+        88,
+        "intel"
       )
         .then((text) => {
           const el = document.getElementById('insight-' + agent.id);
@@ -2019,7 +2048,7 @@ async function runWarRoom() {
       await sleep(500);
       const system = rd.side === 'bull' ? debateSystemBull(teams) : debateSystemBear(teams);
       const messages = [...history, { role: 'user', content: rd.userContent }];
-      const text = await callClaude(messages, system, DEBATE_MAX_TOKENS);
+      const text = await callClaude(messages, system, DEBATE_MAX_TOKENS, "debate");
       history.push({ role: 'user', content: rd.userContent }, { role: 'assistant', content: text });
       hideTyping();
       debateLog.push({
@@ -2077,10 +2106,12 @@ async function runWarRoom() {
         [
           {
             role: 'user',
-            content: `Match: "${match}"\nTeams: ${teams.teamA} vs ${teams.teamB}${liveState ? `\n\nLIVE IN-GAME STATE (ground truth — overrides everything):\n${enrichLiveStateText(liveState.text)}` : ""}\n\nDebate transcript:\n${debateStr}\n\nRespond with ONLY the JSON object described in your instructions.`,
+            content: `Match: "${match}"\nTeams: ${teams.teamA} vs ${teams.teamB}${liveState ? `\n\nLIVE IN-GAME STATE (ground truth — overrides everything):\n${enrichLiveStateText(liveState.text)}` : ""}\n\nDebate transcript:\n${clipText(debateStr, 12000)}\n\nRespond with ONLY the JSON object described in your instructions.`,
           },
         ],
-        buildBrowserJudgeSystemPrompt(teams, match, liveState)
+        buildBrowserJudgeSystemPrompt(teams, match, liveState),
+        520,
+        "judge"
       );
       hideTyping();
       let parsed;
@@ -2801,7 +2832,8 @@ async function runOverPrediction() {
     const raw = await callClaude(
       [{ role: "user", content: prompt }],
       OVER_PREDICT_SYSTEM,
-      3200
+      1800,
+      "over"
     );
 
     let parsed;
