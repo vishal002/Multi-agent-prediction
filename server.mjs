@@ -326,7 +326,14 @@ const STATIC_FILES = new Set([
   "ai_cricket_war_room.html",
   "ai_cricket_war_room.css",
   "ai_cricket_war_room.js",
+  "sw.js",
   "match_suggestions.json",
+  "manifest.webmanifest",
+  "favicon.png",
+  "icon-192.png",
+  "icon-512.png",
+  "icon-maskable-512.png",
+  "apple-touch-icon.png",
 ]);
 
 const MIME = {
@@ -334,6 +341,9 @@ const MIME = {
   ".css": "text/css; charset=utf-8",
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
+  ".svg": "image/svg+xml; charset=utf-8",
+  ".png": "image/png",
 };
 
 function safeJoin(root, reqPath) {

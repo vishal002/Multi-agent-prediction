@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "icons": "node scripts/generate-pwa-icons.mjs"
+  },
+  "devDependencies": {
+    "sharp": "^0.33.5"
   }
 }

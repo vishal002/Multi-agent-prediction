@@ -14,9 +14,12 @@ RUN npm ci --omit=dev
 COPY ai_cricket_war_room.html \
      ai_cricket_war_room.css  \
      ai_cricket_war_room.js   \
+     sw.js                    \
      match_suggestions.json   \
+     manifest.webmanifest     \
      server.mjs               \
      ./
+COPY icons ./icons/
 
 EXPOSE 3333
 
