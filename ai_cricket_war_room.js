@@ -235,12 +235,45 @@ function renderHowto() {
   `).join('');
 }
 
+/** Scroll the debate column into view (e.g. when debate phase starts). */
+function scrollDebatePanelIntoView(options = {}) {
+  const behavior = options.behavior ?? "smooth";
+  const block = options.block ?? "nearest";
+  const panel = document.getElementById("debatePanel") || document.querySelector(".dash-col--debate");
+  if (!panel) return;
+  requestAnimationFrame(() => {
+    panel.scrollIntoView({ block, behavior, inline: "nearest" });
+    if (typeof panel.focus === "function") {
+      try {
+        panel.focus({ preventScroll: true });
+      } catch {
+        panel.focus();
+      }
+    }
+  });
+}
+
+/** Scroll the verdict / stage column into view (completed match or final verdict). */
+function scrollVerdictPanelIntoView(options = {}) {
+  const behavior = options.behavior ?? "smooth";
+  const panel = document.querySelector(".dash-col--stage");
+  if (!panel) return;
+  requestAnimationFrame(() => {
+    panel.scrollIntoView({ block: "nearest", behavior, inline: "nearest" });
+  });
+}
+
+/** Keep the typing indicator / latest bubbles visible inside the debate scroller. */
 function scrollDebateEnd() {
   requestAnimationFrame(() => {
-    window.scrollTo({
-      top: document.documentElement.scrollHeight,
-      behavior: "auto",
-    });
+    const scroller = document.getElementById("debateScroller");
+    if (scroller) {
+      scroller.scrollTop = scroller.scrollHeight;
+    }
+    const panel = document.querySelector(".dash-col--debate");
+    if (panel) {
+      panel.scrollIntoView({ block: "nearest", behavior: "auto", inline: "nearest" });
+    }
   });
 }
 
@@ -1783,7 +1816,7 @@ async function runWarRoom() {
     </div>`;
       scheduleVerdictWinProbabilityAnimation(verdictEl, winProbFinal.pctA, winProbFinal.pctB);
 
-      scrollDebateEnd();
+      scrollVerdictPanelIntoView({ behavior: "smooth" });
     } catch (e) {
       showApiError(e instanceof Error ? e.message : String(e));
       document.getElementById('runBtn').style.display = '';
@@ -1913,6 +1946,7 @@ async function runWarRoom() {
     const matchContext = buildMatchContextBlock(match, insights, teams, ingestedCtx, liveState);
     setPhase('Debate in progress…', true);
     document.getElementById('runningLabel').textContent = `${teams.codeA} vs ${teams.codeB} · debate`;
+    scrollDebatePanelIntoView({ behavior: "smooth", block: "start" });
 
     const debateLog = [];
     const rounds = [
@@ -2038,7 +2072,7 @@ async function runWarRoom() {
       mountJudgeVerdictCard(vDiv, v, teams, { source: 'browser', ingestionCtx: ingestedCtx });
     }
 
-    scrollDebateEnd();
+    scrollVerdictPanelIntoView({ behavior: "smooth" });
     setPhase(null);
     document.getElementById('runningLabel').style.display = 'none';
 

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#202124" id="metaThemeColor" />
   <title>AI Cricket War Room</title>
+  <!-- UI tokens & patterns: DESIGN.md -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
@@ -179,7 +180,7 @@
       <section class="dash-col dash-col--stage" aria-labelledby="stage-heading">
         <div class="dash-col__head">
           <div class="stage-head-row">
-            <h2 class="dash-col__label" id="stage-heading">Debate &amp; verdict</h2>
+            <h2 class="dash-col__label" id="stage-heading">Verdict</h2>
             <div class="phase-stepper" id="phaseStepper" aria-hidden="true">
               <span class="phase-step" id="stepIntel">Intel</span>
               <span class="phase-stepper__sep">›</span>
@@ -189,7 +190,7 @@
             </div>
           </div>
         </div>
-        <div class="surface surface--stage" id="debateCard">
+        <div class="surface surface--stage surface--verdict" id="debateCard">
           <div id="phaseBanner" class="phase-banner" style="display:none"></div>
           <div class="stage-fixture-verdict" id="stageFixtureVerdict" hidden>
             <div class="match-bar match-bar--in-summary" id="matchBar" hidden aria-label="Fixture">
@@ -210,6 +211,12 @@
             <div id="verdictArea" class="verdict-slot"></div>
             <div id="liveUpdatesArea" class="live-updates-area" hidden></div>
           </div>
+        </div>
+      </section>
+
+      <aside class="dash-col dash-col--debate" aria-labelledby="debate-heading" tabindex="-1" id="debatePanel">
+        <h2 class="dash-col__label" id="debate-heading">Debate</h2>
+        <div class="surface surface--debate">
           <div class="debate-scroller" id="debateScroller">
             <div class="debate-area" id="debateArea">
               <div class="empty-state" id="emptyState">
@@ -225,7 +232,7 @@
             </div>
           </div>
         </div>
-      </section>
+      </aside>
     </main>
 
     <footer class="app-footer" aria-label="Prediction stats and disclaimer">

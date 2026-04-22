@@ -1,4 +1,5 @@
-/* ─── Design tokens (Google dark / scorecard-inspired) ───────────── */
+/* ─── Design tokens (Google dark / scorecard-inspired) ─────────────
+   Canonical UI spec for tokens, themes, and patterns: DESIGN.md      */
 :root {
   --gap: 12px;
   --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
@@ -377,7 +378,7 @@ body {
 .dashboard {
   flex: 0 1 auto;
   display: grid;
-  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
+  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr) minmax(200px, 300px);
   gap: 0.6rem;
   align-items: start;
   padding-bottom: 0.35rem;
@@ -424,6 +425,29 @@ body {
   flex-direction: column;
   overflow: visible;
   padding: 0.5rem 0.6rem;
+}
+
+.surface--verdict {
+  flex: 0 1 auto;
+}
+
+.surface--debate {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0.5rem 0.6rem;
+}
+
+.dash-col--debate {
+  min-height: 0;
+}
+
+.dash-col--debate .dash-col__label {
+  margin: 0 0 0.35rem;
+}
+
+.dash-col--debate .empty-state__desc {
+  max-width: 100%;
 }
 
 /* Fixture + judge verdict (single panel, above debate) */
@@ -658,11 +682,13 @@ body {
 }
 
 .debate-scroller {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  overflow: visible;
-  min-height: 0;
+  overflow-x: visible;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .verdict-slot {
@@ -1894,7 +1920,7 @@ body {
 @media (max-width: 760px) {
   .dashboard {
     grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(200px, 1fr);
+    grid-template-rows: auto auto minmax(200px, 1fr);
   }
 
   .dash-col--agents {
@@ -1912,7 +1938,16 @@ body {
   }
 
   .dash-col--stage {
-    min-height: 42vh;
+    min-height: auto;
+  }
+
+  .dash-col--debate {
+    min-height: 36vh;
+  }
+
+  .surface--debate {
+    max-height: min(52vh, 420px);
+    overflow: hidden;
   }
 }
 
