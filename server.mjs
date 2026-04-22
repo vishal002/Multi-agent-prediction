@@ -500,7 +500,8 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === "GET" && url.pathname === "/api/judge/accuracy") {
     const target = `${JUDGE_SERVICE_URL}/accuracy`;
-    const ctrl = AbortSignal.timeout(15_000);
+    // Judge on Render free tier can take 30s+ to cold-start; keep below Node fetch limits but above typical wake time.
+    const ctrl = AbortSignal.timeout(90_000);
     try {
       const r = await fetch(target, {
         method: "GET",

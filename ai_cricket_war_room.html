@@ -3,41 +3,83 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#202124" id="metaThemeColor" />
+  <meta name="theme-color" content="#070b12" id="metaThemeColor" />
   <title>AI Cricket War Room</title>
   <!-- UI tokens & patterns: DESIGN.md -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;800&family=Rajdhani:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=Oswald:wght@300;400;500;600;700&family=Roboto+Condensed:wght@300;400;700&family=Bebas+Neue&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="ai_cricket_war_room.css" />
   <script>
     (function () {
       var saved = localStorage.getItem('acwr-theme');
       var theme = saved || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
       document.documentElement.setAttribute('data-theme', theme);
+      var uiSaved = localStorage.getItem('acwr-ui');
+      var uiInit = uiSaved === 'classic' || uiSaved === 'ipl' ? uiSaved : 'warroom';
+      document.documentElement.setAttribute('data-ui', uiInit);
     })();
   </script>
 </head>
 <body>
   <div class="app">
     <header class="app-header" role="banner">
-      <div class="app-header__main">
-        <div class="brand">
-          <span class="brand__eyebrow">Multi-agent prediction</span>
-          <h1 class="brand__title">AI Cricket War Room</h1>
+      <div class="app-header__top">
+        <div class="app-header__main">
+          <div class="brand brand--war-room">
+            <div class="brand__logo-icon" aria-hidden="true">🏏</div>
+            <div class="brand__text-block">
+              <span class="brand__eyebrow">Multi-agent AI</span>
+              <h1 class="brand__title"><span class="brand__title-line">Cricket</span> <span class="brand__title-accent">War Room</span></h1>
+            </div>
+          </div>
+          <p class="brand__tagline">Intel → debate → judge verdict in one flow.</p>
         </div>
-        <p class="brand__tagline">Intel → debate → judge verdict in one flow.</p>
+        <div class="app-header__actions">
+          <div class="header-badge" aria-hidden="true">
+            <span class="header-badge__dot"></span>
+            <span class="header-badge__text">Live ops</span>
+          </div>
+          <button type="button" class="ui-toggle" id="uiToggle" aria-label="UI: War room. Next: Classic." title="Cycle UI: War room → Classic → IPL">
+            <svg class="ui-toggle__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="11" width="7" height="10" rx="1"/><rect x="3" y="15" width="7" height="6" rx="1"/></svg>
+          </button>
+          <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark theme" title="Toggle theme">
+            <svg class="theme-toggle__moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+            <svg class="theme-toggle__sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          </button>
+        </div>
       </div>
       <nav class="app-header__nav" aria-label="Reference">
       </nav>
-      <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark theme" title="Toggle theme">
-        <svg class="theme-toggle__moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-        <svg class="theme-toggle__sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-      </button>
     </header>
 
     <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
 
+    <div class="ticker" aria-hidden="true">
+      <div class="ticker__track">
+        <span class="ticker__item">IND vs AUS — MCG <span class="ticker__sep">·</span> <span class="ticker__up">IND 287/4</span> in 42.3 overs</span>
+        <span class="ticker__item">ENG vs PAK — Lords <span class="ticker__sep">·</span> <span class="ticker__dn">ENG 156 all out</span> · Target 312</span>
+        <span class="ticker__item">SA vs NZ — Wanderers <span class="ticker__sep">·</span> <span class="ticker__up">NZ 198/3</span> in 35 overs</span>
+        <span class="ticker__item">IPL: MI vs CSK — Wankhede <span class="ticker__sep">·</span> Fixture window</span>
+        <span class="ticker__item">IND vs AUS — MCG <span class="ticker__sep">·</span> <span class="ticker__up">IND 287/4</span> in 42.3 overs</span>
+        <span class="ticker__item">ENG vs PAK — Lords <span class="ticker__sep">·</span> <span class="ticker__dn">ENG 156 all out</span> · Target 312</span>
+        <span class="ticker__item">SA vs NZ — Wanderers <span class="ticker__sep">·</span> <span class="ticker__up">NZ 198/3</span> in 35 overs</span>
+        <span class="ticker__item">IPL: MI vs CSK — Wankhede <span class="ticker__sep">·</span> Fixture window</span>
+      </div>
+    </div>
+
+    <div class="pipeline pipeline--flow" role="list" aria-label="Pipeline">
+      <span class="pipeline__step">Data</span>
+      <span class="pipeline__arrow" aria-hidden="true">→</span>
+      <span class="pipeline__step">6 agents</span>
+      <span class="pipeline__arrow" aria-hidden="true">→</span>
+      <span class="pipeline__step">Debate</span>
+      <span class="pipeline__arrow" aria-hidden="true">→</span>
+      <span class="pipeline__step">Judge</span>
+    </div>
+
+    <div class="war-room__grid">
+      <div class="war-room__col war-room__col--controls">
     <section class="command-bar" aria-label="Match and run">
       <!-- ── Live score first (ground truth) then fixture search + run ── -->
       <div class="live-score-bar" id="liveScoreBar">
@@ -154,29 +196,10 @@
         <div id="overPredictResult" class="over-predict-result" hidden></div>
       </div>
     </section>
+      </div>
 
+      <div class="war-room__col war-room__col--intel">
     <main class="dashboard" id="main-content">
-      <aside class="dash-col dash-col--agents" aria-labelledby="agents-heading">
-        <div class="agents-col-head">
-          <h2 class="dash-col__label" id="agents-heading">Intel agents</h2>
-          <button type="button" class="agents-toggle" id="agentsToggle" aria-expanded="true" aria-controls="agentsCard" aria-label="Toggle agents panel">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 15l-6-6-6 6"/></svg>
-          </button>
-        </div>
-        <div class="surface surface--agents" id="agentsCard">
-          <div id="agentsList"></div>
-        </div>
-        <div class="pipeline" role="list" aria-label="Pipeline">
-          <span class="pipeline__step">Data</span>
-          <span class="pipeline__arrow" aria-hidden="true">→</span>
-          <span class="pipeline__step">6 agents</span>
-          <span class="pipeline__arrow" aria-hidden="true">→</span>
-          <span class="pipeline__step">Debate</span>
-          <span class="pipeline__arrow" aria-hidden="true">→</span>
-          <span class="pipeline__step">Judge</span>
-        </div>
-      </aside>
-
       <section class="dash-col dash-col--stage" aria-labelledby="stage-heading">
         <div class="dash-col__head">
           <div class="stage-head-row">
@@ -190,7 +213,7 @@
             </div>
           </div>
         </div>
-        <div class="surface surface--stage surface--verdict" id="debateCard">
+        <div class="surface surface--stage surface--verdict surface--panel" id="debateCard">
           <div id="phaseBanner" class="phase-banner" style="display:none"></div>
           <div class="stage-fixture-verdict" id="stageFixtureVerdict" hidden>
             <div class="match-bar match-bar--in-summary" id="matchBar" hidden aria-label="Fixture">
@@ -214,9 +237,32 @@
         </div>
       </section>
 
+      <aside class="dash-col dash-col--agents" aria-labelledby="agents-heading">
+        <div class="agents-col-head">
+          <h2 class="dash-col__label" id="agents-heading">Intel agents</h2>
+          <button type="button" class="agents-toggle" id="agentsToggle" aria-expanded="true" aria-controls="agentsCard" aria-label="Toggle agents panel">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 15l-6-6-6 6"/></svg>
+          </button>
+        </div>
+        <div class="surface surface--agents surface--panel" id="agentsCard">
+          <div class="panel-like panel-like--agents">
+            <div id="agentsList"></div>
+          </div>
+        </div>
+        <div class="pipeline pipeline--agents-only" role="list" aria-label="Pipeline">
+          <span class="pipeline__step">Data</span>
+          <span class="pipeline__arrow" aria-hidden="true">→</span>
+          <span class="pipeline__step">6 agents</span>
+          <span class="pipeline__arrow" aria-hidden="true">→</span>
+          <span class="pipeline__step">Debate</span>
+          <span class="pipeline__arrow" aria-hidden="true">→</span>
+          <span class="pipeline__step">Judge</span>
+        </div>
+      </aside>
+
       <aside class="dash-col dash-col--debate" aria-labelledby="debate-heading" tabindex="-1" id="debatePanel">
         <h2 class="dash-col__label" id="debate-heading">Debate</h2>
-        <div class="surface surface--debate">
+        <div class="surface surface--debate surface--panel">
           <div class="debate-scroller" id="debateScroller">
             <div class="debate-area" id="debateArea">
               <div class="empty-state" id="emptyState">
@@ -234,6 +280,8 @@
         </div>
       </aside>
     </main>
+      </div>
+    </div>
 
     <footer class="app-footer" aria-label="Prediction stats and disclaimer">
       <p class="app-footer__line" id="judgeAccuracyFooter"></p>
@@ -277,12 +325,42 @@
 <script>
   (function () {
     var btn = document.getElementById('themeToggle');
+    var uiBtn = document.getElementById('uiToggle');
     var metaTheme = document.getElementById('metaThemeColor');
-    var COLORS = { dark: '#202124', light: '#f1f5f9' };
+    var PAGE = {
+      warroom: { dark: '#070b12', light: '#f1f5f9' },
+      classic: { dark: '#202124', light: '#f1f5f9' },
+      ipl: { dark: '#002d62', light: '#e8eef6' }
+    };
+    function syncMetaThemeColor() {
+      var theme = document.documentElement.getAttribute('data-theme') || 'dark';
+      var ui = document.documentElement.getAttribute('data-ui') || 'warroom';
+      var map = PAGE[ui] || PAGE.warroom;
+      if (metaTheme) metaTheme.setAttribute('content', map[theme] || map.dark);
+    }
     function applyTheme(theme) {
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('acwr-theme', theme);
-      if (metaTheme) metaTheme.setAttribute('content', COLORS[theme] || COLORS.dark);
+      syncMetaThemeColor();
+    }
+    function applyUi(ui) {
+      document.documentElement.setAttribute('data-ui', ui);
+      localStorage.setItem('acwr-ui', ui);
+      syncMetaThemeColor();
+      if (uiBtn) {
+        uiBtn.setAttribute('aria-pressed', ui === 'warroom' ? 'false' : 'true');
+        uiBtn.setAttribute('data-ui-mode', ui);
+        if (ui === 'warroom') {
+          uiBtn.setAttribute('aria-label', 'UI: War room. Next: Classic layout.');
+          uiBtn.title = 'Next: Classic (Google-style)';
+        } else if (ui === 'classic') {
+          uiBtn.setAttribute('aria-label', 'UI: Classic. Next: IPL broadcast look.');
+          uiBtn.title = 'Next: IPL (blue & gold)';
+        } else {
+          uiBtn.setAttribute('aria-label', 'UI: IPL broadcast. Next: War room.');
+          uiBtn.title = 'Next: War room';
+        }
+      }
     }
     if (btn) {
       btn.addEventListener('click', function () {
@@ -290,7 +368,15 @@
         applyTheme(cur === 'dark' ? 'light' : 'dark');
       });
     }
+    if (uiBtn) {
+      uiBtn.addEventListener('click', function () {
+        var cur = document.documentElement.getAttribute('data-ui') || 'warroom';
+        var next = cur === 'warroom' ? 'classic' : cur === 'classic' ? 'ipl' : 'warroom';
+        applyUi(next);
+      });
+    }
     applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+    applyUi(document.documentElement.getAttribute('data-ui') || 'warroom');
   })();
 </script>
 </body>

@@ -875,6 +875,34 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
   scheduleVerdictWinProbabilityAnimation(verdictRootEl, winProb.pctA, winProb.pctB);
 }
 
+/** Transient gateway / cold-start statuses when the Node proxy calls the Judge service on Render. */
+function isJudgeTransientHttpStatus(status) {
+  return status === 502 || status === 503 || status === 504;
+}
+
+/**
+ * Judge routes are proxied to a separate Python service; free-tier cold starts often return 502 briefly.
+ * @param {string} url
+ * @param {RequestInit} init
+ */
+async function fetchJudgeProxyWithRetry(url, init) {
+  const maxAttempts = 3;
+  const pauseMs = 3000;
+  /** @type {Response|undefined} */
+  let last;
+  for (let i = 0; i < maxAttempts; i++) {
+    const r = await fetch(url, init);
+    last = r;
+    if (r.ok) return r;
+    if (i < maxAttempts - 1 && isJudgeTransientHttpStatus(r.status)) {
+      await new Promise((resolve) => setTimeout(resolve, pauseMs));
+    } else {
+      return r;
+    }
+  }
+  return /** @type {Response} */ (last);
+}
+
 /**
  * @param {string} matchId
  * @param {string} debateTranscript
@@ -882,7 +910,7 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
  */
 async function postJudgePredict(matchId, debateTranscript) {
   try {
-    const r = await fetch(`${apiBase()}/api/judge/predict`, {
+    const r = await fetchJudgeProxyWithRetry(`${apiBase()}/api/judge/predict`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ match_id: matchId, debate_transcript: debateTranscript }),
@@ -901,7 +929,9 @@ async function postJudgePredict(matchId, debateTranscript) {
  */
 async function fetchJudgeAccuracyStats() {
   try {
-    const r = await fetch(`${apiBase()}/api/judge/accuracy`, { headers: { Accept: "application/json" } });
+    const r = await fetchJudgeProxyWithRetry(`${apiBase()}/api/judge/accuracy`, {
+      headers: { Accept: "application/json" },
+    });
     if (!r.ok) return null;
     const data = await r.json();
     if (!data || typeof data !== "object") return null;
@@ -954,7 +984,7 @@ async function refreshJudgeAccuracyFooter() {
   }
   let r;
   try {
-    r = await fetch(`${apiBase()}/api/judge/accuracy`, { headers: { Accept: "application/json" } });
+    r = await fetchJudgeProxyWithRetry(`${apiBase()}/api/judge/accuracy`, { headers: { Accept: "application/json" } });
   } catch {
     updateJudgeAccuracyFooterFromStats(null, { proxyUnreachable: true });
     return;
@@ -2447,6 +2477,14 @@ function riskLabel(risk) {
   return '<span class="over-card__risk over-card__risk--low">✓ Low</span>';
 }
 
+/** Win sparkline stroke / fill: classic blue vs war-room green */
+function winSparkAccentHex() {
+  const ui = document.documentElement.getAttribute("data-ui");
+  if (ui === "classic") return "#8ab4f8";
+  if (ui === "ipl") return "#d4af37";
+  return "#00e87a";
+}
+
 /**
  * Build an SVG sparkline for win-probability trend across overs.
  * @param {OverPrediction[]} overs
@@ -2456,6 +2494,7 @@ function riskLabel(risk) {
  * @returns {string} HTML string
  */
 function buildWinProbSparkline(overs, startProb, bat, bowl) {
+  const accent = winSparkAccentHex();
   const points = overs
     .map((o) => (o.win_probability != null ? Number(o.win_probability) : null))
     .filter((p) => p !== null);
@@ -2513,8 +2552,8 @@ function buildWinProbSparkline(overs, startProb, bat, bowl) {
       <svg class="win-trend__svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
         <defs>
           <linearGradient id="wpGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#8ab4f8" stop-opacity="0.35"/>
-            <stop offset="100%" stop-color="#8ab4f8" stop-opacity="0.03"/>
+            <stop offset="0%" stop-color="${accent}" stop-opacity="0.35"/>
+            <stop offset="100%" stop-color="${accent}" stop-opacity="0.03"/>
           </linearGradient>
         </defs>
         <!-- 50% reference line -->
@@ -2523,13 +2562,13 @@ function buildWinProbSparkline(overs, startProb, bat, bowl) {
         <!-- Area fill -->
         <path d="${areaPath}" fill="url(#wpGrad)"/>
         <!-- Line -->
-        <polyline points="${allPts.map((p, i) => `${toX(i).toFixed(1)},${toY(p).toFixed(1)}`).join(" ")}" fill="none" stroke="#8ab4f8" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+        <polyline points="${allPts.map((p, i) => `${toX(i).toFixed(1)},${toY(p).toFixed(1)}`).join(" ")}" fill="none" stroke="${accent}" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
         <!-- Y-axis labels -->
         ${yLabels}
         <!-- X-axis labels -->
         ${xLabels}
         <!-- End point -->
-        <circle cx="${lastX}" cy="${lastY}" r="3.5" fill="#8ab4f8"/>
+        <circle cx="${lastX}" cy="${lastY}" r="3.5" fill="${accent}"/>
         <text x="${(Number(lastX) + 5).toFixed(1)}" y="${(Number(lastY) + 1).toFixed(1)}" dominant-baseline="middle" class="spark-label spark-label--end">${lastPct}%</text>
       </svg>
     </div>`;
