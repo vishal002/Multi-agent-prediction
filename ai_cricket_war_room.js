@@ -2873,6 +2873,28 @@ function swapLiveFormTeams() {
 
 window.swapLiveFormTeams = swapLiveFormTeams;
 
+/** Pre-fill live-panel team / venue fields from the fixture search line (same rules as matchInput `change`). */
+function populateLiveFormFromMatchInput() {
+  const matchInput = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+  const batEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBatTeam"));
+  const bowlEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBowlTeam"));
+  const venueEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfVenue"));
+  if (!matchInput || !batEl || !bowlEl) return;
+  const val = matchInput.value.trim();
+  if (!val) return;
+  try {
+    const t = parseTeamsFromMatch(val);
+    if (t.codeA !== "TM1" && t.codeB !== "TM2") {
+      if (!batEl.value) batEl.value = t.codeA;
+      if (!bowlEl.value) bowlEl.value = t.codeB;
+    }
+  } catch (_e) { /* ignore */ }
+  if (venueEl && !venueEl.value) {
+    const m = val.match(/,\s*([^,]+)$/);
+    if (m) venueEl.value = m[1].trim();
+  }
+}
+
 function initLivePanel() {
   const head   = document.querySelector(".live-panel__head");
   const toggle = document.getElementById("livePanelToggle");
@@ -2885,6 +2907,7 @@ function initLivePanel() {
     body.hidden = !open;
     toggle.setAttribute("aria-expanded", open ? "true" : "false");
     toggle.textContent = open ? "Collapse" : "Expand";
+    if (open) populateLiveFormFromMatchInput();
   }
 
   if (head) {
@@ -2902,27 +2925,9 @@ function initLivePanel() {
     updateTargetVisibility();
   }
 
-  // Pre-fill batting/bowling teams from the main match input if it looks like a fixture
   const matchInput = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
-  const batEl  = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBatTeam"));
-  const bowlEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBowlTeam"));
-  const venueEl= /** @type {HTMLInputElement|null} */ (document.getElementById("lfVenue"));
-  if (matchInput && batEl && bowlEl) {
-    const syncFromMatchInput = () => {
-      const val = matchInput.value.trim();
-      try {
-        const t = parseTeamsFromMatch(val);
-        if (t.codeA !== "TM1" && t.codeB !== "TM2") {
-          if (!batEl.value) batEl.value = t.codeA;
-          if (!bowlEl.value) bowlEl.value = t.codeB;
-        }
-      } catch (_e) { /* ignore */ }
-      if (venueEl && !venueEl.value) {
-        const m = val.match(/,\s*([^,]+)$/);
-        if (m) venueEl.value = m[1].trim();
-      }
-    };
-    matchInput.addEventListener("change", syncFromMatchInput);
+  if (matchInput) {
+    matchInput.addEventListener("change", populateLiveFormFromMatchInput);
   }
 }
 
