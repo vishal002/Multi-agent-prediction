@@ -1,15 +1,16 @@
-# ── Node.js production image ───────────────────────────────────────────────────
-# Serves the war room UI and proxies LLM API calls (Groq / Anthropic).
-# Used by docker-compose.yml; Render uses its native Node runtime instead.
+# ── Node.js production image (two-stage) ─────────────────────────────────────
+# Stage 1 builds the minified, hashed, pre-compressed bundle in dist/.
+# Stage 2 ships only server.mjs + dist/ on top of production node_modules,
+# so the runtime layer never carries esbuild, html-minifier-terser, or sharp.
+# Used by docker-compose.yml; Render uses its native Node runtime + render.yaml.
 # Build: docker build -t cricket-war-room .
 # Run:   docker run -p 3333:3333 -e GROQ_API_KEY=gsk_... cricket-war-room
 
-FROM node:20-alpine
-
+FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 
 COPY ai_cricket_war_room.html \
      ai_cricket_war_room.css  \
@@ -17,9 +18,24 @@ COPY ai_cricket_war_room.html \
      sw.js                    \
      match_suggestions.json   \
      manifest.webmanifest     \
-     server.mjs               \
      ./
 COPY icons ./icons/
+COPY scripts ./scripts/
+
+RUN npm run build
+
+# ── Runtime stage ────────────────────────────────────────────────────────────
+FROM node:20-alpine AS runtime
+WORKDIR /app
+
+ENV NODE_ENV=production \
+    SERVE_DIST=1
+
+COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+COPY server.mjs ./
+COPY --from=builder /app/dist ./dist
 
 EXPOSE 3333
 

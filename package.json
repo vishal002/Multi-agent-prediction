@@ -3,10 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.mjs",
+    "build": "node scripts/build.mjs",
+    "start": "SERVE_DIST=1 node server.mjs",
+    "start:dev": "node server.mjs",
     "icons": "node scripts/generate-pwa-icons.mjs"
   },
   "devDependencies": {
+    "esbuild": "^0.28.0",
+    "html-minifier-terser": "^7.2.0",
     "sharp": "^0.33.5"
   }
 }

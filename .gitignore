@@ -1,4 +1,6 @@
 .ingestion_cache/
 data/
 .env
-
+dist/
+*.gz
+*.br

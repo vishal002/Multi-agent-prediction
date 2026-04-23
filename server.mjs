@@ -499,7 +499,25 @@ async function forwardAnthropic(body) {
   return { status: r.status, body: text };
 }
 
-const STATIC_FILES = new Set([
+/**
+ * Production layout: when SERVE_DIST=1, serve the prebuilt, hashed bundle from
+ * dist/. We discover the file set at startup so we don't have to maintain a
+ * hand-curated allowlist alongside the build script.
+ *
+ * Dev layout (default): serve raw source files from the project root, just like
+ * before the build pipeline existed.
+ */
+const SERVE_DIST = process.env.SERVE_DIST === "1";
+const STATIC_ROOT = SERVE_DIST ? path.join(__dirname, "dist") : __dirname;
+
+/**
+ * Hashed asset filename suffix from build.mjs (8-char SHA-256 prefix).
+ * Files matching `name.HASH.{js,css}` are immutable — the URL changes whenever
+ * the bytes change, so they can be cached forever.
+ */
+const HASHED_ASSET_RX = /\.[A-Z0-9]{8}\.(js|css)$/;
+
+const DEV_STATIC_FILES = new Set([
   "ai_cricket_war_room.html",
   "ai_cricket_war_room.css",
   "ai_cricket_war_room.js",
@@ -513,6 +531,42 @@ const STATIC_FILES = new Set([
   "apple-touch-icon.png",
 ]);
 
+/** @returns {Set<string>} relative POSIX paths under STATIC_ROOT we'll serve */
+function buildDistAllowlist(root) {
+  /** @type {Set<string>} */
+  const out = new Set();
+  /** @type {string[]} */
+  const stack = [root];
+  while (stack.length) {
+    const dir = stack.pop();
+    for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        stack.push(full);
+        continue;
+      }
+      if (!ent.isFile()) continue;
+      // Encoded siblings are picked up automatically based on the raw name; no
+      // need to expose them as separately-routable URLs.
+      if (ent.name.endsWith(".gz") || ent.name.endsWith(".br")) continue;
+      const rel = path.relative(root, full).split(path.sep).join("/");
+      out.add(rel);
+    }
+  }
+  return out;
+}
+
+/** @type {Set<string> | null} */
+let DIST_ALLOWLIST = null;
+if (SERVE_DIST) {
+  try {
+    DIST_ALLOWLIST = buildDistAllowlist(STATIC_ROOT);
+  } catch (e) {
+    console.warn(`War room: SERVE_DIST=1 but dist/ is missing — run \`npm run build\`. (${e instanceof Error ? e.message : e})`);
+    DIST_ALLOWLIST = new Set();
+  }
+}
+
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -521,7 +575,50 @@ const MIME = {
   ".webmanifest": "application/manifest+json; charset=utf-8",
   ".svg": "image/svg+xml; charset=utf-8",
   ".png": "image/png",
+  ".map": "application/json; charset=utf-8",
 };
+
+const ENCODING_EXT = { br: ".br", gzip: ".gz" };
+
+/**
+ * Parse Accept-Encoding and pick the best precomputed sibling that exists on
+ * disk. Brotli wins when both are available because it gives ~15-20% smaller
+ * payloads than gzip for our text assets.
+ *
+ * @param {string} acceptEncoding raw header value
+ * @param {string} filePath absolute path to the raw file
+ * @returns {{ encoding: "br" | "gzip", path: string } | null}
+ */
+function pickEncoding(acceptEncoding, filePath) {
+  if (!acceptEncoding) return null;
+  const accepts = acceptEncoding.toLowerCase();
+  // Don't compress images / source maps that won't get smaller, and don't
+  // double-compress already-compressed assets.
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".png" || ext === ".webp" || ext === ".jpg" || ext === ".jpeg" || ext === ".gif") return null;
+  if (accepts.includes("br")) {
+    const p = filePath + ENCODING_EXT.br;
+    if (fs.existsSync(p)) return { encoding: "br", path: p };
+  }
+  if (accepts.includes("gzip")) {
+    const p = filePath + ENCODING_EXT.gzip;
+    if (fs.existsSync(p)) return { encoding: "gzip", path: p };
+  }
+  return null;
+}
+
+/**
+ * @param {string} relPath  path relative to STATIC_ROOT (POSIX-style)
+ * @param {string} ext
+ */
+function cacheControlFor(relPath, ext) {
+  const base = path.basename(relPath);
+  if (HASHED_ASSET_RX.test(base)) return "public, max-age=31536000, immutable";
+  if (base === "sw.js") return "no-cache";
+  if (ext === ".html" || base === "manifest.webmanifest" || base === "match_suggestions.json") return "no-cache";
+  if (relPath.startsWith("icons/")) return "public, max-age=86400";
+  return "no-cache";
+}
 
 function safeJoin(root, reqPath) {
   const base = reqPath === "/" || reqPath === "" ? "ai_cricket_war_room.html" : reqPath.slice(1);
@@ -871,7 +968,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const filePath = safeJoin(__dirname, url.pathname);
+  const filePath = safeJoin(STATIC_ROOT, url.pathname);
   if (!filePath) {
     res.writeHead(403);
     res.end("Forbidden");
@@ -879,8 +976,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   const ext = path.extname(filePath);
-  const name = path.basename(filePath);
-  if (!STATIC_FILES.has(name)) {
+  const relPath = path.relative(STATIC_ROOT, filePath).split(path.sep).join("/");
+
+  const allowed = SERVE_DIST
+    ? DIST_ALLOWLIST != null && DIST_ALLOWLIST.has(relPath)
+    : DEV_STATIC_FILES.has(path.basename(filePath));
+
+  if (!allowed) {
     res.writeHead(404);
     res.end("Not found");
     return;
@@ -892,7 +994,35 @@ const server = http.createServer(async (req, res) => {
       res.end("Not found");
       return;
     }
-    res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream" });
+
+    const headers = {
+      "Content-Type": MIME[ext] || "application/octet-stream",
+      "Cache-Control": cacheControlFor(relPath, ext),
+      Vary: "Accept-Encoding",
+    };
+
+    // Only negotiate encodings when serving the prebuilt bundle — dev mode
+    // doesn't have .br/.gz siblings on disk.
+    const picked = SERVE_DIST ? pickEncoding(req.headers["accept-encoding"] || "", filePath) : null;
+    if (picked) {
+      try {
+        const encStat = fs.statSync(picked.path);
+        headers["Content-Encoding"] = picked.encoding;
+        headers["Content-Length"] = String(encStat.size);
+        res.writeHead(200, headers);
+        if (req.method === "HEAD") {
+          res.end();
+          return;
+        }
+        fs.createReadStream(picked.path).pipe(res);
+        return;
+      } catch {
+        /* fall through to raw */
+      }
+    }
+
+    headers["Content-Length"] = String(st.size);
+    res.writeHead(200, headers);
     if (req.method === "HEAD") {
       res.end();
       return;
