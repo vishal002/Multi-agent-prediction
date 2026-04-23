@@ -6,7 +6,7 @@
  * precache bucket is deleted on activate (avoids stale large bundles).
  * Changing this file also triggers a service-worker update check in browsers.
  */
-const STATIC_ASSET_VERSION = "20260423-2";
+const STATIC_ASSET_VERSION = "20260423-3";
 const STATIC_CACHE = `acwr-static-${STATIC_ASSET_VERSION}`;
 
 const PRECACHE_URLS = [

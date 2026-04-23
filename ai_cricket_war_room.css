@@ -2630,6 +2630,59 @@ body::after {
   flex: 0 1 100px;
 }
 
+.live-form__teams {
+  display: flex;
+  flex: 2 1 280px;
+  gap: 8px;
+  align-items: flex-end;
+  min-width: 0;
+}
+
+.live-form__teams > .live-form__field {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.live-form__team-swap {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  padding-bottom: 1px;
+}
+
+.live-form__swap-btn {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 34px;
+  padding: 0;
+  border-radius: 5px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-page);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s, color 0.15s;
+}
+
+.live-form__swap-btn:hover {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-tertiary);
+}
+
+.live-form__swap-btn:focus-visible {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px rgba(0, 232, 122, 0.1);
+}
+
+.live-form__swap-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
 .live-form__label {
   font-size: 0.65rem;
   font-weight: 600;
@@ -3390,6 +3443,10 @@ body::after {
 @media (max-width: 480px) {
   .live-form__row {
     gap: 8px;
+  }
+
+  .live-form__teams {
+    flex: 1 1 100%;
   }
 
   .live-form__field {

@@ -2861,6 +2861,18 @@ async function runOverPrediction() {
   }
 }
 
+function swapLiveFormTeams() {
+  const batEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBatTeam"));
+  const bowlEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBowlTeam"));
+  if (!batEl || !bowlEl) return;
+  const t = batEl.value;
+  batEl.value = bowlEl.value;
+  bowlEl.value = t;
+  bowlEl.focus();
+}
+
+window.swapLiveFormTeams = swapLiveFormTeams;
+
 function initLivePanel() {
   const head   = document.querySelector(".live-panel__head");
   const toggle = document.getElementById("livePanelToggle");

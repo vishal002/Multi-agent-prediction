@@ -137,7 +137,7 @@
       <div class="live-panel__head">
         <div class="live-panel__title-row">
           <span class="live-dot" aria-hidden="true"></span>
-          <span class="live-panel__title">Live match · Current score</span>
+          <span class="live-panel__title">Live match · Current score · Prediction</span>
         </div>
         <button type="button" class="text-btn live-panel__toggle" id="livePanelToggle" aria-expanded="false" aria-controls="livePanelBody">
           Expand
@@ -148,13 +148,20 @@
       <div class="live-panel__body" id="livePanelBody" hidden>
         <div class="live-form">
           <div class="live-form__row">
-            <div class="live-form__field">
-              <label class="live-form__label" for="lfBatTeam">Batting team</label>
-              <input class="live-form__input" id="lfBatTeam" type="text" placeholder="e.g. PBKS" autocomplete="off" />
-            </div>
-            <div class="live-form__field">
-              <label class="live-form__label" for="lfBowlTeam">Bowling team</label>
-              <input class="live-form__input" id="lfBowlTeam" type="text" placeholder="e.g. LSG" autocomplete="off" />
+            <div class="live-form__teams">
+              <div class="live-form__field">
+                <label class="live-form__label" for="lfBatTeam">Batting team</label>
+                <input class="live-form__input" id="lfBatTeam" type="text" placeholder="e.g. PBKS" autocomplete="off" />
+              </div>
+              <div class="live-form__team-swap">
+                <button type="button" class="live-form__swap-btn" id="lfSwapTeamsBtn" aria-label="Swap batting and bowling teams" title="Swap teams" onclick="swapLiveFormTeams()">
+                  <span class="live-form__swap-icon" aria-hidden="true">⇄</span>
+                </button>
+              </div>
+              <div class="live-form__field">
+                <label class="live-form__label" for="lfBowlTeam">Bowling team</label>
+                <input class="live-form__input" id="lfBowlTeam" type="text" placeholder="e.g. LSG" autocomplete="off" />
+              </div>
             </div>
             <div class="live-form__field live-form__field--sm">
               <label class="live-form__label" for="lfFormat">Format</label>
