@@ -174,7 +174,7 @@ body::after {
   flex-direction: column;
   padding: 0 max(1rem, env(safe-area-inset-left, 0)) env(safe-area-inset-bottom, 0)
     max(1rem, env(safe-area-inset-right, 0));
-  padding-top: max(0.75rem, env(safe-area-inset-top, 0));
+  padding-top: max(1rem, env(safe-area-inset-top, 0));
   padding-bottom: 2.5rem;
   box-sizing: border-box;
 }
@@ -183,6 +183,7 @@ body::after {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  padding-top: 0.5rem;
   padding-bottom: 1rem;
   margin-bottom: 0.5rem;
   border-bottom: 1px solid var(--color-border);
@@ -192,14 +193,15 @@ body::after {
 .app-header__top {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 0.75rem 1rem;
+  min-height: 2.5rem;
 }
 
 .app-header__main {
   min-width: 0;
-  flex: 1;
+  flex: 1 1 auto;
 }
 
 .app-header__actions {
@@ -207,6 +209,8 @@ body::after {
   align-items: center;
   gap: 0.65rem;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .brand--war-room {
