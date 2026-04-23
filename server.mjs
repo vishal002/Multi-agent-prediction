@@ -173,8 +173,14 @@ const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY?.trim();
 const LLM_PROVIDER = process.env.LLM_PROVIDER?.toLowerCase();
 
 const GROQ_MODEL = process.env.GROQ_MODEL?.trim() || "llama-3.3-70b-versatile";
-/** Smaller/cheaper Groq model for short intel + debate turns (saves TPD vs 70B). */
+/** Smaller/cheaper Groq model for short intel + live + misc turns (saves TPD vs 70B). */
 const GROQ_MODEL_LIGHT = process.env.GROQ_MODEL_LIGHT?.trim() || "llama-3.1-8b-instant";
+/**
+ * Model used for the multi-round debate. Defaults to the 70B (12k TPM bucket on
+ * Groq's free tier) so the debate transcript doesn't compete with the 8B intel
+ * burst for the 6k TPM bucket. Override with GROQ_MODEL_DEBATE if needed.
+ */
+const GROQ_MODEL_DEBATE = process.env.GROQ_MODEL_DEBATE?.trim() || GROQ_MODEL;
 
 const INGESTION_SERVICE_URL = (process.env.INGESTION_SERVICE_URL || "http://127.0.0.1:3334").replace(
   /\/$/,
@@ -206,12 +212,15 @@ function contentToString(content) {
 /** @param {string} route */
 function groqModelForRoute(route) {
   if (route === "judge" || route === "over") return GROQ_MODEL;
+  if (route === "debate") return GROQ_MODEL_DEBATE;
   return GROQ_MODEL_LIGHT;
 }
 
 /** @param {string} route */
 function groqMaxTokensCap(route) {
-  const caps = { intel: 96, debate: 160, judge: 640, live: 140, over: 2200, misc: 1024 };
+  // intel: bumped from 96 → 240 to fit the merged 5-key JSON object.
+  // debate: bumped from 160 → 220 — well under the 70B model's per-turn limits.
+  const caps = { intel: 240, debate: 220, judge: 640, live: 140, over: 2200, misc: 1024 };
   return caps[route] ?? 1024;
 }
 
@@ -262,6 +271,142 @@ function groqResponseToAnthropicShape(groqJson) {
   };
 }
 
+// ── Per-model concurrency + sliding-window TPM gate ────────────────────────
+//
+// Groq's free tier publishes per-model TPM caps. We defend against bursts
+// (e.g. parallel intel calls) by:
+//   1. Capping in-flight requests per model (MAX_INFLIGHT_PER_MODEL).
+//   2. Tracking token usage in a 60s sliding window per model and sleeping
+//      until the oldest entry expires when a request would push us over the
+//      cap (minus a safety reserve).
+//   3. Retrying transparent 429s up to MAX_429_RETRIES, parsing the wait
+//      hint from the body ("try again in N.Ns") or the Retry-After header.
+//
+// All sleeps are capped at MAX_BACKOFF_MS so a stuck upstream cannot wedge a
+// request indefinitely.
+const GROQ_TPM = {
+  "llama-3.1-8b-instant": 6000,
+  "llama-3.3-70b-versatile": 12000,
+};
+const DEFAULT_TPM = 6000;
+const RESERVE_TPM = 500;
+const MAX_INFLIGHT_PER_MODEL = 2;
+const MAX_429_RETRIES = 2;
+const MAX_BACKOFF_MS = 30_000;
+
+/** @type {Map<string, number>} model -> current in-flight count */
+const inflightByModel = new Map();
+/** @type {Map<string, { resolve: () => void }[]>} model -> FIFO of waiters */
+const concurrencyWaiters = new Map();
+/** @type {Map<string, { t: number, tokens: number }[]>} model -> entries in last 60s */
+const tpmWindow = new Map();
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, Math.max(0, ms)));
+
+/** @param {string} model */
+function acquireConcurrencySlot(model) {
+  const current = inflightByModel.get(model) || 0;
+  if (current < MAX_INFLIGHT_PER_MODEL) {
+    inflightByModel.set(model, current + 1);
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const queue = concurrencyWaiters.get(model) || [];
+    queue.push({ resolve });
+    concurrencyWaiters.set(model, queue);
+  });
+}
+
+/** @param {string} model */
+function releaseConcurrencySlot(model) {
+  const queue = concurrencyWaiters.get(model);
+  if (queue && queue.length) {
+    const next = queue.shift();
+    // Hand the slot off directly; in-flight count stays the same.
+    next.resolve();
+    return;
+  }
+  const current = inflightByModel.get(model) || 1;
+  inflightByModel.set(model, Math.max(0, current - 1));
+}
+
+/** @param {string} model */
+function pruneTpmWindow(model) {
+  const cutoff = Date.now() - 60_000;
+  const entries = tpmWindow.get(model) || [];
+  let i = 0;
+  while (i < entries.length && entries[i].t < cutoff) i++;
+  if (i > 0) tpmWindow.set(model, entries.slice(i));
+}
+
+/** @param {string} model */
+function tokensUsedInWindow(model) {
+  pruneTpmWindow(model);
+  const entries = tpmWindow.get(model) || [];
+  let sum = 0;
+  for (const e of entries) sum += e.tokens;
+  return sum;
+}
+
+/**
+ * Wait until the rolling 60s TPM bucket has room for `estTokens` (or capped wait).
+ * @param {string} model
+ * @param {number} estTokens
+ */
+async function awaitTpmHeadroom(model, estTokens) {
+  const limit = (GROQ_TPM[model] ?? DEFAULT_TPM) - RESERVE_TPM;
+  for (let i = 0; i < 6; i++) {
+    pruneTpmWindow(model);
+    const used = tokensUsedInWindow(model);
+    if (used + estTokens <= limit) return;
+    const entries = tpmWindow.get(model) || [];
+    if (!entries.length) return;
+    const oldest = entries[0];
+    const waitMs = Math.min(MAX_BACKOFF_MS, Math.max(250, 60_000 - (Date.now() - oldest.t) + 100));
+    console.warn(
+      `[groq-gate] ${model} TPM ${used}/${limit} + est ${estTokens}; sleeping ${waitMs}ms`
+    );
+    await sleep(waitMs);
+  }
+}
+
+/**
+ * Parse Groq's "Please try again in 1.5s" or Retry-After header into ms.
+ * @param {Response} response
+ * @param {string} bodyText
+ */
+function parseRetryAfterMs(response, bodyText) {
+  const header = response.headers.get("retry-after");
+  if (header) {
+    const n = Number(header);
+    if (Number.isFinite(n) && n > 0) return Math.min(MAX_BACKOFF_MS, Math.ceil(n * 1000));
+    const dateMs = Date.parse(header);
+    if (Number.isFinite(dateMs)) {
+      const delta = dateMs - Date.now();
+      if (delta > 0) return Math.min(MAX_BACKOFF_MS, delta);
+    }
+  }
+  // Body shapes: "try again in 1.5s", "try again in 850ms", "try again in 12s"
+  const m = bodyText && bodyText.match(/try again in\s+([\d.]+)\s*(ms|s)\b/i);
+  if (m) {
+    const value = parseFloat(m[1]);
+    if (Number.isFinite(value) && value > 0) {
+      const ms = m[2].toLowerCase() === "ms" ? value : value * 1000;
+      return Math.min(MAX_BACKOFF_MS, Math.ceil(ms));
+    }
+  }
+  return null;
+}
+
+/** @param {{ messages?: { content?: unknown }[], max_tokens?: number }} groqBody */
+function estimateTokens(groqBody) {
+  let chars = 0;
+  for (const msg of groqBody.messages || []) {
+    chars += String(msg && msg.content != null ? msg.content : "").length;
+  }
+  return Math.ceil(chars / 4) + (Number(groqBody.max_tokens) || 0);
+}
+
 async function forwardGroq(anthropicBodyString) {
   let anthropicJson;
   try {
@@ -273,29 +418,61 @@ async function forwardGroq(anthropicBodyString) {
   delete anthropicJson.groq_route;
   const route = typeof routeRaw === "string" && routeRaw.trim() ? routeRaw.trim() : "misc";
   const groqBody = anthropicBodyToGroq(anthropicJson, route);
-  const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${GROQ_KEY}`,
-    },
-    body: JSON.stringify(groqBody),
-  });
-  const text = await r.text();
-  if (!r.ok) {
-    return { status: r.status, body: text };
-  }
-  let groqJson;
+  const model = groqBody.model;
+  const estTokens = estimateTokens(groqBody);
+
+  await acquireConcurrencySlot(model);
   try {
-    groqJson = JSON.parse(text);
-  } catch {
-    return {
-      status: 502,
-      body: JSON.stringify({ error: { message: "Groq returned non-JSON" } }),
-    };
+    let lastStatus = 0;
+    let lastBody = "";
+    for (let attempt = 0; attempt <= MAX_429_RETRIES; attempt++) {
+      await awaitTpmHeadroom(model, estTokens);
+      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${GROQ_KEY}`,
+        },
+        body: JSON.stringify(groqBody),
+      });
+      const text = await r.text();
+      lastStatus = r.status;
+      lastBody = text;
+
+      if (r.status === 429 && attempt < MAX_429_RETRIES) {
+        const waitMs = parseRetryAfterMs(r, text) ?? Math.min(MAX_BACKOFF_MS, 1000 * (attempt + 1) ** 2);
+        console.warn(
+          `[groq-gate] ${model} 429 on attempt ${attempt + 1}/${MAX_429_RETRIES + 1}; sleeping ${waitMs}ms`
+        );
+        await sleep(waitMs);
+        continue;
+      }
+
+      if (!r.ok) {
+        return { status: r.status, body: text };
+      }
+      let groqJson;
+      try {
+        groqJson = JSON.parse(text);
+      } catch {
+        return {
+          status: 502,
+          body: JSON.stringify({ error: { message: "Groq returned non-JSON" } }),
+        };
+      }
+      const usedTokens = Number(groqJson?.usage?.total_tokens) || estTokens;
+      const entries = tpmWindow.get(model) || [];
+      entries.push({ t: Date.now(), tokens: usedTokens });
+      tpmWindow.set(model, entries);
+
+      const shaped = groqResponseToAnthropicShape(groqJson);
+      return { status: 200, body: JSON.stringify(shaped) };
+    }
+    // All retries exhausted on a 429 — surface the upstream response so the UI gets a meaningful error.
+    return { status: lastStatus || 429, body: lastBody };
+  } finally {
+    releaseConcurrencySlot(model);
   }
-  const shaped = groqResponseToAnthropicShape(groqJson);
-  return { status: 200, body: JSON.stringify(shaped) };
 }
 
 async function forwardAnthropic(body) {

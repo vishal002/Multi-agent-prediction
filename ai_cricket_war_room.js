@@ -1323,6 +1323,18 @@ const INTEL_SYSTEM =
   "Use ONLY facts stated in the Evidence section; do not invent statistics, scores, or events. " +
   `If the evidence does not support a substantive claim for your specialty, say exactly: ${INTEL_FALLBACK}`;
 
+const MERGED_INTEL_SYSTEM =
+  "You are five cricket-analysis specialists collapsed into one call. The user message contains " +
+  "five labelled evidence sections — scout, stats, weather, pitch, news. " +
+  "Reply with ONLY a JSON object of the exact shape " +
+  `{"scout":"...","stats":"...","weather":"...","pitch":"...","news":"..."} — no markdown, no extra keys. ` +
+  "Each value must be exactly one sentence of 15–20 words, derived strictly from that section's evidence; " +
+  "do not invent statistics, scores, or events; do not cross-reference other specialties. " +
+  `If a section's evidence does not support a substantive claim, set its value to exactly: ${INTEL_FALLBACK}`;
+
+const MAX_EVIDENCE_CHARS_PER_AGENT = 1200;
+const MAX_DEBATE_HISTORY_CHARS = 2400;
+
 /**
  * @param {string} reason
  * @returns {Record<string, unknown>}
@@ -1420,6 +1432,44 @@ function clipText(s, max) {
   const t = String(s);
   if (t.length <= max) return t;
   return `${t.slice(0, Math.max(0, max - 20))}\n…[truncated]`;
+}
+
+/**
+ * Clip an Anthropic-style debate transcript so the cumulative content length
+ * stays at or below `maxChars`. Always preserves the most recent two turns
+ * (one user/assistant pair) intact; older turns are summarised to their first
+ * ~300 chars and dropped entirely once the budget is still exceeded.
+ *
+ * @param {{ role: 'user' | 'assistant', content: string }[]} history
+ * @param {number} maxChars
+ * @returns {{ role: 'user' | 'assistant', content: string }[]}
+ */
+function clipDebateHistory(history, maxChars) {
+  if (!Array.isArray(history) || history.length === 0) return [];
+  const total = history.reduce((n, m) => n + String(m.content || "").length, 0);
+  if (total <= maxChars) return history;
+
+  // Keep the most recent two turns (last user + last assistant) intact.
+  const keepTailCount = Math.min(2, history.length);
+  const tail = history.slice(history.length - keepTailCount);
+  const head = history.slice(0, history.length - keepTailCount);
+
+  const tailLen = tail.reduce((n, m) => n + String(m.content || "").length, 0);
+  let headBudget = Math.max(0, maxChars - tailLen);
+
+  // Summarise older turns; when the budget is exceeded, drop the OLDEST first
+  // by walking the head newest→oldest and prepending while the budget allows.
+  /** @type {{ role: 'user' | 'assistant', content: string }[]} */
+  const summarised = [];
+  for (let i = head.length - 1; i >= 0; i--) {
+    const m = head[i];
+    const summary = clipText(String(m.content || "").trim(), 300);
+    if (summary.length + 1 > headBudget) break;
+    summarised.unshift({ role: m.role, content: summary });
+    headBudget -= summary.length;
+  }
+
+  return [...summarised, ...tail];
 }
 
 function formatIngestedBlockForDebate(ctx) {
@@ -1939,7 +1989,8 @@ async function runWarRoom() {
   showNoLiveDataWarning(!liveState);
 
   const insights = {};
-  const agentPromises = [];
+  /** @type {Record<string, string>} agent.id (excluding live) -> trimmed/clipped evidence string */
+  const evidenceByAgent = {};
 
   for (const agent of AGENTS) {
     await sleep(550);
@@ -1961,48 +2012,77 @@ async function runWarRoom() {
       continue;
     }
 
-    const evidenceBlock = buildAgentEvidenceString(agent.id, ingestedCtx).trim();
+    const evidenceBlock = clipText(
+      buildAgentEvidenceString(agent.id, ingestedCtx).trim(),
+      MAX_EVIDENCE_CHARS_PER_AGENT
+    );
+    evidenceByAgent[agent.id] = evidenceBlock;
+
     if (!evidenceBlock) {
       const el = document.getElementById('insight-' + agent.id);
       el.textContent = INTEL_FALLBACK;
       el.classList.add('show');
       insights[agent.id] = INTEL_FALLBACK;
-      continue;
+    }
+  }
+
+  // Single merged intel call: one LLM round-trip returns one sentence per specialty.
+  // Skip entirely if every non-live agent had empty evidence (already filled with INTEL_FALLBACK above).
+  const intelAgents = AGENTS.filter((a) => a.id !== "live");
+  const agentsNeedingLLM = intelAgents.filter((a) => evidenceByAgent[a.id]);
+
+  if (agentsNeedingLLM.length) {
+    const sections = agentsNeedingLLM
+      .map((a) => `### ${a.id} — ${a.role}\n${evidenceByAgent[a.id] || "(no evidence)"}`)
+      .join("\n\n");
+
+    const userContent =
+      `Match: "${match}". Contest: ${teams.teamA} vs ${teams.teamB}.\n\n` +
+      `Evidence sections (use ONLY facts in each section; do not cross-reference):\n\n${sections}\n\n` +
+      `Respond with ONLY the JSON object described in your instructions.`;
+
+    let parsedIntel = null;
+    try {
+      const merged = await callClaude(
+        [{ role: "user", content: userContent }],
+        MERGED_INTEL_SYSTEM,
+        220,
+        "intel"
+      );
+      try {
+        parsedIntel = JSON.parse(extractJudgeJsonObject(merged));
+      } catch {
+        parsedIntel = null;
+      }
+    } catch (err) {
+      // Surface the API error on each tile that was awaiting an LLM result.
+      const msg = '— ' + (err instanceof Error ? err.message : 'API error');
+      for (const a of agentsNeedingLLM) {
+        const el = document.getElementById('insight-' + a.id);
+        if (el) {
+          el.textContent = msg;
+          el.classList.add('show');
+        }
+        insights[a.id] = '';
+      }
+      parsedIntel = undefined; // sentinel so we skip the per-agent fan-out below
     }
 
-    agentPromises.push(
-      callClaude(
-        [
-          {
-            role: 'user',
-            content:
-              `Match: "${match}". Contest: ${teams.teamA} vs ${teams.teamB}.\n` +
-              `You are the ${agent.name}. Specialty: ${agent.role}.\n\n` +
-              `Evidence (use ONLY the following; do not use outside knowledge):\n---\n${evidenceBlock}\n---`,
-          },
-        ],
-        INTEL_SYSTEM,
-        88,
-        "intel"
-      )
-        .then((text) => {
-          const el = document.getElementById('insight-' + agent.id);
-          el.textContent = text.trim();
+    if (parsedIntel !== undefined) {
+      for (const a of agentsNeedingLLM) {
+        const raw = parsedIntel && typeof parsedIntel === "object" ? parsedIntel[a.id] : null;
+        const text = (raw != null ? String(raw) : "").trim() || INTEL_FALLBACK;
+        const el = document.getElementById('insight-' + a.id);
+        if (el) {
+          el.textContent = text;
           el.classList.add('show');
-          insights[agent.id] = text.trim();
-        })
-        .catch((err) => {
-          const el = document.getElementById('insight-' + agent.id);
-          el.textContent = '— ' + (err instanceof Error ? err.message : 'API error');
-          el.classList.add('show');
-          insights[agent.id] = '';
-        })
-    );
+        }
+        insights[a.id] = text;
+      }
+    }
   }
 
   try {
-    await Promise.all(agentPromises);
-
     const matchContext = buildMatchContextBlock(match, insights, teams, ingestedCtx, liveState);
     setPhase('Debate in progress…', true);
     document.getElementById('runningLabel').textContent = `${teams.codeA} vs ${teams.codeB} · debate`;
@@ -2047,7 +2127,8 @@ async function runWarRoom() {
       showTyping(rd.side);
       await sleep(500);
       const system = rd.side === 'bull' ? debateSystemBull(teams) : debateSystemBear(teams);
-      const messages = [...history, { role: 'user', content: rd.userContent }];
+      const trimmedHistory = clipDebateHistory(history, MAX_DEBATE_HISTORY_CHARS);
+      const messages = [...trimmedHistory, { role: 'user', content: rd.userContent }];
       const text = await callClaude(messages, system, DEBATE_MAX_TOKENS, "debate");
       history.push({ role: 'user', content: rd.userContent }, { role: 'assistant', content: text });
       hideTyping();
