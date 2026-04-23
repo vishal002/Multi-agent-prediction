@@ -306,6 +306,10 @@
       <p class="app-footer__disclaimer">
         For entertainment and fan discussion only. AI outputs are not advice, may be inaccurate, and must not be used for betting, trading, or other financial decisions.
       </p>
+      <p class="app-footer__version" id="appVersionLine" aria-label="Build version">
+        <span class="app-footer__version-label">version</span>
+        <code class="app-footer__version-tag" id="appVersionTag">…</code>
+      </p>
     </footer>
   </div>
 
@@ -404,6 +408,33 @@
       .catch(function (err) {
         console.warn('Service worker registration failed:', err);
       });
+  })();
+</script>
+<script>
+  // Footer version badge — populated from /api/version (resolved server-side
+  // from dist/build-manifest.json in prod, or git + package.json in dev).
+  (function () {
+    var tag = document.getElementById('appVersionTag');
+    var line = document.getElementById('appVersionLine');
+    if (!tag || !line) return;
+    fetch('/api/version', { headers: { Accept: 'application/json' }, cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (v) {
+        if (!v) { line.hidden = true; return; }
+        var label = 'v' + (v.appVersion || '0.0.0');
+        var suffix = v.commitShort || (v.buildHash ? v.buildHash.slice(0, 7) : '');
+        if (suffix) label += ' · ' + suffix;
+        if (v.dirty) label += '*';
+        tag.textContent = label;
+        var tipParts = [];
+        if (v.appVersion) tipParts.push('App: v' + v.appVersion);
+        if (v.buildHash) tipParts.push('Build: ' + v.buildHash);
+        if (v.commit) tipParts.push('Commit: ' + v.commit + (v.branch ? ' (' + v.branch + ')' : '') + (v.dirty ? ' [dirty]' : ''));
+        if (v.builtAt) tipParts.push('Built: ' + new Date(v.builtAt).toLocaleString());
+        if (v.mode) tipParts.push('Mode: ' + v.mode);
+        if (tipParts.length) line.title = tipParts.join('\n');
+      })
+      .catch(function () { line.hidden = true; });
   })();
 </script>
 <script src="ai_cricket_war_room.js"></script>

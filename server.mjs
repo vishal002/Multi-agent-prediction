@@ -46,6 +46,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -567,6 +568,76 @@ if (SERVE_DIST) {
   }
 }
 
+/**
+ * Resolve the version payload exposed at GET /api/version.
+ *
+ * In SERVE_DIST mode we read the build-manifest the build script writes
+ * (single source of truth for the deployed bundle). In dev mode we synthesise
+ * the same shape from package.json + a best-effort `git rev-parse` so the UI
+ * footer stays populated while iterating locally.
+ *
+ * Resolved once at process start and reused across requests — version metadata
+ * is immutable for the life of the process.
+ */
+function resolveVersionInfo() {
+  const pkgPath = path.join(__dirname, "package.json");
+  let pkg = {};
+  try {
+    pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+  } catch {
+    /* package.json missing in some weird container — fall through with empty */
+  }
+
+  if (SERVE_DIST) {
+    const manifestPath = path.join(__dirname, "dist", "build-manifest.json");
+    try {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+      return {
+        appVersion: manifest.appVersion || pkg.version || "0.0.0",
+        buildHash: manifest.buildHash || null,
+        builtAt: manifest.builtAt || null,
+        commit: manifest.git?.commit ?? null,
+        commitShort: manifest.git?.commitShort ?? null,
+        branch: manifest.git?.branch ?? null,
+        dirty: manifest.git?.dirty ?? null,
+        mode: "production",
+      };
+    } catch {
+      /* fall through to dev-style payload — better than 500ing */
+    }
+  }
+
+  // Dev (or prod-without-manifest) fallback: probe git directly.
+  let commit = null;
+  let branch = null;
+  let dirty = null;
+  try {
+    commit = execSync("git rev-parse HEAD", { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    try {
+      branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+    } catch { /* detached HEAD */ }
+    try {
+      dirty = execSync("git status --porcelain", { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().length > 0;
+    } catch { /* not a git repo */ }
+  } catch {
+    /* git missing or not a repo */
+  }
+
+  return {
+    appVersion: pkg.version || "0.0.0",
+    buildHash: null,
+    builtAt: null,
+    commit,
+    commitShort: commit ? commit.slice(0, 7) : null,
+    branch,
+    dirty,
+    mode: SERVE_DIST ? "production" : "development",
+  };
+}
+
+const VERSION_INFO = resolveVersionInfo();
+const VERSION_INFO_JSON = JSON.stringify(VERSION_INFO);
+
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -645,7 +716,8 @@ const server = http.createServer(async (req, res) => {
       url.pathname === "/api/match-context" ||
       url.pathname === "/api/live-score" ||
       url.pathname === "/api/judge/predict" ||
-      url.pathname === "/api/judge/accuracy")
+      url.pathname === "/api/judge/accuracy" ||
+      url.pathname === "/api/version")
   ) {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
@@ -654,6 +726,17 @@ const server = http.createServer(async (req, res) => {
       "Access-Control-Max-Age": "86400",
     });
     res.end();
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/version") {
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      // Always fresh — version flips on every deploy and the payload is tiny.
+      "Cache-Control": "no-cache",
+    });
+    res.end(VERSION_INFO_JSON);
     return;
   }
 

@@ -17,6 +17,7 @@ import fs from "node:fs";
 import path from "node:path";
 import zlib from "node:zlib";
 import crypto from "node:crypto";
+import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import * as esbuild from "esbuild";
@@ -170,6 +171,24 @@ function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * Best-effort git metadata for the build manifest. Returns nulls if git isn't
+ * available (e.g. when building from a tarball inside Docker without .git).
+ *
+ * @returns {{ commit: string | null, commitShort: string | null, branch: string | null, dirty: boolean | null }}
+ */
+function readGitInfo() {
+  const run = (args) => execSync(`git ${args}`, { cwd: ROOT, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+  try {
+    const commit = run("rev-parse HEAD");
+    const branch = (() => { try { return run("rev-parse --abbrev-ref HEAD"); } catch { return null; } })();
+    const dirty = (() => { try { return run("status --porcelain").length > 0; } catch { return null; } })();
+    return { commit, commitShort: commit.slice(0, 7), branch, dirty };
+  } catch {
+    return { commit: null, commitShort: null, branch: null, dirty: null };
+  }
+}
+
 function buildSw(hashed, buildVersion) {
   let sw = fs.readFileSync(path.join(ROOT, SW_ENTRY), "utf8");
 
@@ -254,9 +273,15 @@ async function main() {
   for (const f of COPY_FILES) copyFileToDist(f);
   for (const d of COPY_DIRS) copyDirToDist(d);
 
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  const git = readGitInfo();
+
   const manifest = {
+    name: pkg.name,
+    appVersion: pkg.version || "0.0.0",
+    buildHash: buildVersion,
     builtAt: new Date().toISOString(),
-    version: buildVersion,
+    git,
     assets: hashed,
   };
   fs.writeFileSync(path.join(DIST, "build-manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
