@@ -2,5 +2,6 @@
 data/
 .env
 dist/
+node_modules/
 *.gz
 *.br
