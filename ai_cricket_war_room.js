@@ -1795,6 +1795,84 @@ function clipForShareUrl(text, maxLen) {
 }
 
 /**
+ * @typedef {{ v: 1, l: string, w: string, c: number, s?: string, r?: string, k?: string, f?: string }} SharePackV1
+ */
+
+/** Set when `?p=` or `?sid=` resolves; consumed by {@link applySharedPredictionPreviewFromUrl}. */
+let _acwrSharePackP = /** @type {SharePackV1 | null} */ (null);
+
+/**
+ * Normalise server or base64-decoded JSON into {@link SharePackV1}.
+ * @param {unknown} o
+ * @returns {SharePackV1 | null}
+ */
+function sharePackV1FromApiBody(o) {
+  if (!o || typeof o !== "object") return null;
+  const raw = /** @type {Record<string, unknown>} */ (o);
+  if (Number(raw.v) !== 1) return null;
+  const l = String(raw.l ?? "").trim();
+  const w = String(raw.w ?? "").trim();
+  if (!l || !w) return null;
+  const c = Number(raw.c);
+  /** @type {SharePackV1} */
+  const out = {
+    v: 1,
+    l,
+    w,
+    c: Number.isFinite(c) ? Math.min(100, Math.max(0, Math.round(c))) : 55,
+  };
+  if (raw.s != null && String(raw.s).trim()) out.s = String(raw.s);
+  if (raw.r != null && String(raw.r).trim()) out.r = String(raw.r);
+  if (raw.k != null && String(raw.k).trim()) out.k = String(raw.k);
+  if (raw.f != null && String(raw.f).trim()) out.f = String(raw.f);
+  return out;
+}
+
+function utf8ToBase64Url(str) {
+  const bytes = new TextEncoder().encode(str);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/**
+ * @param {string} b64url
+ * @returns {string}
+ */
+function base64UrlToUtf8(b64url) {
+  let b64 = String(b64url).replace(/-/g, "+").replace(/_/g, "/");
+  const pad = b64.length % 4;
+  if (pad) b64 += "=".repeat(4 - pad);
+  const binary = atob(b64);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return new TextDecoder().decode(out);
+}
+
+/**
+ * Compact share token: one `p` query param (base64url JSON) instead of many long `share=…&summary=…` params.
+ * @param {SharePackV1} pack
+ */
+function encodeSharePack(pack) {
+  return utf8ToBase64Url(JSON.stringify(pack));
+}
+
+/**
+ * @param {string} b64url
+ * @returns {SharePackV1 | null}
+ */
+function decodeSharePack(b64url) {
+  try {
+    const s = base64UrlToUtf8(b64url.trim());
+    return sharePackV1FromApiBody(JSON.parse(s));
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Map Judge winner field to a short team code for share URLs (e.g. SRH).
  * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
  * @param {string} winnerField
@@ -1834,25 +1912,73 @@ function verdictParamMatchesTeams(verdictParam, teams) {
 /**
  * @param {string} matchLabel
  * @param {WarRoomVerdict} v
+ * @returns {SharePackV1}
  */
-function buildPredictionShareUrl(matchLabel, v) {
+function sharePackFromVerdict(matchLabel, v) {
   const label = String(matchLabel || "").trim();
   const teams = parseTeamsFromMatch(label);
+  const conf = Math.round(Number(v.confidence) || 55);
+  /** @type {SharePackV1} */
+  const pack = {
+    v: 1,
+    l: label,
+    w: verdictWinnerToShareCode(teams, v.winner),
+    c: conf,
+  };
+  const sum = clipForShareUrl(v.summary, 160);
+  if (sum) pack.s = sum;
+  const sr = clipForShareUrl(v.score_range === "—" ? "" : v.score_range, 40);
+  if (sr) pack.r = sr;
+  const kp = clipForShareUrl(v.key_player === "—" ? "" : v.key_player, 48);
+  if (kp) pack.k = kp;
+  const sf = clipForShareUrl(v.swing_factor === "—" ? "" : v.swing_factor, 48);
+  if (sf) pack.f = sf;
+  return pack;
+}
+
+/**
+ * Offline / fallback: one `p=` base64url param.
+ * @param {string} matchLabel
+ * @param {WarRoomVerdict} v
+ */
+function buildPredictionShareUrlCompactP(matchLabel, v) {
   const u = new URL(window.location.href);
   u.hash = "";
   u.search = "";
-  u.searchParams.set("share", label);
-  u.searchParams.set("verdict", verdictWinnerToShareCode(teams, v.winner));
-  u.searchParams.set("confidence", String(Math.round(Number(v.confidence) || 55)));
-  const sum = clipForShareUrl(v.summary, 200);
-  if (sum) u.searchParams.set("summary", sum);
-  const sr = clipForShareUrl(v.score_range === "—" ? "" : v.score_range, 48);
-  if (sr) u.searchParams.set("score_range", sr);
-  const kp = clipForShareUrl(v.key_player === "—" ? "" : v.key_player, 72);
-  if (kp) u.searchParams.set("key_player", kp);
-  const sf = clipForShareUrl(v.swing_factor === "—" ? "" : v.swing_factor, 72);
-  if (sf) u.searchParams.set("swing_factor", sf);
+  u.searchParams.set("p", encodeSharePack(sharePackFromVerdict(matchLabel, v)));
   return u.toString();
+}
+
+/**
+ * Short `/s/{id}` when the Node server is available; else compact `?p=`.
+ * @param {string} matchLabel
+ * @param {WarRoomVerdict} v
+ */
+async function resolvePredictionShareUrl(matchLabel, v) {
+  const pack = sharePackFromVerdict(matchLabel, v);
+  if (apiBase() !== null) {
+    try {
+      const r = await fetch(`${apiBase()}/api/share-prediction`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(pack),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        const id = d && d.id != null ? String(d.id).trim().toLowerCase() : "";
+        if (id && /^[a-f0-9]{8}$/.test(id)) {
+          const u = new URL(window.location.href);
+          u.hash = "";
+          u.search = "";
+          u.pathname = `/s/${id}`;
+          return u.toString();
+        }
+      }
+    } catch {
+      /* fall back */
+    }
+  }
+  return buildPredictionShareUrlCompactP(matchLabel, v);
 }
 
 /**
@@ -1860,7 +1986,7 @@ function buildPredictionShareUrl(matchLabel, v) {
  * @param {WarRoomVerdict} v
  */
 async function copyPredictionShareLink(matchLabel, v) {
-  const url = buildPredictionShareUrl(matchLabel, v);
+  const url = await resolvePredictionShareUrl(matchLabel, v);
   try {
     await navigator.clipboard.writeText(url);
     showAutoDetectToast("Prediction link copied");
@@ -1931,18 +2057,9 @@ function mountSharedPredictionPreviewCard(verdictRootEl, v, teams, opts) {
 }
 
 /**
- * If the URL includes `verdict` (and the fixture was resolved into `#matchInput`), show the shared verdict card immediately.
+ * If the URL includes compact `?p=` or legacy `verdict=…` (with fixture in `#matchInput`), show the shared verdict card immediately.
  */
 async function applySharedPredictionPreviewFromUrl() {
-  let sp;
-  try {
-    sp = new URLSearchParams(window.location.search);
-  } catch {
-    return;
-  }
-  const verdictRaw = String(sp.get("verdict") || "").trim();
-  if (!verdictRaw) return;
-
   const input = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
   const verdictEl = document.getElementById("verdictArea");
   if (!input || !verdictEl) return;
@@ -1950,15 +2067,42 @@ async function applySharedPredictionPreviewFromUrl() {
   const matchLabel = input.value.trim();
   if (!matchLabel) return;
 
+  let sp;
+  try {
+    sp = new URLSearchParams(window.location.search);
+  } catch {
+    return;
+  }
+
+  let verdictRaw = "";
+  let confidence = 55;
+  let summary = "";
+  let score_range = "";
+  let key_player = "";
+  let swing_factor = "";
+
+  if (_acwrSharePackP) {
+    const p = _acwrSharePackP;
+    verdictRaw = String(p.w || "").trim();
+    confidence = p.c;
+    if (p.s) summary = String(p.s).trim();
+    if (p.r) score_range = String(p.r).trim();
+    if (p.k) key_player = String(p.k).trim();
+    if (p.f) swing_factor = String(p.f).trim();
+  } else {
+    verdictRaw = String(sp.get("verdict") || "").trim();
+    if (!verdictRaw) return;
+    const c = Number(sp.get("confidence"));
+    confidence = Number.isFinite(c) ? Math.min(100, Math.max(0, Math.round(c))) : 55;
+    summary = String(sp.get("summary") || "").trim();
+    score_range = String(sp.get("score_range") || "").trim();
+    key_player = String(sp.get("key_player") || "").trim();
+    swing_factor = String(sp.get("swing_factor") || "").trim();
+  }
+
+  if (!verdictRaw) return;
+
   const teams = parseTeamsFromMatch(matchLabel);
-  const c = Number(sp.get("confidence"));
-  const confidence = Number.isFinite(c) ? Math.min(100, Math.max(0, Math.round(c))) : 55;
-
-  const summary = String(sp.get("summary") || "").trim();
-  const score_range = String(sp.get("score_range") || "").trim();
-  const key_player = String(sp.get("key_player") || "").trim();
-  const swing_factor = String(sp.get("swing_factor") || "").trim();
-
   /** @type {Record<string, unknown>} */
   const partial = { winner: verdictRaw, confidence };
   if (score_range) partial.score_range = score_range;
@@ -4439,15 +4583,100 @@ async function tryMatchByLabelApi(label) {
 }
 
 /**
- * Deep link: `?share=` + URL-encoded fixture string pre-fills the search field.
+ * Resolve `pack.l` against suggestions / API and fill `#matchInput`.
+ * @param {SharePackV1} pack
+ * @returns {Promise<boolean>}
+ */
+async function applyResolvedSharePackToInput(pack) {
+  const input = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+  if (!input) return false;
+  let label = String(pack.l).trim();
+  if (!label) return false;
+  try {
+    label = decodeURIComponent(label.replace(/\+/g, " ")).trim();
+  } catch {
+    /* */ 
+  }
+  const rows = await loadAllMatchSuggestionRows();
+  let final = label;
+  const fromApi = await tryMatchByLabelApi(label);
+  if (fromApi) {
+    final = fromApi;
+  } else {
+    final = resolveShareStringToLabel(label, rows);
+    if (final !== label) {
+      const api2 = await tryMatchByLabelApi(final);
+      if (api2) final = api2;
+    }
+  }
+  input.value = final;
+  const clearBtn = document.getElementById("matchSearchClear");
+  if (clearBtn) /** @type {HTMLElement} */ (clearBtn).hidden = false;
+  try {
+    populateLiveFormFromMatchInput();
+  } catch {
+    /* */ 
+  }
+  try {
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  } catch {
+    /* */ 
+  }
+  return true;
+}
+
+/**
+ * Deep link: `/s/{id}` (302 → `?sid=`), `?sid=`, `?p=`, or `?share=` pre-fills the match field.
  * Accepts the exact catalog label **or** a looser hand-written line (e.g. `IPL 2026 — SRH vs DC, Hyderabad`
  * → resolves to the real row such as `DC vs SRH — …, Rajiv Gandhi International Stadium, Hyderabad`).
- * With `verdict` + `confidence`, {@link applySharedPredictionPreviewFromUrl} shows a static Judge-style card immediately; user still runs the room for the full pipeline.
+ * With a share pack (sid / p / legacy verdict + share), {@link applySharedPredictionPreviewFromUrl} shows the preview card.
  */
 async function applyShareQueryParam() {
+  _acwrSharePackP = null;
+
+  let sp;
+  try {
+    sp = new URLSearchParams(window.location.search);
+  } catch {
+    return;
+  }
+
+  const sid = String(sp.get("sid") || "").trim().toLowerCase();
+  if (sid && /^[a-f0-9]{8}$/.test(sid) && apiBase() !== null) {
+    try {
+      const r = await fetch(`${apiBase()}/api/share/${encodeURIComponent(sid)}`, {
+        headers: { Accept: "application/json" },
+      });
+      if (r.ok) {
+        const data = await r.json();
+        const spack = sharePackV1FromApiBody(data);
+        if (spack) {
+          _acwrSharePackP = spack;
+          if (await applyResolvedSharePackToInput(spack)) return;
+          _acwrSharePackP = null;
+        }
+      }
+    } catch {
+      /* */ 
+    }
+  }
+
+  const pToken = String(sp.get("p") || "").trim();
+  if (pToken) {
+    const pack = decodeSharePack(pToken);
+    if (pack && pack.l) {
+      _acwrSharePackP = pack;
+    }
+  }
+
+  if (_acwrSharePackP) {
+    if (await applyResolvedSharePackToInput(_acwrSharePackP)) return;
+    _acwrSharePackP = null;
+  }
+
   let raw = "";
   try {
-    raw = new URLSearchParams(window.location.search).get("share") || "";
+    raw = sp.get("share") || "";
   } catch {
     return;
   }

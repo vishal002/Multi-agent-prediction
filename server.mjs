@@ -41,11 +41,15 @@
  * GET /api/match-by-label?label=… returns the full row for an exact label (404 if unknown).
  * Response: { suggestions: [{ label, date, venue, completed?, result? }] }.
  * With a non-empty q, results are filtered and sorted by fixture date (newest first), then venue.
+ *
+ * Short prediction links (no Mongo): POST /api/share-prediction → { id }; GET /api/share/:id → pack JSON;
+ * GET /s/:id → 302 to /?sid=:id (pack persisted under data/share_predictions.json by default).
  */
 
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -719,6 +723,104 @@ async function readBody(req) {
   return Buffer.concat(chunks).toString("utf8");
 }
 
+// ── Short share links: POST pack → id; GET /s/:id → app with ?sid= ─────────
+const SHARE_PREDICTION_STORE_PATH =
+  process.env.SHARE_PREDICTION_STORE_PATH || path.join(__dirname, "data", "share_predictions.json");
+const MAX_SHARE_PREDICTIONS = 5000;
+const SHARE_ID_HEX_RX = /^[a-f0-9]{8}$/;
+
+/** @type {Map<string, { created: number, pack: Record<string, unknown> }>} */
+const sharePredictionById = new Map();
+
+function loadSharePredictionsFromDisk() {
+  try {
+    if (!fs.existsSync(SHARE_PREDICTION_STORE_PATH)) return;
+    const raw = fs.readFileSync(SHARE_PREDICTION_STORE_PATH, "utf8");
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return;
+    for (const row of arr) {
+      if (!row || typeof row !== "object") continue;
+      const id = String(row.id || "").trim().toLowerCase();
+      if (!SHARE_ID_HEX_RX.test(id)) continue;
+      const created = Number(row.created) || Date.now();
+      const pack = row.pack;
+      if (pack && typeof pack === "object") sharePredictionById.set(id, { created, pack });
+    }
+  } catch (e) {
+    console.warn("[share-predictions] load:", e instanceof Error ? e.message : e);
+  }
+}
+
+function persistSharePredictions() {
+  try {
+    const dir = path.dirname(SHARE_PREDICTION_STORE_PATH);
+    fs.mkdirSync(dir, { recursive: true });
+    let rows = [...sharePredictionById.entries()].map(([id, v]) => ({
+      id,
+      created: v.created,
+      pack: v.pack,
+    }));
+    rows.sort((a, b) => a.created - b.created);
+    while (rows.length > MAX_SHARE_PREDICTIONS) rows.shift();
+    sharePredictionById.clear();
+    for (const r of rows) sharePredictionById.set(r.id, { created: r.created, pack: r.pack });
+    fs.writeFileSync(SHARE_PREDICTION_STORE_PATH, JSON.stringify(rows), "utf8");
+  } catch (e) {
+    console.warn("[share-predictions] persist:", e instanceof Error ? e.message : e);
+  }
+}
+
+function pruneSharePredictionsIfNeeded() {
+  if (sharePredictionById.size <= MAX_SHARE_PREDICTIONS) return;
+  const sorted = [...sharePredictionById.entries()].sort((a, b) => a[1].created - b[1].created);
+  while (sharePredictionById.size > MAX_SHARE_PREDICTIONS && sorted.length) {
+    const [id] = sorted.shift();
+    sharePredictionById.delete(id);
+  }
+}
+
+/**
+ * @param {unknown} body
+ * @returns {Record<string, unknown> | null}
+ */
+function normalizeSharePredictionPack(body) {
+  if (!body || typeof body !== "object") return null;
+  const o = /** @type {Record<string, unknown>} */ (body);
+  if (Number(o.v) !== 1) return null;
+  const l = String(o.l ?? "").trim();
+  const w = String(o.w ?? "").trim();
+  if (!l || l.length > 520) return null;
+  if (!w || w.length > 32) return null;
+  const cRaw = Number(o.c);
+  const c = Number.isFinite(cRaw) ? Math.min(100, Math.max(0, Math.round(cRaw))) : 55;
+  /** @type {Record<string, unknown>} */
+  const pack = { v: 1, l, w, c };
+  const clip = (x, max) => {
+    const s = String(x ?? "").trim();
+    if (!s) return null;
+    return s.length > max ? s.slice(0, max) : s;
+  };
+  const s = clip(o.s, 400);
+  if (s) pack.s = s;
+  const r = clip(o.r, 80);
+  if (r) pack.r = r;
+  const k = clip(o.k, 120);
+  if (k) pack.k = k;
+  const f = clip(o.f, 120);
+  if (f) pack.f = f;
+  return pack;
+}
+
+function newSharePredictionId() {
+  for (let i = 0; i < 24; i++) {
+    const id = crypto.randomBytes(4).toString("hex");
+    if (!sharePredictionById.has(id)) return id;
+  }
+  return crypto.randomBytes(4).toString("hex");
+}
+
+loadSharePredictionsFromDisk();
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
 
@@ -731,7 +833,9 @@ const server = http.createServer(async (req, res) => {
       url.pathname === "/api/live-score" ||
       url.pathname === "/api/judge/predict" ||
       url.pathname === "/api/judge/accuracy" ||
-      url.pathname === "/api/version")
+      url.pathname === "/api/version" ||
+      url.pathname === "/api/share-prediction" ||
+      url.pathname.startsWith("/api/share/"))
   ) {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
@@ -1070,8 +1174,105 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "POST" && url.pathname === "/api/share-prediction") {
+    let raw = "";
+    try {
+      raw = await readBody(req);
+    } catch {
+      res.writeHead(400, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(JSON.stringify({ error: { message: "Empty body" } }));
+      return;
+    }
+    if (raw.length > 48_000) {
+      res.writeHead(413, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(JSON.stringify({ error: { message: "Body too large" } }));
+      return;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      res.writeHead(400, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(JSON.stringify({ error: { message: "Invalid JSON" } }));
+      return;
+    }
+    const pack = normalizeSharePredictionPack(parsed);
+    if (!pack) {
+      res.writeHead(400, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(JSON.stringify({ error: { message: "Invalid share payload" } }));
+      return;
+    }
+    const id = newSharePredictionId();
+    sharePredictionById.set(id, { created: Date.now(), pack });
+    pruneSharePredictionsIfNeeded();
+    persistSharePredictions();
+    res.writeHead(201, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "no-store",
+    });
+    res.end(JSON.stringify({ id }));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname.startsWith("/api/share/")) {
+    const id = url.pathname.slice("/api/share/".length).trim().toLowerCase();
+    if (!SHARE_ID_HEX_RX.test(id)) {
+      res.writeHead(400, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(JSON.stringify({ error: { message: "Invalid id" } }));
+      return;
+    }
+    const row = sharePredictionById.get(id);
+    if (!row) {
+      res.writeHead(404, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Access-Control-Allow-Origin": "*",
+      });
+      res.end(JSON.stringify({ error: { message: "Not found" } }));
+      return;
+    }
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "no-store",
+    });
+    res.end(JSON.stringify(row.pack));
+    return;
+  }
+
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.writeHead(405);
+    res.end();
+    return;
+  }
+
+  if (url.pathname.startsWith("/s/")) {
+    const id = url.pathname.slice(3).trim().toLowerCase();
+    if (!SHARE_ID_HEX_RX.test(id) || !sharePredictionById.has(id)) {
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Share link not found");
+      return;
+    }
+    const absolute = `${url.protocol}//${url.host}/?sid=${encodeURIComponent(id)}`;
+    res.writeHead(302, {
+      Location: absolute,
+      "Cache-Control": "no-store",
+    });
     res.end();
     return;
   }
