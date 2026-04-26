@@ -6,7 +6,7 @@
  * precache bucket is deleted on activate (avoids stale large bundles).
  * Changing this file also triggers a service-worker update check in browsers.
  */
-const STATIC_ASSET_VERSION = "20260423-3";
+const STATIC_ASSET_VERSION = "20260427-1";
 const STATIC_CACHE = `acwr-static-${STATIC_ASSET_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -16,11 +16,7 @@ const PRECACHE_URLS = [
   "/ai_cricket_war_room.js",
   "/manifest.webmanifest",
   "/match_suggestions.json",
-  "/icons/favicon.png",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
-  "/icons/icon-maskable-512.png",
-  "/icons/apple-touch-icon.png",
+  "/icons/Gemini_Generated_Image_p1mewsp1mewsp1me.png",
 ];
 
 self.addEventListener("install", (event) => {

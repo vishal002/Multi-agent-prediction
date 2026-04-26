@@ -3658,9 +3658,7 @@ function resetWarRoom() {
   document.getElementById('debateArea')?.classList.remove('debate-area--final-only');
   document.getElementById('debateArea').innerHTML = `
     <div class="empty-state" id="emptyState">
-      <div class="empty-state__icon" aria-hidden="true">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-      </div>
+      <div class="empty-state__icon" aria-hidden="true"></div>
       <p class="empty-state__title">Ready</p>
       <p class="empty-state__desc">Pick a fixture above, then <strong>Run war room</strong> for intel, debate, and verdict.</p>
     </div>`;

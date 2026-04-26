@@ -68,6 +68,16 @@
   --color-border-tertiary: var(--color-border);
   --color-border-success: var(--color-success-border);
   --color-border-info: var(--color-info-border);
+
+  /* Single-sheet app artwork (PWA + in-app chrome). Extend with --sprite-* / modifier classes if you add more cells later. */
+  --acwr-icon-sprite: url("/icons/Gemini_Generated_Image_p1mewsp1mewsp1me.png");
+}
+
+.icon-sprite {
+  background-image: var(--acwr-icon-sprite);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
 }
 
 *,
@@ -247,10 +257,13 @@ body::after {
 .brand__logo-img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
   border-radius: 9px;
   display: block;
   pointer-events: none;
+  background-image: var(--acwr-icon-sprite);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
 }
 
 .brand__text-block {
@@ -2123,13 +2136,16 @@ html.acwr-notice-dismissed .notice-strip {
 .empty-state__icon {
   width: 2rem;
   height: 2rem;
-  border-radius: 50%;
-  background: var(--color-bg-muted);
+  border-radius: 9px;
   border: 1px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-tertiary);
+  display: block;
+  flex-shrink: 0;
+  overflow: hidden;
+  background-color: var(--color-bg-muted);
+  background-image: var(--acwr-icon-sprite);
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
 }
 
 .empty-state__title {
