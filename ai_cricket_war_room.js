@@ -23,92 +23,938 @@ const ARCH = [
 
 /** Same rows as match_suggestions.json (order preserved for empty search). */
 const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
-  { label: "IPL 2026 Final — TBD", date: "2026-06-01", venue: "TBD", teams: [] },
-  { label: "IPL 2026 Qualifier 2 — TBD", date: "2026-05-30", venue: "TBD", teams: [] },
-  { label: "IPL 2026 Qualifier 1 — TBD", date: "2026-05-28", venue: "TBD", teams: [] },
-  { label: "IPL 2026 Eliminator — TBD", date: "2026-05-27", venue: "TBD", teams: [] },
-  { label: "KKR vs DC — IPL 2026 Match 70, Eden Gardens, Kolkata", date: "2026-05-24", venue: "Eden Gardens, Kolkata", teams: ["KKR", "DC"] },
-  { label: "MI vs RR — IPL 2026 Match 69, Wankhede Stadium, Mumbai", date: "2026-05-24", venue: "Wankhede Stadium, Mumbai", teams: ["MI", "RR"] },
-  { label: "LSG vs PBKS — IPL 2026 Match 68, BRSABV Ekana Cricket Stadium, Lucknow", date: "2026-05-23", venue: "BRSABV Ekana Cricket Stadium, Lucknow", teams: ["LSG", "PBKS"] },
-  { label: "SRH vs RCB — IPL 2026 Match 67, Rajiv Gandhi International Stadium, Hyderabad", date: "2026-05-22", venue: "Rajiv Gandhi International Stadium, Hyderabad", teams: ["SRH", "RCB"] },
-  { label: "GT vs CSK — IPL 2026 Match 66, Narendra Modi Stadium, Ahmedabad", date: "2026-05-21", venue: "Narendra Modi Stadium, Ahmedabad", teams: ["GT", "CSK"] },
-  { label: "KKR vs MI — IPL 2026 Match 65, Eden Gardens, Kolkata", date: "2026-05-20", venue: "Eden Gardens, Kolkata", teams: ["KKR", "MI"] },
-  { label: "RR vs LSG — IPL 2026 Match 64, Sawai Mansingh Stadium, Jaipur", date: "2026-05-19", venue: "Sawai Mansingh Stadium, Jaipur", teams: ["RR", "LSG"] },
-  { label: "CSK vs SRH — IPL 2026 Match 63, M. A. Chidambaram Stadium, Chennai", date: "2026-05-18", venue: "M. A. Chidambaram Stadium, Chennai", teams: ["CSK", "SRH"] },
-  { label: "DC vs RR — IPL 2026 Match 62, Arun Jaitley Stadium, Delhi", date: "2026-05-17", venue: "Arun Jaitley Stadium, Delhi", teams: ["DC", "RR"] },
-  { label: "PBKS vs RCB — IPL 2026 Match 61, IS Bindra Stadium, Mohali", date: "2026-05-17", venue: "IS Bindra Stadium, Mohali", teams: ["PBKS", "RCB"] },
-  { label: "KKR vs GT — IPL 2026 Match 60, Eden Gardens, Kolkata", date: "2026-05-16", venue: "Eden Gardens, Kolkata", teams: ["KKR", "GT"] },
-  { label: "LSG vs CSK — IPL 2026 Match 59, BRSABV Ekana Cricket Stadium, Lucknow", date: "2026-05-15", venue: "BRSABV Ekana Cricket Stadium, Lucknow", teams: ["LSG", "CSK"] },
-  { label: "PBKS vs MI — IPL 2026 Match 58, IS Bindra Stadium, Mohali", date: "2026-05-14", venue: "IS Bindra Stadium, Mohali", teams: ["PBKS", "MI"] },
-  { label: "RCB vs KKR — IPL 2026 Match 57, M. Chinnaswamy Stadium, Bengaluru", date: "2026-05-13", venue: "M. Chinnaswamy Stadium, Bengaluru", teams: ["RCB", "KKR"] },
-  { label: "GT vs SRH — IPL 2026 Match 56, Narendra Modi Stadium, Ahmedabad", date: "2026-05-12", venue: "Narendra Modi Stadium, Ahmedabad", teams: ["GT", "SRH"] },
-  { label: "PBKS vs DC — IPL 2026 Match 55, IS Bindra Stadium, Mohali", date: "2026-05-11", venue: "IS Bindra Stadium, Mohali", teams: ["PBKS", "DC"] },
-  { label: "RCB vs MI — IPL 2026 Match 54, M. Chinnaswamy Stadium, Bengaluru", date: "2026-05-10", venue: "M. Chinnaswamy Stadium, Bengaluru", teams: ["RCB", "MI"] },
-  { label: "CSK vs LSG — IPL 2026 Match 53, M. A. Chidambaram Stadium, Chennai", date: "2026-05-10", venue: "M. A. Chidambaram Stadium, Chennai", teams: ["CSK", "LSG"] },
-  { label: "RR vs GT — IPL 2026 Match 52, Sawai Mansingh Stadium, Jaipur", date: "2026-05-09", venue: "Sawai Mansingh Stadium, Jaipur", teams: ["RR", "GT"] },
-  { label: "DC vs KKR — IPL 2026 Match 51, Arun Jaitley Stadium, Delhi", date: "2026-05-08", venue: "Arun Jaitley Stadium, Delhi", teams: ["DC", "KKR"] },
-  { label: "LSG vs RCB — IPL 2026 Match 50, BRSABV Ekana Cricket Stadium, Lucknow", date: "2026-05-07", venue: "BRSABV Ekana Cricket Stadium, Lucknow", teams: ["LSG", "RCB"] },
-  { label: "SRH vs PBKS — IPL 2026 Match 49, Rajiv Gandhi International Stadium, Hyderabad", date: "2026-05-06", venue: "Rajiv Gandhi International Stadium, Hyderabad", teams: ["SRH", "PBKS"] },
-  { label: "DC vs CSK — IPL 2026 Match 48, Arun Jaitley Stadium, Delhi", date: "2026-05-05", venue: "Arun Jaitley Stadium, Delhi", teams: ["DC", "CSK"] },
-  { label: "MI vs LSG — IPL 2026 Match 47, Wankhede Stadium, Mumbai", date: "2026-05-04", venue: "Wankhede Stadium, Mumbai", teams: ["MI", "LSG"] },
-  { label: "GT vs PBKS — IPL 2026 Match 46, Narendra Modi Stadium, Ahmedabad", date: "2026-05-03", venue: "Narendra Modi Stadium, Ahmedabad", teams: ["GT", "PBKS"] },
-  { label: "SRH vs KKR — IPL 2026 Match 45, Rajiv Gandhi International Stadium, Hyderabad", date: "2026-05-03", venue: "Rajiv Gandhi International Stadium, Hyderabad", teams: ["SRH", "KKR"] },
-  { label: "CSK vs MI — IPL 2026 Match 44, M. A. Chidambaram Stadium, Chennai", date: "2026-05-02", venue: "M. A. Chidambaram Stadium, Chennai", teams: ["CSK", "MI"] },
-  { label: "RR vs DC — IPL 2026 Match 43, Sawai Mansingh Stadium, Jaipur", date: "2026-05-01", venue: "Sawai Mansingh Stadium, Jaipur", teams: ["RR", "DC"] },
-  { label: "GT vs RCB — IPL 2026 Match 42, Narendra Modi Stadium, Ahmedabad", date: "2026-04-30", venue: "Narendra Modi Stadium, Ahmedabad", teams: ["GT", "RCB"] },
-  { label: "MI vs SRH — IPL 2026 Match 41, Wankhede Stadium, Mumbai", date: "2026-04-29", venue: "Wankhede Stadium, Mumbai", teams: ["MI", "SRH"] },
-  { label: "PBKS vs RR — IPL 2026 Match 40, IS Bindra Stadium, Mohali", date: "2026-04-28", venue: "IS Bindra Stadium, Mohali", teams: ["PBKS", "RR"] },
-  { label: "DC vs RCB — IPL 2026 Match 39, Arun Jaitley Stadium, Delhi", date: "2026-04-27", venue: "Arun Jaitley Stadium, Delhi", teams: ["DC", "RCB"] },
-  { label: "LSG vs KKR — IPL 2026 Match 38, BRSABV Ekana Cricket Stadium, Lucknow", date: "2026-04-26", venue: "BRSABV Ekana Cricket Stadium, Lucknow", teams: ["LSG", "KKR"] },
-  { label: "CSK vs GT — IPL 2026 Match 37, M. A. Chidambaram Stadium, Chennai", date: "2026-04-26", venue: "M. A. Chidambaram Stadium, Chennai", teams: ["CSK", "GT"] },
-  { label: "RR vs SRH — IPL 2026 Match 36, Sawai Mansingh Stadium, Jaipur", date: "2026-04-25", venue: "Sawai Mansingh Stadium, Jaipur", teams: ["RR", "SRH"] },
-  { label: "DC vs PBKS — IPL 2026 Match 35, Arun Jaitley Stadium, Delhi", date: "2026-04-25", venue: "Arun Jaitley Stadium, Delhi", teams: ["DC", "PBKS"] },
-  { label: "RCB vs GT — IPL 2026 Match 34, M. Chinnaswamy Stadium, Bengaluru", date: "2026-04-24", venue: "M. Chinnaswamy Stadium, Bengaluru", teams: ["RCB", "GT"] },
-  { label: "CSK vs MI — IPL 2026 Match 33, Wankhede Stadium, Mumbai", date: "2026-04-23", venue: "Wankhede Stadium, Mumbai", teams: ["CSK", "MI"] },
-  { label: "RR vs LSG — IPL 2026 Match 32, Sawai Mansingh Stadium, Jaipur", date: "2026-04-22", venue: "Sawai Mansingh Stadium, Jaipur", teams: ["RR", "LSG"], completed: true, result: { winner: "RR", summary: "Rajasthan Royals won by 40 runs (RR 159/6, LSG 119 in 18 ov)" } },
-  { label: "SRH vs DC — IPL 2026 Match 31, Rajiv Gandhi International Stadium, Hyderabad", date: "2026-04-21", venue: "Rajiv Gandhi International Stadium, Hyderabad", teams: ["SRH", "DC"], completed: true, result: { winner: "SRH", summary: "Sunrisers Hyderabad won by 47 runs (SRH 242/2, DC 195/9 in 20 ov)" } },
-  { label: "MI vs GT — IPL 2026 Match 30, Narendra Modi Stadium, Ahmedabad", date: "2026-04-20", venue: "Narendra Modi Stadium, Ahmedabad", teams: ["MI", "GT"], completed: true, result: { winner: "MI", summary: "Mumbai Indians won by 99 runs (MI 199/5, GT 100 in 15.5 ov)" } },
-  { label: "PBKS vs LSG — IPL 2026 Match 29, IS Bindra Stadium, Mohali", date: "2026-04-19", venue: "IS Bindra Stadium, Mohali", teams: ["PBKS", "LSG"], completed: true, result: { winner: "PBKS", summary: "Punjab Kings won by 54 runs (PBKS 254/7, LSG 200/5 in 20 ov)" } },
-  { label: "RR vs KKR — IPL 2026 Match 28, Sawai Mansingh Stadium, Jaipur", date: "2026-04-19", venue: "Sawai Mansingh Stadium, Jaipur", teams: ["RR", "KKR"], completed: true, result: { winner: "KKR", summary: "Kolkata Knight Riders won by 4 wickets (RR 155/9, KKR 161/6 in 19.4 ov)" } },
-  { label: "SRH vs CSK — IPL 2026 Match 27, Rajiv Gandhi International Stadium, Hyderabad", date: "2026-04-18", venue: "Rajiv Gandhi International Stadium, Hyderabad", teams: ["SRH", "CSK"], completed: true, result: { winner: "SRH", summary: "Sunrisers Hyderabad won by 10 runs (SRH 194/9, CSK 184/8 in 20 ov)" } },
-  { label: "RCB vs DC — IPL 2026 Match 26, M. Chinnaswamy Stadium, Bengaluru", date: "2026-04-18", venue: "M. Chinnaswamy Stadium, Bengaluru", teams: ["RCB", "DC"], completed: true, result: { winner: "DC", summary: "Delhi Capitals won by 6 wickets (RCB 175/8, DC 179/4 in 19.5 ov)" } },
-  { label: "KKR vs GT — IPL 2026 Match 25, Narendra Modi Stadium, Ahmedabad", date: "2026-04-17", venue: "Narendra Modi Stadium, Ahmedabad", teams: ["KKR", "GT"], completed: true, result: { winner: "GT", summary: "Gujarat Titans won by 5 wickets (KKR 180, GT 181/5 in 19.4 ov)" } },
-  { label: "MI vs PBKS — IPL 2026 Match 24, Wankhede Stadium, Mumbai", date: "2026-04-16", venue: "Wankhede Stadium, Mumbai", teams: ["MI", "PBKS"], completed: true, result: { winner: "PBKS", summary: "Punjab Kings won by 7 wickets (MI 195/6, PBKS 198/3 in 16.3 ov)" } },
-  { label: "RCB vs LSG — IPL 2026 Match 23, M. Chinnaswamy Stadium, Bengaluru", date: "2026-04-15", venue: "M. Chinnaswamy Stadium, Bengaluru", teams: ["RCB", "LSG"], completed: true, result: { winner: "RCB", summary: "Royal Challengers Bengaluru won by 5 wickets (LSG 146, RCB 149/5 in 15.1 ov)" } },
-  { label: "CSK vs KKR — IPL 2026 Match 22, M. A. Chidambaram Stadium, Chennai", date: "2026-04-14", venue: "M. A. Chidambaram Stadium, Chennai", teams: ["CSK", "KKR"], completed: true, result: { winner: "CSK", summary: "Chennai Super Kings won by 32 runs (CSK 192/5, KKR 160/7 in 20 ov)" } },
-  { label: "SRH vs RR — IPL 2026 Match 21, Rajiv Gandhi International Stadium, Hyderabad", date: "2026-04-13", venue: "Rajiv Gandhi International Stadium, Hyderabad", teams: ["SRH", "RR"], completed: true, result: { winner: "SRH", summary: "Sunrisers Hyderabad won by 57 runs (SRH 216/6, RR 159 in 19 ov)" } },
-  { label: "RCB vs MI — IPL 2026 Match 20, M. Chinnaswamy Stadium, Bengaluru", date: "2026-04-12", venue: "M. Chinnaswamy Stadium, Bengaluru", teams: ["RCB", "MI"], completed: true, result: { winner: "RCB", summary: "Royal Challengers Bengaluru won by 18 runs (RCB 240/4, MI 222/5 in 20 ov)" } },
-  { label: "LSG vs GT — IPL 2026 Match 19, BRSABV Ekana Cricket Stadium, Lucknow", date: "2026-04-12", venue: "BRSABV Ekana Cricket Stadium, Lucknow", teams: ["LSG", "GT"], completed: true, result: { winner: "GT", summary: "Gujarat Titans won by 7 wickets (LSG 164/8, GT 165/3 in 18.4 ov)" } },
-  { label: "CSK vs DC — IPL 2026 Match 18, M. A. Chidambaram Stadium, Chennai", date: "2026-04-11", venue: "M. A. Chidambaram Stadium, Chennai", teams: ["CSK", "DC"], completed: true, result: { winner: "CSK", summary: "Chennai Super Kings won by 23 runs (CSK 212/2, DC 189 in 20 ov)" } },
-  { label: "SRH vs PBKS — IPL 2026 Match 17, Rajiv Gandhi International Stadium, Hyderabad", date: "2026-04-11", venue: "Rajiv Gandhi International Stadium, Hyderabad", teams: ["SRH", "PBKS"], completed: true, result: { winner: "PBKS", summary: "Punjab Kings won by 6 wickets (SRH 219/6, PBKS 223/4 in 18.5 ov)" } },
-  { label: "RCB vs RR — IPL 2026 Match 16, Barsapara Cricket Stadium, Guwahati", date: "2026-04-10", venue: "Barsapara Cricket Stadium, Guwahati", teams: ["RCB", "RR"], completed: true, result: { winner: "RR", summary: "Rajasthan Royals won by 6 wickets (RCB 201/8, RR 202/4 in 18 ov)" } },
-  { label: "KKR vs LSG — IPL 2026 Match 15, Eden Gardens, Kolkata", date: "2026-04-09", venue: "Eden Gardens, Kolkata", teams: ["KKR", "LSG"], completed: true, result: { winner: "LSG", summary: "Lucknow Super Giants won by 3 wickets (KKR 181/4, LSG 182/7 in 20 ov)" } },
-  { label: "GT vs DC — IPL 2026 Match 14, Narendra Modi Stadium, Ahmedabad", date: "2026-04-08", venue: "Narendra Modi Stadium, Ahmedabad", teams: ["GT", "DC"], completed: true, result: { winner: "GT", summary: "Gujarat Titans won by 1 run (GT 210/4, DC 209/8 in 20 ov)" } },
-  { label: "RR vs MI — IPL 2026 Match 13, Sawai Mansingh Stadium, Jaipur", date: "2026-04-07", venue: "Sawai Mansingh Stadium, Jaipur", teams: ["RR", "MI"], completed: true, result: { winner: "RR", summary: "Rajasthan Royals won by 27 runs D/L (RR 150/3 in 11 ov, MI 123/9 in 11 ov)" } },
-  { label: "KKR vs PBKS — IPL 2026 Match 12, Eden Gardens, Kolkata", date: "2026-04-06", venue: "Eden Gardens, Kolkata", teams: ["KKR", "PBKS"], completed: true, result: { winner: null, summary: "No result — match abandoned (KKR 25/2 in 3.4 ov)" } },
-  { label: "RCB vs CSK — IPL 2026 Match 11, M. Chinnaswamy Stadium, Bengaluru", date: "2026-04-05", venue: "M. Chinnaswamy Stadium, Bengaluru", teams: ["RCB", "CSK"], completed: true, result: { winner: "RCB", summary: "Royal Challengers Bengaluru won by 43 runs (RCB 250/3, CSK 207 in 19.4 ov)" } },
-  { label: "SRH vs LSG — IPL 2026 Match 10, Rajiv Gandhi International Stadium, Hyderabad", date: "2026-04-05", venue: "Rajiv Gandhi International Stadium, Hyderabad", teams: ["SRH", "LSG"], completed: true, result: { winner: "LSG", summary: "Lucknow Super Giants won by 5 wickets (SRH 156/9, LSG 160/5 in 19.5 ov)" } },
-  { label: "RR vs GT — IPL 2026 Match 9, Sawai Mansingh Stadium, Jaipur", date: "2026-04-04", venue: "Sawai Mansingh Stadium, Jaipur", teams: ["RR", "GT"], completed: true, result: { winner: "RR", summary: "Rajasthan Royals won by 6 runs (RR 210/6, GT 204/8 in 20 ov)" } },
-  { label: "MI vs DC — IPL 2026 Match 8, Wankhede Stadium, Mumbai", date: "2026-04-04", venue: "Wankhede Stadium, Mumbai", teams: ["MI", "DC"], completed: true, result: { winner: "DC", summary: "Delhi Capitals won by 6 wickets (MI 162/6, DC 164/4 in 18.1 ov)" } },
-  { label: "CSK vs PBKS — IPL 2026 Match 7, M. A. Chidambaram Stadium, Chennai", date: "2026-04-03", venue: "M. A. Chidambaram Stadium, Chennai", teams: ["CSK", "PBKS"], completed: true, result: { winner: "PBKS", summary: "Punjab Kings won by 5 wickets (CSK 209/5, PBKS 210/5 in 18.4 ov)" } },
-  { label: "SRH vs KKR — IPL 2026 Match 6, Rajiv Gandhi International Stadium, Hyderabad", date: "2026-04-02", venue: "Rajiv Gandhi International Stadium, Hyderabad", teams: ["SRH", "KKR"], completed: true, result: { winner: "SRH", summary: "Sunrisers Hyderabad won by 65 runs (SRH 226/8, KKR 161 in 16 ov)" } },
-  { label: "LSG vs DC — IPL 2026 Match 5, BRSABV Ekana Cricket Stadium, Lucknow", date: "2026-04-01", venue: "BRSABV Ekana Cricket Stadium, Lucknow", teams: ["LSG", "DC"], completed: true, result: { winner: "DC", summary: "Delhi Capitals won by 6 wickets (LSG 141, DC 145/4 in 17.1 ov)" } },
-  { label: "GT vs PBKS — IPL 2026 Match 4, Narendra Modi Stadium, Ahmedabad", date: "2026-03-31", venue: "Narendra Modi Stadium, Ahmedabad", teams: ["GT", "PBKS"], completed: true, result: { winner: "PBKS", summary: "Punjab Kings won by 3 wickets (GT 162/6, PBKS 165/7 in 19.1 ov)" } },
-  { label: "CSK vs RR — IPL 2026 Match 3, M. A. Chidambaram Stadium, Chennai", date: "2026-03-30", venue: "M. A. Chidambaram Stadium, Chennai", teams: ["CSK", "RR"], completed: true, result: { winner: "RR", summary: "Rajasthan Royals won by 8 wickets (CSK 127, RR 128/2 in 12.1 ov)" } },
-  { label: "KKR vs MI — IPL 2026 Match 2, Eden Gardens, Kolkata", date: "2026-03-29", venue: "Eden Gardens, Kolkata", teams: ["KKR", "MI"], completed: true, result: { winner: "MI", summary: "Mumbai Indians won by 6 wickets (KKR 220/4, MI 224/4 in 19.1 ov)" } },
-  { label: "RCB vs SRH — IPL 2026 Match 1, M. Chinnaswamy Stadium, Bengaluru", date: "2026-03-28", venue: "M. Chinnaswamy Stadium, Bengaluru", teams: ["RCB", "SRH"], completed: true, result: { winner: "RCB", summary: "Royal Challengers Bengaluru won by 6 wickets (SRH 201/9, RCB 203/4 in 15.4 ov)" } },
-  { label: "IND vs AUS — 3rd T20I, Wankhede Stadium, Mumbai", date: "2026-06-08", venue: "Wankhede Stadium, Mumbai", teams: ["IND", "AUS"] },
-  { label: "IND vs SA — 1st T20I, Wanderers Stadium, Johannesburg", date: "2026-06-12", venue: "Wanderers Stadium, Johannesburg", teams: ["IND", "SA"] },
-  { label: "PAK vs IND — ODI, Dubai International Cricket Stadium", date: "2026-06-15", venue: "Dubai International Cricket Stadium", teams: ["PAK", "IND"] },
-  { label: "WI vs SA — 1st T20I, Kensington Oval, Bridgetown", date: "2026-06-18", venue: "Kensington Oval, Bridgetown", teams: ["WI", "SA"] },
-  { label: "IND vs ENG — 1st ODI, Vidarbha Cricket Association Stadium, Nagpur", date: "2026-06-22", venue: "Vidarbha Cricket Association Stadium, Nagpur", teams: ["IND", "ENG"] },
-  { label: "BAN vs SL — 2nd ODI, Shere Bangla Stadium, Mirpur", date: "2026-06-25", venue: "Shere Bangla Stadium, Mirpur", teams: ["BAN", "SL"] },
-  { label: "ENG vs WI — 3rd ODI, County Ground, Taunton", date: "2026-06-28", venue: "County Ground, Taunton", teams: ["ENG", "WI"] },
-  { label: "IND vs NZ — 2nd Test, M. Chinnaswamy Stadium, Bengaluru", date: "2026-07-02", venue: "M. Chinnaswamy Stadium, Bengaluru", teams: ["IND", "NZ"] },
-  { label: "AUS vs ENG — 5th Ashes Test, Kia Oval, London", date: "2026-07-10", venue: "Kia Oval, London", teams: ["AUS", "ENG"] },
-  { label: "NZ vs SA — Test, Basin Reserve, Wellington", date: "2026-07-14", venue: "Basin Reserve, Wellington", teams: ["NZ", "SA"] },
-  { label: "AFG vs IRE — T20 World Cup group, Providence Stadium, Guyana", date: "2026-07-18", venue: "Providence Stadium, Guyana", teams: ["AFG", "IRE"] },
-  { label: "AUS vs IND — Boxing Day Test, Melbourne Cricket Ground", date: "2026-07-26", venue: "Melbourne Cricket Ground", teams: ["AUS", "IND"] },
+    {
+      "label": "IPL 2026 Final — TBD",
+      "date": "2026-06-01",
+      "venue": "TBD",
+      "teams": []
+    },
+    {
+      "label": "IPL 2026 Qualifier 2 — TBD",
+      "date": "2026-05-30",
+      "venue": "TBD",
+      "teams": []
+    },
+    {
+      "label": "IPL 2026 Qualifier 1 — TBD",
+      "date": "2026-05-28",
+      "venue": "TBD",
+      "teams": []
+    },
+    {
+      "label": "IPL 2026 Eliminator — TBD",
+      "date": "2026-05-27",
+      "venue": "TBD",
+      "teams": []
+    },
+    {
+      "label": "DC vs KKR — IPL 2026 Match 70, Eden Gardens, Kolkata",
+      "date": "2026-05-24",
+      "venue": "Eden Gardens, Kolkata",
+      "teams": [
+        "DC",
+        "KKR"
+      ]
+    },
+    {
+      "label": "MI vs RR — IPL 2026 Match 69, Wankhede Stadium, Mumbai",
+      "date": "2026-05-24",
+      "venue": "Wankhede Stadium, Mumbai",
+      "teams": [
+        "MI",
+        "RR"
+      ]
+    },
+    {
+      "label": "LSG vs PBKS — IPL 2026 Match 68, BRSABV Ekana Cricket Stadium, Lucknow",
+      "date": "2026-05-23",
+      "venue": "BRSABV Ekana Cricket Stadium, Lucknow",
+      "teams": [
+        "LSG",
+        "PBKS"
+      ]
+    },
+    {
+      "label": "RCB vs SRH — IPL 2026 Match 67, Rajiv Gandhi International Stadium, Hyderabad",
+      "date": "2026-05-22",
+      "venue": "Rajiv Gandhi International Stadium, Hyderabad",
+      "teams": [
+        "RCB",
+        "SRH"
+      ]
+    },
+    {
+      "label": "CSK vs GT — IPL 2026 Match 66, Narendra Modi Stadium, Ahmedabad",
+      "date": "2026-05-21",
+      "venue": "Narendra Modi Stadium, Ahmedabad",
+      "teams": [
+        "CSK",
+        "GT"
+      ]
+    },
+    {
+      "label": "KKR vs MI — IPL 2026 Match 65, Eden Gardens, Kolkata",
+      "date": "2026-05-20",
+      "venue": "Eden Gardens, Kolkata",
+      "teams": [
+        "KKR",
+        "MI"
+      ]
+    },
+    {
+      "label": "LSG vs RR — IPL 2026 Match 64, Sawai Mansingh Stadium, Jaipur",
+      "date": "2026-05-19",
+      "venue": "Sawai Mansingh Stadium, Jaipur",
+      "teams": [
+        "LSG",
+        "RR"
+      ]
+    },
+    {
+      "label": "CSK vs SRH — IPL 2026 Match 63, M. A. Chidambaram Stadium, Chennai",
+      "date": "2026-05-18",
+      "venue": "M. A. Chidambaram Stadium, Chennai",
+      "teams": [
+        "CSK",
+        "SRH"
+      ]
+    },
+    {
+      "label": "DC vs RR — IPL 2026 Match 62, Arun Jaitley Stadium, Delhi",
+      "date": "2026-05-17",
+      "venue": "Arun Jaitley Stadium, Delhi",
+      "teams": [
+        "DC",
+        "RR"
+      ]
+    },
+    {
+      "label": "PBKS vs RCB — IPL 2026 Match 61, IS Bindra Stadium, Mohali",
+      "date": "2026-05-17",
+      "venue": "IS Bindra Stadium, Mohali",
+      "teams": [
+        "PBKS",
+        "RCB"
+      ]
+    },
+    {
+      "label": "GT vs KKR — IPL 2026 Match 60, Eden Gardens, Kolkata",
+      "date": "2026-05-16",
+      "venue": "Eden Gardens, Kolkata",
+      "teams": [
+        "GT",
+        "KKR"
+      ]
+    },
+    {
+      "label": "CSK vs LSG — IPL 2026 Match 59, BRSABV Ekana Cricket Stadium, Lucknow",
+      "date": "2026-05-15",
+      "venue": "BRSABV Ekana Cricket Stadium, Lucknow",
+      "teams": [
+        "CSK",
+        "LSG"
+      ]
+    },
+    {
+      "label": "MI vs PBKS — IPL 2026 Match 58, IS Bindra Stadium, Mohali",
+      "date": "2026-05-14",
+      "venue": "IS Bindra Stadium, Mohali",
+      "teams": [
+        "MI",
+        "PBKS"
+      ]
+    },
+    {
+      "label": "KKR vs RCB — IPL 2026 Match 57, M. Chinnaswamy Stadium, Bengaluru",
+      "date": "2026-05-13",
+      "venue": "M. Chinnaswamy Stadium, Bengaluru",
+      "teams": [
+        "KKR",
+        "RCB"
+      ]
+    },
+    {
+      "label": "GT vs SRH — IPL 2026 Match 56, Narendra Modi Stadium, Ahmedabad",
+      "date": "2026-05-12",
+      "venue": "Narendra Modi Stadium, Ahmedabad",
+      "teams": [
+        "GT",
+        "SRH"
+      ]
+    },
+    {
+      "label": "DC vs PBKS — IPL 2026 Match 55, IS Bindra Stadium, Mohali",
+      "date": "2026-05-11",
+      "venue": "IS Bindra Stadium, Mohali",
+      "teams": [
+        "DC",
+        "PBKS"
+      ]
+    },
+    {
+      "label": "MI vs RCB — IPL 2026 Match 54, M. Chinnaswamy Stadium, Bengaluru",
+      "date": "2026-05-10",
+      "venue": "M. Chinnaswamy Stadium, Bengaluru",
+      "teams": [
+        "MI",
+        "RCB"
+      ]
+    },
+    {
+      "label": "CSK vs LSG — IPL 2026 Match 53, M. A. Chidambaram Stadium, Chennai",
+      "date": "2026-05-10",
+      "venue": "M. A. Chidambaram Stadium, Chennai",
+      "teams": [
+        "CSK",
+        "LSG"
+      ]
+    },
+    {
+      "label": "GT vs RR — IPL 2026 Match 52, Sawai Mansingh Stadium, Jaipur",
+      "date": "2026-05-09",
+      "venue": "Sawai Mansingh Stadium, Jaipur",
+      "teams": [
+        "GT",
+        "RR"
+      ]
+    },
+    {
+      "label": "DC vs KKR — IPL 2026 Match 51, Arun Jaitley Stadium, Delhi",
+      "date": "2026-05-08",
+      "venue": "Arun Jaitley Stadium, Delhi",
+      "teams": [
+        "DC",
+        "KKR"
+      ]
+    },
+    {
+      "label": "LSG vs RCB — IPL 2026 Match 50, BRSABV Ekana Cricket Stadium, Lucknow",
+      "date": "2026-05-07",
+      "venue": "BRSABV Ekana Cricket Stadium, Lucknow",
+      "teams": [
+        "LSG",
+        "RCB"
+      ]
+    },
+    {
+      "label": "PBKS vs SRH — IPL 2026 Match 49, Rajiv Gandhi International Stadium, Hyderabad",
+      "date": "2026-05-06",
+      "venue": "Rajiv Gandhi International Stadium, Hyderabad",
+      "teams": [
+        "PBKS",
+        "SRH"
+      ]
+    },
+    {
+      "label": "CSK vs DC — IPL 2026 Match 48, Arun Jaitley Stadium, Delhi",
+      "date": "2026-05-05",
+      "venue": "Arun Jaitley Stadium, Delhi",
+      "teams": [
+        "CSK",
+        "DC"
+      ]
+    },
+    {
+      "label": "LSG vs MI — IPL 2026 Match 47, Wankhede Stadium, Mumbai",
+      "date": "2026-05-04",
+      "venue": "Wankhede Stadium, Mumbai",
+      "teams": [
+        "LSG",
+        "MI"
+      ]
+    },
+    {
+      "label": "GT vs PBKS — IPL 2026 Match 46, Narendra Modi Stadium, Ahmedabad",
+      "date": "2026-05-03",
+      "venue": "Narendra Modi Stadium, Ahmedabad",
+      "teams": [
+        "GT",
+        "PBKS"
+      ]
+    },
+    {
+      "label": "KKR vs SRH — IPL 2026 Match 45, Rajiv Gandhi International Stadium, Hyderabad",
+      "date": "2026-05-03",
+      "venue": "Rajiv Gandhi International Stadium, Hyderabad",
+      "teams": [
+        "KKR",
+        "SRH"
+      ]
+    },
+    {
+      "label": "CSK vs MI — IPL 2026 Match 44, M. A. Chidambaram Stadium, Chennai",
+      "date": "2026-05-02",
+      "venue": "M. A. Chidambaram Stadium, Chennai",
+      "teams": [
+        "CSK",
+        "MI"
+      ]
+    },
+    {
+      "label": "DC vs RR — IPL 2026 Match 43, Sawai Mansingh Stadium, Jaipur",
+      "date": "2026-05-01",
+      "venue": "Sawai Mansingh Stadium, Jaipur",
+      "teams": [
+        "DC",
+        "RR"
+      ]
+    },
+    {
+      "label": "GT vs RCB — IPL 2026 Match 42, Narendra Modi Stadium, Ahmedabad",
+      "date": "2026-04-30",
+      "venue": "Narendra Modi Stadium, Ahmedabad",
+      "teams": [
+        "GT",
+        "RCB"
+      ]
+    },
+    {
+      "label": "MI vs SRH — IPL 2026 Match 41, Wankhede Stadium, Mumbai",
+      "date": "2026-04-29",
+      "venue": "Wankhede Stadium, Mumbai",
+      "teams": [
+        "MI",
+        "SRH"
+      ]
+    },
+    {
+      "label": "PBKS vs RR — IPL 2026 Match 40, IS Bindra Stadium, Mohali",
+      "date": "2026-04-28",
+      "venue": "IS Bindra Stadium, Mohali",
+      "teams": [
+        "PBKS",
+        "RR"
+      ]
+    },
+    {
+      "label": "DC vs RCB — IPL 2026 Match 39, Arun Jaitley Stadium, Delhi",
+      "date": "2026-04-27",
+      "venue": "Arun Jaitley Stadium, Delhi",
+      "teams": [
+        "DC",
+        "RCB"
+      ]
+    },
+    {
+      "label": "KKR vs LSG — IPL 2026 Match 38, BRSABV Ekana Cricket Stadium, Lucknow",
+      "date": "2026-04-26",
+      "venue": "BRSABV Ekana Cricket Stadium, Lucknow",
+      "teams": [
+        "KKR",
+        "LSG"
+      ]
+    },
+    {
+      "label": "CSK vs GT — IPL 2026 Match 37, M. A. Chidambaram Stadium, Chennai",
+      "date": "2026-04-26",
+      "venue": "M. A. Chidambaram Stadium, Chennai",
+      "teams": [
+        "CSK",
+        "GT"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "GT",
+        "summary": "Gujarat Titans won by 8 wickets (CSK 158/7 in 20 ov, GT 162/2 in 16.4 ov)"
+      }
+    },
+    {
+      "label": "RR vs SRH — IPL 2026 Match 36, Sawai Mansingh Stadium, Jaipur",
+      "date": "2026-04-25",
+      "venue": "Sawai Mansingh Stadium, Jaipur",
+      "teams": [
+        "RR",
+        "SRH"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "SRH",
+        "summary": "Sunrisers Hyderabad won by 5 wickets (RR 228/6 in 20 ov, SRH 229/5 in 18.3 ov)"
+      }
+    },
+    {
+      "label": "DC vs PBKS — IPL 2026 Match 35, Arun Jaitley Stadium, Delhi",
+      "date": "2026-04-25",
+      "venue": "Arun Jaitley Stadium, Delhi",
+      "teams": [
+        "DC",
+        "PBKS"
+      ]
+    },
+    {
+      "label": "GT vs RCB — IPL 2026 Match 34, M. Chinnaswamy Stadium, Bengaluru",
+      "date": "2026-04-24",
+      "venue": "M. Chinnaswamy Stadium, Bengaluru",
+      "teams": [
+        "GT",
+        "RCB"
+      ]
+    },
+    {
+      "label": "CSK vs MI — IPL 2026 Match 33, Wankhede Stadium, Mumbai",
+      "date": "2026-04-23",
+      "venue": "Wankhede Stadium, Mumbai",
+      "teams": [
+        "CSK",
+        "MI"
+      ]
+    },
+    {
+      "label": "LSG vs RR — IPL 2026 Match 32, Sawai Mansingh Stadium, Jaipur",
+      "date": "2026-04-22",
+      "venue": "Sawai Mansingh Stadium, Jaipur",
+      "teams": [
+        "LSG",
+        "RR"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "RR",
+        "summary": "Rajasthan Royals won by 40 runs (RR 159/6, LSG 119 in 18 ov)"
+      }
+    },
+    {
+      "label": "DC vs SRH — IPL 2026 Match 31, Rajiv Gandhi International Stadium, Hyderabad",
+      "date": "2026-04-21",
+      "venue": "Rajiv Gandhi International Stadium, Hyderabad",
+      "teams": [
+        "DC",
+        "SRH"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "SRH",
+        "summary": "Sunrisers Hyderabad won by 47 runs (SRH 242/2, DC 195/9 in 20 ov)"
+      }
+    },
+    {
+      "label": "GT vs MI — IPL 2026 Match 30, Narendra Modi Stadium, Ahmedabad",
+      "date": "2026-04-20",
+      "venue": "Narendra Modi Stadium, Ahmedabad",
+      "teams": [
+        "GT",
+        "MI"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "MI",
+        "summary": "Mumbai Indians won by 99 runs (MI 199/5, GT 100 in 15.5 ov)"
+      }
+    },
+    {
+      "label": "LSG vs PBKS — IPL 2026 Match 29, IS Bindra Stadium, Mohali",
+      "date": "2026-04-19",
+      "venue": "IS Bindra Stadium, Mohali",
+      "teams": [
+        "LSG",
+        "PBKS"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "PBKS",
+        "summary": "Punjab Kings won by 54 runs (PBKS 254/7, LSG 200/5 in 20 ov)"
+      }
+    },
+    {
+      "label": "KKR vs RR — IPL 2026 Match 28, Sawai Mansingh Stadium, Jaipur",
+      "date": "2026-04-19",
+      "venue": "Sawai Mansingh Stadium, Jaipur",
+      "teams": [
+        "KKR",
+        "RR"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "KKR",
+        "summary": "Kolkata Knight Riders won by 4 wickets (RR 155/9, KKR 161/6 in 19.4 ov)"
+      }
+    },
+    {
+      "label": "CSK vs SRH — IPL 2026 Match 27, Rajiv Gandhi International Stadium, Hyderabad",
+      "date": "2026-04-18",
+      "venue": "Rajiv Gandhi International Stadium, Hyderabad",
+      "teams": [
+        "CSK",
+        "SRH"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "SRH",
+        "summary": "Sunrisers Hyderabad won by 10 runs (SRH 194/9, CSK 184/8 in 20 ov)"
+      }
+    },
+    {
+      "label": "DC vs RCB — IPL 2026 Match 26, M. Chinnaswamy Stadium, Bengaluru",
+      "date": "2026-04-18",
+      "venue": "M. Chinnaswamy Stadium, Bengaluru",
+      "teams": [
+        "DC",
+        "RCB"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "DC",
+        "summary": "Delhi Capitals won by 6 wickets (RCB 175/8, DC 179/4 in 19.5 ov)"
+      }
+    },
+    {
+      "label": "GT vs KKR — IPL 2026 Match 25, Narendra Modi Stadium, Ahmedabad",
+      "date": "2026-04-17",
+      "venue": "Narendra Modi Stadium, Ahmedabad",
+      "teams": [
+        "GT",
+        "KKR"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "GT",
+        "summary": "Gujarat Titans won by 5 wickets (KKR 180, GT 181/5 in 19.4 ov)"
+      }
+    },
+    {
+      "label": "MI vs PBKS — IPL 2026 Match 24, Wankhede Stadium, Mumbai",
+      "date": "2026-04-16",
+      "venue": "Wankhede Stadium, Mumbai",
+      "teams": [
+        "MI",
+        "PBKS"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "PBKS",
+        "summary": "Punjab Kings won by 7 wickets (MI 195/6, PBKS 198/3 in 16.3 ov)"
+      }
+    },
+    {
+      "label": "LSG vs RCB — IPL 2026 Match 23, M. Chinnaswamy Stadium, Bengaluru",
+      "date": "2026-04-15",
+      "venue": "M. Chinnaswamy Stadium, Bengaluru",
+      "teams": [
+        "LSG",
+        "RCB"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "RCB",
+        "summary": "Royal Challengers Bengaluru won by 5 wickets (LSG 146, RCB 149/5 in 15.1 ov)"
+      }
+    },
+    {
+      "label": "CSK vs KKR — IPL 2026 Match 22, M. A. Chidambaram Stadium, Chennai",
+      "date": "2026-04-14",
+      "venue": "M. A. Chidambaram Stadium, Chennai",
+      "teams": [
+        "CSK",
+        "KKR"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "CSK",
+        "summary": "Chennai Super Kings won by 32 runs (CSK 192/5, KKR 160/7 in 20 ov)"
+      }
+    },
+    {
+      "label": "RR vs SRH — IPL 2026 Match 21, Rajiv Gandhi International Stadium, Hyderabad",
+      "date": "2026-04-13",
+      "venue": "Rajiv Gandhi International Stadium, Hyderabad",
+      "teams": [
+        "RR",
+        "SRH"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "SRH",
+        "summary": "Sunrisers Hyderabad won by 57 runs (SRH 216/6, RR 159 in 19 ov)"
+      }
+    },
+    {
+      "label": "MI vs RCB — IPL 2026 Match 20, M. Chinnaswamy Stadium, Bengaluru",
+      "date": "2026-04-12",
+      "venue": "M. Chinnaswamy Stadium, Bengaluru",
+      "teams": [
+        "MI",
+        "RCB"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "RCB",
+        "summary": "Royal Challengers Bengaluru won by 18 runs (RCB 240/4, MI 222/5 in 20 ov)"
+      }
+    },
+    {
+      "label": "GT vs LSG — IPL 2026 Match 19, BRSABV Ekana Cricket Stadium, Lucknow",
+      "date": "2026-04-12",
+      "venue": "BRSABV Ekana Cricket Stadium, Lucknow",
+      "teams": [
+        "GT",
+        "LSG"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "GT",
+        "summary": "Gujarat Titans won by 7 wickets (LSG 164/8, GT 165/3 in 18.4 ov)"
+      }
+    },
+    {
+      "label": "CSK vs DC — IPL 2026 Match 18, M. A. Chidambaram Stadium, Chennai",
+      "date": "2026-04-11",
+      "venue": "M. A. Chidambaram Stadium, Chennai",
+      "teams": [
+        "CSK",
+        "DC"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "CSK",
+        "summary": "Chennai Super Kings won by 23 runs (CSK 212/2, DC 189 in 20 ov)"
+      }
+    },
+    {
+      "label": "PBKS vs SRH — IPL 2026 Match 17, Rajiv Gandhi International Stadium, Hyderabad",
+      "date": "2026-04-11",
+      "venue": "Rajiv Gandhi International Stadium, Hyderabad",
+      "teams": [
+        "PBKS",
+        "SRH"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "PBKS",
+        "summary": "Punjab Kings won by 6 wickets (SRH 219/6, PBKS 223/4 in 18.5 ov)"
+      }
+    },
+    {
+      "label": "RCB vs RR — IPL 2026 Match 16, Barsapara Cricket Stadium, Guwahati",
+      "date": "2026-04-10",
+      "venue": "Barsapara Cricket Stadium, Guwahati",
+      "teams": [
+        "RCB",
+        "RR"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "RR",
+        "summary": "Rajasthan Royals won by 6 wickets (RCB 201/8, RR 202/4 in 18 ov)"
+      }
+    },
+    {
+      "label": "KKR vs LSG — IPL 2026 Match 15, Eden Gardens, Kolkata",
+      "date": "2026-04-09",
+      "venue": "Eden Gardens, Kolkata",
+      "teams": [
+        "KKR",
+        "LSG"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "LSG",
+        "summary": "Lucknow Super Giants won by 3 wickets (KKR 181/4, LSG 182/7 in 20 ov)"
+      }
+    },
+    {
+      "label": "DC vs GT — IPL 2026 Match 14, Narendra Modi Stadium, Ahmedabad",
+      "date": "2026-04-08",
+      "venue": "Narendra Modi Stadium, Ahmedabad",
+      "teams": [
+        "DC",
+        "GT"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "GT",
+        "summary": "Gujarat Titans won by 1 run (GT 210/4, DC 209/8 in 20 ov)"
+      }
+    },
+    {
+      "label": "MI vs RR — IPL 2026 Match 13, Sawai Mansingh Stadium, Jaipur",
+      "date": "2026-04-07",
+      "venue": "Sawai Mansingh Stadium, Jaipur",
+      "teams": [
+        "MI",
+        "RR"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "RR",
+        "summary": "Rajasthan Royals won by 27 runs D/L (RR 150/3 in 11 ov, MI 123/9 in 11 ov)"
+      }
+    },
+    {
+      "label": "KKR vs PBKS — IPL 2026 Match 12, Eden Gardens, Kolkata",
+      "date": "2026-04-06",
+      "venue": "Eden Gardens, Kolkata",
+      "teams": [
+        "KKR",
+        "PBKS"
+      ],
+      "completed": true,
+      "result": {
+        "winner": null,
+        "summary": "No result — match abandoned (KKR 25/2 in 3.4 ov)"
+      }
+    },
+    {
+      "label": "CSK vs RCB — IPL 2026 Match 11, M. Chinnaswamy Stadium, Bengaluru",
+      "date": "2026-04-05",
+      "venue": "M. Chinnaswamy Stadium, Bengaluru",
+      "teams": [
+        "CSK",
+        "RCB"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "RCB",
+        "summary": "Royal Challengers Bengaluru won by 43 runs (RCB 250/3, CSK 207 in 19.4 ov)"
+      }
+    },
+    {
+      "label": "LSG vs SRH — IPL 2026 Match 10, Rajiv Gandhi International Stadium, Hyderabad",
+      "date": "2026-04-05",
+      "venue": "Rajiv Gandhi International Stadium, Hyderabad",
+      "teams": [
+        "LSG",
+        "SRH"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "LSG",
+        "summary": "Lucknow Super Giants won by 5 wickets (SRH 156/9, LSG 160/5 in 19.5 ov)"
+      }
+    },
+    {
+      "label": "GT vs RR — IPL 2026 Match 9, Sawai Mansingh Stadium, Jaipur",
+      "date": "2026-04-04",
+      "venue": "Sawai Mansingh Stadium, Jaipur",
+      "teams": [
+        "GT",
+        "RR"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "RR",
+        "summary": "Rajasthan Royals won by 6 runs (RR 210/6, GT 204/8 in 20 ov)"
+      }
+    },
+    {
+      "label": "DC vs MI — IPL 2026 Match 8, Wankhede Stadium, Mumbai",
+      "date": "2026-04-04",
+      "venue": "Wankhede Stadium, Mumbai",
+      "teams": [
+        "DC",
+        "MI"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "DC",
+        "summary": "Delhi Capitals won by 6 wickets (MI 162/6, DC 164/4 in 18.1 ov)"
+      }
+    },
+    {
+      "label": "CSK vs PBKS — IPL 2026 Match 7, M. A. Chidambaram Stadium, Chennai",
+      "date": "2026-04-03",
+      "venue": "M. A. Chidambaram Stadium, Chennai",
+      "teams": [
+        "CSK",
+        "PBKS"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "PBKS",
+        "summary": "Punjab Kings won by 5 wickets (CSK 209/5, PBKS 210/5 in 18.4 ov)"
+      }
+    },
+    {
+      "label": "KKR vs SRH — IPL 2026 Match 6, Rajiv Gandhi International Stadium, Hyderabad",
+      "date": "2026-04-02",
+      "venue": "Rajiv Gandhi International Stadium, Hyderabad",
+      "teams": [
+        "KKR",
+        "SRH"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "SRH",
+        "summary": "Sunrisers Hyderabad won by 65 runs (SRH 226/8, KKR 161 in 16 ov)"
+      }
+    },
+    {
+      "label": "DC vs LSG — IPL 2026 Match 5, BRSABV Ekana Cricket Stadium, Lucknow",
+      "date": "2026-04-01",
+      "venue": "BRSABV Ekana Cricket Stadium, Lucknow",
+      "teams": [
+        "DC",
+        "LSG"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "DC",
+        "summary": "Delhi Capitals won by 6 wickets (LSG 141, DC 145/4 in 17.1 ov)"
+      }
+    },
+    {
+      "label": "GT vs PBKS — IPL 2026 Match 4, Narendra Modi Stadium, Ahmedabad",
+      "date": "2026-03-31",
+      "venue": "Narendra Modi Stadium, Ahmedabad",
+      "teams": [
+        "GT",
+        "PBKS"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "PBKS",
+        "summary": "Punjab Kings won by 3 wickets (GT 162/6, PBKS 165/7 in 19.1 ov)"
+      }
+    },
+    {
+      "label": "CSK vs RR — IPL 2026 Match 3, M. A. Chidambaram Stadium, Chennai",
+      "date": "2026-03-30",
+      "venue": "M. A. Chidambaram Stadium, Chennai",
+      "teams": [
+        "CSK",
+        "RR"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "RR",
+        "summary": "Rajasthan Royals won by 8 wickets (CSK 127, RR 128/2 in 12.1 ov)"
+      }
+    },
+    {
+      "label": "KKR vs MI — IPL 2026 Match 2, Eden Gardens, Kolkata",
+      "date": "2026-03-29",
+      "venue": "Eden Gardens, Kolkata",
+      "teams": [
+        "KKR",
+        "MI"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "MI",
+        "summary": "Mumbai Indians won by 6 wickets (KKR 220/4, MI 224/4 in 19.1 ov)"
+      }
+    },
+    {
+      "label": "RCB vs SRH — IPL 2026 Match 1, M. Chinnaswamy Stadium, Bengaluru",
+      "date": "2026-03-28",
+      "venue": "M. Chinnaswamy Stadium, Bengaluru",
+      "teams": [
+        "RCB",
+        "SRH"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "RCB",
+        "summary": "Royal Challengers Bengaluru won by 6 wickets (SRH 201/9, RCB 203/4 in 15.4 ov)"
+      }
+    },
+    {
+      "label": "IND vs AUS — 3rd T20I, Wankhede Stadium, Mumbai",
+      "date": "2026-06-08",
+      "venue": "Wankhede Stadium, Mumbai",
+      "teams": [
+        "IND",
+        "AUS"
+      ]
+    },
+    {
+      "label": "IND vs SA — 1st T20I, Wanderers Stadium, Johannesburg",
+      "date": "2026-06-12",
+      "venue": "Wanderers Stadium, Johannesburg",
+      "teams": [
+        "IND",
+        "SA"
+      ]
+    },
+    {
+      "label": "PAK vs IND — ODI, Dubai International Cricket Stadium",
+      "date": "2026-06-15",
+      "venue": "Dubai International Cricket Stadium",
+      "teams": [
+        "PAK",
+        "IND"
+      ]
+    },
+    {
+      "label": "WI vs SA — 1st T20I, Kensington Oval, Bridgetown",
+      "date": "2026-06-18",
+      "venue": "Kensington Oval, Bridgetown",
+      "teams": [
+        "WI",
+        "SA"
+      ]
+    },
+    {
+      "label": "IND vs ENG — 1st ODI, Vidarbha Cricket Association Stadium, Nagpur",
+      "date": "2026-06-22",
+      "venue": "Vidarbha Cricket Association Stadium, Nagpur",
+      "teams": [
+        "IND",
+        "ENG"
+      ]
+    },
+    {
+      "label": "BAN vs SL — 2nd ODI, Shere Bangla Stadium, Mirpur",
+      "date": "2026-06-25",
+      "venue": "Shere Bangla Stadium, Mirpur",
+      "teams": [
+        "BAN",
+        "SL"
+      ]
+    },
+    {
+      "label": "ENG vs WI — 3rd ODI, County Ground, Taunton",
+      "date": "2026-06-28",
+      "venue": "County Ground, Taunton",
+      "teams": [
+        "ENG",
+        "WI"
+      ]
+    },
+    {
+      "label": "IND vs NZ — 2nd Test, M. Chinnaswamy Stadium, Bengaluru",
+      "date": "2026-07-02",
+      "venue": "M. Chinnaswamy Stadium, Bengaluru",
+      "teams": [
+        "IND",
+        "NZ"
+      ]
+    },
+    {
+      "label": "AUS vs ENG — 5th Ashes Test, Kia Oval, London",
+      "date": "2026-07-10",
+      "venue": "Kia Oval, London",
+      "teams": [
+        "AUS",
+        "ENG"
+      ]
+    },
+    {
+      "label": "NZ vs SA — Test, Basin Reserve, Wellington",
+      "date": "2026-07-14",
+      "venue": "Basin Reserve, Wellington",
+      "teams": [
+        "NZ",
+        "SA"
+      ]
+    },
+    {
+      "label": "AFG vs IRE — T20 World Cup group, Providence Stadium, Guyana",
+      "date": "2026-07-18",
+      "venue": "Providence Stadium, Guyana",
+      "teams": [
+        "AFG",
+        "IRE"
+      ]
+    },
+    {
+      "label": "AUS vs IND — Boxing Day Test, Melbourne Cricket Ground",
+      "date": "2026-07-26",
+      "venue": "Melbourne Cricket Ground",
+      "teams": [
+        "AUS",
+        "IND"
+      ]
+    }
 ]);
 
 const MATCH_SUGGEST_TEAM_ALIASES = { KXIP: "PBKS", DD: "DC" };
@@ -138,8 +984,17 @@ function matchSuggestionRowMatches(row, qLower) {
   });
 }
 
+function iplMatchNumberFromLabel(label) {
+  const m = String(label).match(/\bMatch\s+(\d+)\b/i);
+  return m ? Number(m[1]) : 0;
+}
+
+/** Newest fixture date first; same date: lower Match N first (double-headers). */
 function compareMatchSuggestionsNewestFirst(a, b) {
   if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+  const na = iplMatchNumberFromLabel(a.label);
+  const nb = iplMatchNumberFromLabel(b.label);
+  if (na !== nb) return na - nb;
   return a.venue.localeCompare(b.venue, undefined, { sensitivity: "base" });
 }
 
@@ -3057,13 +3912,18 @@ async function autoPopulateTodayMatch() {
     }
   } catch { /* best-effort — use bundled fallback */ }
 
-  // 1st priority: today's incomplete (live / upcoming) matches
-  const todayLive = rows.filter((r) => r.date === todayStr && !r.completed);
+  // 1st priority: today's incomplete (live / upcoming) matches — same-day double-headers: lower Match N first
+  const todayLive = rows
+    .filter((r) => r.date === todayStr && !r.completed)
+    .sort((a, b) => iplMatchNumberFromLabel(a.label) - iplMatchNumberFromLabel(b.label));
 
   // 2nd priority: nearest future incomplete match
   const upcoming = rows
     .filter((r) => !r.completed && r.date > todayStr)
-    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+      return iplMatchNumberFromLabel(a.label) - iplMatchNumberFromLabel(b.label);
+    });
 
   const best = todayLive[0] || upcoming[0];
   if (!best) return;

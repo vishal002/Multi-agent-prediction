@@ -143,9 +143,18 @@ function matchSuggestionRowMatches(row, qLower) {
   });
 }
 
-/** Newest fixture date first; tie-break by venue A→Z. */
+/** @param {string} label */
+function iplMatchNumberFromLabel(label) {
+  const m = String(label).match(/\bMatch\s+(\d+)\b/i);
+  return m ? Number(m[1]) : 0;
+}
+
+/** Newest fixture date first; same date: lower Match N first (double-headers: afternoon before evening). */
 function compareMatchSuggestionsNewestFirst(a, b) {
   if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+  const na = iplMatchNumberFromLabel(a.label);
+  const nb = iplMatchNumberFromLabel(b.label);
+  if (na !== nb) return na - nb;
   return a.venue.localeCompare(b.venue, undefined, { sensitivity: "base" });
 }
 
@@ -745,7 +754,7 @@ const server = http.createServer(async (req, res) => {
     const q = normalizeMatchSuggestQuery(qRaw);
     let limit = Number(url.searchParams.get("limit"));
     if (!Number.isFinite(limit)) limit = 10;
-    limit = Math.min(Math.max(Math.floor(limit), 1), 50);
+    limit = Math.min(Math.max(Math.floor(limit), 1), 100);
     const src = matchSuggestionsRows;
     let pool = src.filter((row) => matchSuggestionRowMatches(row, q));
     if (q) {
