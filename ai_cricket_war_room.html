@@ -13,9 +13,10 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>AI Cricket War Room</title>
   <link rel="manifest" href="/manifest.webmanifest" />
-  <link rel="icon" type="image/png" href="/icons/favicon.png" sizes="32x32" />
+  <!-- Same artwork as manifest `icons` so tab favicon, “Open in app”, and install tile match -->
   <link rel="icon" type="image/png" href="/icons/icon-192.png" sizes="192x192" />
-  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
+  <link rel="icon" type="image/png" href="/icons/icon-192.png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" sizes="192x192" />
   <!-- UI tokens & patterns: DESIGN.md -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -37,8 +38,10 @@
     <header class="app-header" role="banner">
       <div class="app-header__top">
         <div class="app-header__main">
-          <div class="brand brand--war-room">
-            <div class="brand__logo-icon" aria-hidden="true">🏏</div>
+            <div class="brand brand--war-room">
+            <div class="brand__logo-icon" aria-hidden="true">
+              <img class="brand__logo-img" src="/icons/icon-192.png" width="192" height="192" alt="" decoding="async" />
+            </div>
             <div class="brand__text-block">
               <span class="brand__eyebrow">Multi-agent AI</span>
               <h1 class="brand__title"><span class="brand__title-line">Cricket</span> <span class="brand__title-accent">War Room</span></h1>

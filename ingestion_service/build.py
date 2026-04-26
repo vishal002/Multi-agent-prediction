@@ -136,8 +136,8 @@ def _extract_live_score_snippet(bullets: list[str]) -> str:
         if s > best_score:
             best_score = s
             best = plain
-    # Only return if we found at least a score pattern + one more signal
-    if best_score >= 5:
+    # Prefer rich chase context (5+). Accept a bare scoreline (e.g. "120/3 (15.2)") at 4+.
+    if best_score >= 5 or (best_score >= 4 and best and _SCORE_RX.search(best)):
         return best[:400]
     return ""
 

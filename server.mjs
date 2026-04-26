@@ -822,13 +822,24 @@ const server = http.createServer(async (req, res) => {
         if (s > bestScore) { bestScore = s; best = plain; }
       }
 
-      const snippet = bestScore >= 5 ? best.slice(0, 400) : "";
+      const snippet =
+        bestScore >= 5 || (bestScore >= 4 && best && SCORE_RX.test(best)) ? best.slice(0, 400) : "";
       res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
         "Access-Control-Allow-Origin": "*",
         "Cache-Control": "no-store",
       });
-      res.end(JSON.stringify({ snippet, richness: bestScore, fetched_at: data.fetched_at || null }));
+      res.end(
+        JSON.stringify({
+          snippet,
+          richness: bestScore,
+          fetched_at: data.fetched_at || null,
+          hint:
+            !snippet && bestScore > 0
+              ? "RSS had a weak score signal for this fixture; paste the score or set CRICAPI_KEY on the ingestion service."
+              : null,
+        })
+      );
     } catch (e) {
       res.writeHead(503, {
         "Content-Type": "application/json; charset=utf-8",
@@ -1135,4 +1146,23 @@ server.listen(PORT, () => {
   } else {
     console.log("Warning: set GROQ_API_KEY (free) or ANTHROPIC_API_KEY.");
   }
+
+  void (async () => {
+    try {
+      const r = await fetch(`${INGESTION_SERVICE_URL}/healthz`, { signal: AbortSignal.timeout(2500) });
+      if (!r.ok) console.warn(`Ingestion service at ${INGESTION_SERVICE_URL} returned HTTP ${r.status} — live scores & match context need: pip install -r requirements-ingestion.txt && python -m uvicorn ingestion_service.app:app --host 127.0.0.1 --port 3334`);
+    } catch {
+      console.warn(
+        `Ingestion service unreachable (${INGESTION_SERVICE_URL}) — live RSS scores and /api/match-context will fail until you run: pip install -r requirements-ingestion.txt && python -m uvicorn ingestion_service.app:app --host 127.0.0.1 --port 3334`
+      );
+    }
+    try {
+      const r = await fetch(`${JUDGE_SERVICE_URL}/accuracy`, { signal: AbortSignal.timeout(2500) });
+      if (!r.ok) console.warn(`Judge service at ${JUDGE_SERVICE_URL} returned HTTP ${r.status} — /api/judge/predict will not work until the Judge API is healthy.`);
+    } catch {
+      console.warn(
+        `Judge service unreachable (${JUDGE_SERVICE_URL}) — POST /api/judge/predict returns 503 until you run: pip install -r requirements-judge.txt && python -m uvicorn judge_service.app:app --host 127.0.0.1 --port 8000`
+      );
+    }
+  })();
 });

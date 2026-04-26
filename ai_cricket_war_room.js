@@ -1049,7 +1049,12 @@ const HOWTO = [
 ];
 
 function renderAgents() {
-  document.getElementById('agentsList').innerHTML = AGENTS.map(a => `
+  document.getElementById('agentsList').innerHTML = AGENTS.map((a) => {
+    const refreshBtn =
+      a.id === "live"
+        ? ""
+        : `<button type="button" class="agent-intel-refresh" id="intel-refresh-${a.id}" data-intel-refresh="${a.id}" hidden aria-label="Refresh ${escapeHtml(a.name)}"><svg class="agent-intel-refresh__icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 .49-3.56"></path></svg></button>`;
+    return `
     <div class="agent-row agent-row--compact agent-row--skeleton" id="row-${a.id}">
       <div class="agent-icon" id="icon-${a.id}">${a.sym}</div>
       <div class="agent-meta">
@@ -1057,9 +1062,25 @@ function renderAgents() {
         <div class="agent-role">${a.role}</div>
         <div class="agent-insight" id="insight-${a.id}"></div>
       </div>
+      ${refreshBtn}
       <div class="status-dot" id="dot-${a.id}"></div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join("");
+}
+
+function initIntelAgentRefreshHandlers() {
+  const root = document.getElementById("agentsList");
+  if (!root || root.dataset.intelRefreshBound === "1") return;
+  root.dataset.intelRefreshBound = "1";
+  root.addEventListener("click", (e) => {
+    const t = /** @type {HTMLElement|null} */ (e.target);
+    const btn = t && "closest" in t ? /** @type {HTMLButtonElement|null} */ (t.closest("[data-intel-refresh]")) : null;
+    if (!btn || !(btn instanceof HTMLButtonElement) || btn.disabled) return;
+    const agentId = btn.getAttribute("data-intel-refresh");
+    if (!agentId) return;
+    e.preventDefault();
+    void runSingleIntelAgentRefresh(agentId);
+  });
 }
 
 function removeAgentSkeleton(agentId) {
@@ -2191,6 +2212,117 @@ const MAX_EVIDENCE_CHARS_PER_AGENT = 1200;
 const MAX_DEBATE_HISTORY_CHARS = 2400;
 
 /**
+ * Last war-room ingestion bundle so per-agent refresh can re-fetch RSS and re-run one intel call.
+ * @type {{ match: string, teams: { teamA: string, teamB: string, codeA: string, codeB: string }, ingestedCtx: Record<string, unknown> } | null}
+ */
+let intelRefreshSession = null;
+
+function clearIntelRefreshSession() {
+  intelRefreshSession = null;
+  for (const a of AGENTS) {
+    if (a.id === "live") continue;
+    const btn = document.getElementById(`intel-refresh-${a.id}`);
+    if (btn) /** @type {HTMLButtonElement} */ (btn).hidden = true;
+  }
+}
+
+/**
+ * @param {string} text
+ */
+function isIntelFallbackInsightText(text) {
+  return String(text || "").trim() === INTEL_FALLBACK;
+}
+
+/**
+ * @param {string} agentId
+ */
+function syncIntelRefreshButtonForAgent(agentId) {
+  if (agentId === "live") return;
+  const btn = document.getElementById(`intel-refresh-${agentId}`);
+  const ins = document.getElementById(`insight-${agentId}`);
+  if (!btn || !ins) return;
+  const show =
+    intelRefreshSession != null &&
+    isIntelFallbackInsightText(ins.textContent || "");
+  /** @type {HTMLButtonElement} */ (btn).hidden = !show;
+}
+
+/**
+ * @param {string} agentId
+ */
+function syncAllIntelRefreshButtons() {
+  for (const a of AGENTS) {
+    if (a.id !== "live") syncIntelRefreshButtonForAgent(a.id);
+  }
+}
+
+/**
+ * @param {{ id: string, name: string, role: string }} agentMeta
+ */
+function buildSingleAgentIntelSystem(agentMeta) {
+  return (
+    "Reply with exactly one sentence of 15–20 words. No preamble, labels, or quotation marks. " +
+    `You are the ${agentMeta.name} (${agentMeta.role}). Use ONLY facts stated in the Evidence section; do not invent statistics, scores, or events. ` +
+    `If the evidence does not support a substantive claim for your specialty, say exactly: ${INTEL_FALLBACK}`
+  );
+}
+
+/**
+ * Re-fetch match context, then one LLM call for this agent only (updates tile + session context).
+ * @param {string} agentId
+ */
+async function runSingleIntelAgentRefresh(agentId) {
+  if (!intelRefreshSession || agentId === "live") return;
+  const meta = AGENTS.find((a) => a.id === agentId);
+  if (!meta) return;
+
+  const btn = /** @type {HTMLButtonElement|null} */ (document.getElementById(`intel-refresh-${agentId}`));
+  const el = document.getElementById(`insight-${agentId}`);
+  if (!btn || !el) return;
+
+  btn.disabled = true;
+  btn.classList.add("agent-intel-refresh--busy");
+  const { match, teams } = intelRefreshSession;
+
+  try {
+    const ingestedCtx = await fetchMatchContextFromServer(match, teams);
+    intelRefreshSession.ingestedCtx = ingestedCtx;
+    const evidence = clipText(
+      buildMergedIntelEvidence(agentId, ingestedCtx).trim(),
+      MAX_EVIDENCE_CHARS_PER_AGENT
+    );
+    if (!evidence) {
+      el.textContent = INTEL_FALLBACK;
+      el.classList.add("show");
+      syncIntelRefreshButtonForAgent(agentId);
+      return;
+    }
+    const userContent =
+      `Match: "${match}". Contest: ${teams.teamA} vs ${teams.teamB}.\n\n### Evidence\n${evidence}`;
+    const text = await callClaude(
+      [{ role: "user", content: userContent }],
+      buildSingleAgentIntelSystem(meta),
+      140,
+      "intel"
+    );
+    let line = String(text || "")
+      .trim()
+      .replace(/\s+/g, " ");
+    if (!line) line = INTEL_FALLBACK;
+    if (line.length > 320) line = `${line.slice(0, 317)}…`;
+    el.textContent = line;
+    el.classList.add("show");
+  } catch (err) {
+    el.textContent = "— " + (err instanceof Error ? err.message : "API error");
+    el.classList.add("show");
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove("agent-intel-refresh--busy");
+    syncIntelRefreshButtonForAgent(agentId);
+  }
+}
+
+/**
  * @param {string} reason
  * @returns {Record<string, unknown>}
  */
@@ -2435,6 +2567,39 @@ function buildAgentEvidenceString(agentId, ctx) {
 }
 
 /**
+ * Evidence for the merged intel LLM. Uses specialist slices from {@link buildAgentEvidenceString};
+ * when those are empty but RSS headlines exist, attaches a bounded news excerpt so each role
+ * can still emit one grounded sentence (the model must use INTEL_FALLBACK if nothing applies).
+ *
+ * @param {string} agentId
+ * @param {Record<string, unknown>} ctx
+ * @returns {string}
+ */
+function buildMergedIntelEvidence(agentId, ctx) {
+  if (agentId === "news") {
+    return buildAgentEvidenceString("news", ctx).trim();
+  }
+  const primary = buildAgentEvidenceString(agentId, ctx).trim();
+  if (primary) return primary;
+  const news = buildAgentEvidenceString("news", ctx).trim();
+  if (!news) return "";
+  const roleHint =
+    agentId === "scout"
+      ? "squad changes, injuries, availability, rest, or named player form"
+      : agentId === "stats"
+        ? "runs, wickets, overs, required rates, margins, or comparisons explicitly stated"
+        : agentId === "weather"
+          ? "weather, dew, rain, humidity, heat, wind, or forecast cues"
+          : agentId === "pitch"
+            ? "pitch, surface, spin, seam, bounce, turn, or wear"
+            : "your specialty";
+  return (
+    `[Ingestion did not isolate lines for this agent only — write at most one short sentence using ONLY facts in the headlines below that clearly relate to: ${roleHint}; if none apply, respond with exactly: ${INTEL_FALLBACK}]\n\n` +
+    clipText(news, 1200)
+  );
+}
+
+/**
  * Try to extract a live score from already-fetched ingested context (from RSS snippets).
  * @param {Record<string, unknown>} ctx
  * @returns {{ text: string } | null}
@@ -2449,25 +2614,49 @@ function extractLiveStateFromCtx(ctx) {
 
 /**
  * Call the server's /api/live-score endpoint (fresh RSS fetch, no cache).
- * Returns a snippet string or empty string on failure.
  * @param {string} match
  * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
- * @returns {Promise<string>}
+ * @returns {Promise<{ snippet: string, hint?: string, unreachable?: boolean }>}
  */
-async function fetchLiveScore(match, teams) {
+async function fetchLiveScoreDetail(match, teams) {
   const base = apiBase();
-  if (!base) return "";
+  if (!base) return { snippet: "" };
   try {
     const teamsParam = `${teams.codeA},${teams.codeB}`;
     const r = await fetch(
       `${base}/api/live-score?teams=${encodeURIComponent(teamsParam)}&label=${encodeURIComponent(match)}`
     );
-    if (!r.ok) return "";
-    const data = await r.json();
-    return typeof data.snippet === "string" ? data.snippet.trim() : "";
+    let data = /** @type {Record<string, unknown>} */ ({});
+    try {
+      data = /** @type {Record<string, unknown>} */ (JSON.parse(await r.text()));
+    } catch {
+      data = {};
+    }
+    if (!r.ok) {
+      const msg =
+        typeof data.message === "string"
+          ? data.message
+          : typeof data.error === "string"
+            ? data.error
+            : "";
+      return { snippet: "", unreachable: r.status === 503, hint: msg || undefined };
+    }
+    const sn = typeof data.snippet === "string" ? data.snippet.trim() : "";
+    const hint = typeof data.hint === "string" && data.hint.trim() ? data.hint.trim() : undefined;
+    return { snippet: sn, hint };
   } catch {
-    return "";
+    return { snippet: "" };
   }
+}
+
+/**
+ * @param {string} match
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @returns {Promise<string>}
+ */
+async function fetchLiveScore(match, teams) {
+  const d = await fetchLiveScoreDetail(match, teams);
+  return d.snippet;
 }
 
 /**
@@ -2723,6 +2912,7 @@ function appendLiveUpdate(liveSnippet, prediction, teams) {
 async function runWarRoom() {
   if (running) return;
   running = true;
+  clearIntelRefreshSession();
   document.getElementById("main-content")?.classList.remove("dashboard--pre-war-room");
   const match =
     (document.getElementById('matchInput').value || MATCH_SUGGESTIONS_FALLBACK_ROWS[0].label).trim();
@@ -2742,6 +2932,7 @@ async function runWarRoom() {
         ins.textContent = "";
         ins.classList.remove("show");
       });
+      clearIntelRefreshSession();
 
       document.getElementById('runBtn').style.display = 'none';
       document.getElementById('resetBtn').style.display = '';
@@ -2807,6 +2998,7 @@ async function runWarRoom() {
 
   // Fetch ingested context first so we can auto-extract live score from RSS if not manually entered
   const ingestedCtx = await fetchMatchContextFromServer(match, teams);
+  intelRefreshSession = { match, teams, ingestedCtx };
 
   // Resolve live state: manual quick-input > RSS-extracted snippet > structured live panel
   let liveState = readLivePanelState();
@@ -2868,7 +3060,7 @@ async function runWarRoom() {
     }
 
     const evidenceBlock = clipText(
-      buildAgentEvidenceString(agent.id, ingestedCtx).trim(),
+      buildMergedIntelEvidence(agent.id, ingestedCtx).trim(),
       MAX_EVIDENCE_CHARS_PER_AGENT
     );
     evidenceByAgent[agent.id] = evidenceBlock;
@@ -2878,6 +3070,7 @@ async function runWarRoom() {
       el.textContent = INTEL_FALLBACK;
       el.classList.add('show');
       insights[agent.id] = INTEL_FALLBACK;
+      syncIntelRefreshButtonForAgent(agent.id);
     }
   }
 
@@ -2935,6 +3128,7 @@ async function runWarRoom() {
         insights[a.id] = text;
       }
     }
+    syncAllIntelRefreshButtons();
   }
 
   try {
@@ -3113,6 +3307,7 @@ function resetWarRoom() {
     const ins = document.getElementById('insight-'+a.id);
     ins.textContent=''; ins.classList.remove('show');
   });
+  clearIntelRefreshSession();
   setPhase(null);
   document.getElementById('runBtn').style.display='';
   document.getElementById('resetBtn').style.display='none';
@@ -3868,6 +4063,7 @@ function initLivePanel() {
 }
 
 renderAgents();
+initIntelAgentRefreshHandlers();
 renderArch();
 renderHowto();
 initMatchAutocomplete();
@@ -4038,10 +4234,14 @@ function initLiveScoreBar() {
 
       try {
         const teams = parseTeamsFromMatch(match);
-        const snippet = await fetchLiveScore(match, teams);
-        if (snippet) {
-          input.value = snippet;
+        const d = await fetchLiveScoreDetail(match, teams);
+        if (d.snippet) {
+          input.value = d.snippet;
           syncClear();
+        } else if (d.unreachable) {
+          input.placeholder = "Score service offline — start ingestion on :3334, or paste score";
+        } else if (d.hint) {
+          input.placeholder = d.hint.length > 130 ? `${d.hint.slice(0, 127)}…` : d.hint;
         } else {
           input.placeholder = "No live score found in RSS — paste manually";
         }

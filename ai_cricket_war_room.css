@@ -220,17 +220,37 @@ body::after {
 }
 
 .brand__logo-icon {
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 8px;
-  background: var(--color-accent);
-  color: #000;
+  --brand-logo-ring: color-mix(in srgb, var(--color-accent) 42%, transparent);
+  --brand-logo-glow: color-mix(in srgb, var(--color-accent) 28%, transparent);
+  width: 2.85rem;
+  height: 2.85rem;
+  border-radius: 12px;
+  padding: 3px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--color-accent) 38%, transparent),
+    color-mix(in srgb, var(--color-accent) 8%, transparent)
+  );
+  box-shadow:
+    0 0 0 1px var(--brand-logo-ring),
+    0 0 0 2px color-mix(in srgb, var(--color-bg-page) 70%, transparent),
+    0 6px 22px var(--brand-logo-glow),
+    0 0 36px color-mix(in srgb, var(--color-accent) 14%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.1rem;
-  line-height: 1;
+  line-height: 0;
   flex-shrink: 0;
+  transform: translateZ(0) scale(1.02);
+}
+
+.brand__logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 9px;
+  display: block;
+  pointer-events: none;
 }
 
 .brand__text-block {
@@ -472,6 +492,10 @@ body::after {
   padding-top: 0.85rem;
   border-top: 1px solid var(--color-border);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
 }
 
 .app-footer__line {
@@ -1350,6 +1374,55 @@ body::after {
   background: var(--color-live);
   box-shadow: 0 0 0 2px rgba(0, 232, 122, 0.2);
   animation: pulse 1s ease-in-out infinite;
+}
+
+.agent-intel-refresh {
+  position: absolute;
+  top: 5px;
+  right: 26px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.agent-intel-refresh:hover:not(:disabled) {
+  color: var(--color-accent);
+  background: rgba(0, 232, 122, 0.1);
+  border-color: var(--color-border);
+}
+
+.agent-intel-refresh:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+.agent-intel-refresh:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.agent-intel-refresh--busy .agent-intel-refresh__icon {
+  animation: agentIntelSpin 0.65s linear infinite;
+}
+
+@keyframes agentIntelSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes pulse {
