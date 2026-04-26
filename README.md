@@ -4,6 +4,45 @@
 
 A dark-themed web demo for **multi-agent cricket match analysis**: specialist agents gather intel, two adversarial debaters argue the fixture, and a **Judge** produces a structured verdict (winner, confidence, projected score band, key player, swing factor).
 
+## AI / tooling context (paste into any assistant)
+
+Use this block when indexing the repo or loading context for code generation, debugging, or deployment.
+
+| Fact | Detail |
+|------|--------|
+| **Purpose** | Single-page **vanilla JS** app (`ai_cricket_war_room.js`) for IPL-style fixtures: parallel **intel agents** (Scout, Stats, Weather, Pitch, News) → multi-round **Bull vs Bear debate** → **Judge** verdict JSON rendered as a card. Optional **Python FastAPI** services for RSS/CricAPI **ingestion** and SQLite-backed **judge predictions**. |
+| **Primary runtime** | **Node 20** `server.mjs`: static files + API proxy (hides LLM keys, same-origin `/api/*`). Default port **3333**. |
+| **Front-end stack** | No framework: HTML + large CSS + ~4k-line JS. **PWA**: `manifest.webmanifest`, `sw.js`, `icons/`. **Production**: `npm run build` → `dist/` (esbuild-minified hashed JS/CSS, html-minifier, precomputed `.gz`/`.br`); `SERVE_DIST=1` serves only allowlisted `dist/` assets. **Dockerfile** runs that path. |
+| **LLM routing (Node)** | `POST /api/messages` → **Groq** (OpenAI-compatible) or **Anthropic** from env; optional `LLM_PROVIDER`. Separate Groq models for heavy vs light traffic (`GROQ_MODEL`, `GROQ_MODEL_LIGHT`, `GROQ_MODEL_DEBATE`). |
+| **Fixture data** | `match_suggestions.json` (array of objects with `label`, `date`, `venue`, `teams[]`, optional `completed` + `result.{winner,summary}`). Server reads at startup; **restart Node** after edits. Browser **file://** uses `MATCH_SUGGESTIONS_FALLBACK_ROWS` in `ai_cricket_war_room.js` — keep in sync if offline matters. |
+| **Orchestration** | `render.yaml`: three Render services (`cricket-war-room`, `cricket-ingestion`, `cricket-judge`). `docker-compose.yml`: same trio with internal URLs. |
+
+**Node HTTP API (all under the main origin):**
+
+| Method | Path | Role |
+|--------|------|------|
+| `POST` | `/api/messages` | Proxy to Groq or Anthropic (request shape from front end). |
+| `GET` | `/api/match-suggest?q=&limit=` | Filtered suggestions from `match_suggestions.json`. |
+| `GET` | `/api/match-by-label?label=` | Full row for exact label (404 if missing); drives completed-match shortcut. |
+| `GET` | `/api/match-context?...` | Reverse-proxy to ingestion service `GET /api/match-context` (RSS + optional CricAPI bundle). |
+| `GET` | `/api/live-score?teams=&label=` | Fresh ingestion fetch (`nocache=1`), returns JSON `{ snippet, richness, fetched_at?, hint? }` for live line UI. |
+| `POST` | `/api/judge/predict` | Body → judge service `POST /predict` (stores prediction, returns verdict + running accuracy). |
+| `GET` | `/api/judge/accuracy` | Proxy to judge `GET /accuracy`. |
+| `GET` | `/api/version` | Build/version JSON (`appVersion`, `buildHash`, `mode`, git fields in dev). |
+
+**Python services (direct ports when run locally):**
+
+| Service | Module | Port (typical) | Notable routes |
+|---------|--------|----------------|----------------|
+| Ingestion | `ingestion_service.app:app` | 3334 | `GET /api/match-context`, `GET /healthz`; env `CRICAPI_KEY`, `INGESTION_DISABLE`, cache/TTL vars. |
+| Judge | `judge_service.app:app` | 8000 | `POST /predict`, `GET /accuracy`, `PATCH /predictions/{id}/result`, `POST /predictions/result-by-match`; env `GROQ_API_KEY` / `ANTHROPIC_API_KEY`, `WAR_ROOM_DB_PATH`, optional `GROQ_JUDGE_MODEL` / `ANTHROPIC_JUDGE_MODEL`. |
+
+**npm scripts:** `build` → `scripts/build.mjs`; `start` → `SERVE_DIST=1 node server.mjs` (production assets; use a Unix-style shell or set `SERVE_DIST=1` manually on Windows CMD); `start:dev` → `node server.mjs` (serves repo root, unhashed files); `icons` → `scripts/generate-pwa-icons.mjs`.
+
+**Judge verdict schema (Pydantic / UI):** `winner`, `confidence` (0–100), `score_range`, `key_player`, `swing_factor`, `summary` — see `judge_service/models.py` and `judge_service/judge.py` system prompt.
+
+**Where to change common behavior:** UI flow and prompts → `ai_cricket_war_room.js`; styling → `ai_cricket_war_room.css`; shell markup → `ai_cricket_war_room.html`; proxy and static policy → `server.mjs`; RSS/CricAPI aggregation → `ingestion_service/build.py` (+ `rss.py`, `cache.py`); judge LLM + DB → `judge_service/`; deploy topology → `render.yaml`, `docker-compose.yml`, `Dockerfile` / `Dockerfile.python`.
+
 ---
 
 ### Latest — v3
@@ -80,7 +119,9 @@ All three services start together. Judge predictions persist in a Docker volume 
    ```bash
    export GROQ_API_KEY="gsk_..."   # free tier: https://console.groq.com
    # or: export ANTHROPIC_API_KEY="sk-ant-..."
-   npm start
+   npm run start:dev               # serves ai_cricket_war_room.* from repo root (iterate on JS/CSS)
+   # production-like bundle (requires `npm run build` first):
+   # SERVE_DIST=1 node server.mjs  # same as `npm start` on Unix shells; on Windows CMD use `set SERVE_DIST=1`
    ```
 
    Open [http://localhost:3333/](http://localhost:3333/).
@@ -95,6 +136,8 @@ All three services start together. Judge predictions persist in a Docker volume 
 |----------------------|--------|
 | `GROQ_API_KEY` | Groq OpenAI-compatible API (default if present). Free tier: [console.groq.com](https://console.groq.com). |
 | `GROQ_MODEL` | Override model (default `llama-3.3-70b-versatile`). |
+| `GROQ_MODEL_LIGHT` | Smaller Groq model for short intel / lighter calls (default `llama-3.1-8b-instant`). |
+| `GROQ_MODEL_DEBATE` | Groq model for debate rounds (defaults to `GROQ_MODEL` / 70B to avoid TPM contention with the light model). |
 | `ANTHROPIC_API_KEY` | Claude via Anthropic API. |
 | `LLM_PROVIDER` | `groq` or `anthropic` to force a provider. |
 | `PORT` | HTTP port (default `3333`). |
@@ -104,6 +147,12 @@ All three services start together. Judge predictions persist in a Docker volume 
 | `INGESTION_FETCH_TIMEOUT_SEC` | Per-source HTTP timeout in seconds (default `8`). |
 | `INGESTION_CACHE_TTL_SEC` | Ingestion cache TTL in seconds (default `900`). Set `0` to disable. |
 | `INGESTION_DISABLE` | Set `1` to disable the ingestion service entirely. |
+| `SERVE_DIST` | Set `1` on the Node process to serve **only** hashed assets from `dist/` (after `npm run build`). Used in `Dockerfile` and `npm start`. |
+| `INGESTION_SERVICE_URL` | Base URL for the Python ingestion service (no trailing slash); default `http://127.0.0.1:3334`. |
+| `JUDGE_SERVICE_URL` | Base URL for the Python judge service; default `http://127.0.0.1:8000`. |
+| `WAR_ROOM_DB_PATH` | SQLite path for judge predictions (judge service); Render free tier often uses `/tmp/war_room.db`. |
+
+**Judge service (Python-only env):** `GROQ_JUDGE_MODEL`, `ANTHROPIC_JUDGE_MODEL` override the default models in `judge_service/judge.py`.
 
 ### Live data setup (CricAPI)
 
@@ -122,6 +171,11 @@ All three services start together. Judge predictions persist in a Docker volume 
 - `POST /api/messages` — proxies to Groq or Anthropic (Anthropic-shaped request body from the front end).
 - `GET /api/match-suggest?q=&limit=` — filtered fixture suggestions.
 - `GET /api/match-by-label?label=` — exact label lookup (used for completed-match detection when served from the server).
+- `GET /api/match-context?...` — forwards query string to the ingestion service (same path); returns the match-context JSON bundle used to ground agents.
+- `GET /api/live-score?teams=&label=` — forces a fresh ingestion pull and returns a short **snippet** plus metadata for the live score strip (503 if ingestion is down).
+- `POST /api/judge/predict` — forwards to the judge service; persists a prediction row when the judge API is reachable.
+- `GET /api/judge/accuracy` — running accuracy stats from the judge SQLite store.
+- `GET /api/version` — `{ appVersion, buildHash, builtAt, commit, mode, ... }` for debugging deploys (`buildHash` populated when `SERVE_DIST=1` and `dist/build-manifest.json` exists).
 
 ## Data: fixtures and results
 
@@ -138,17 +192,27 @@ Restart **`node server.mjs`** after changing the JSON file so the server reloads
 
 | Path | Role |
 |------|------|
-| `ai_cricket_war_room.html` | App shell |
+| `ai_cricket_war_room.html` | App shell (entry HTML; build rewrites script/link hrefs to hashed names) |
 | `ai_cricket_war_room.css` | Layout and theme |
-| `ai_cricket_war_room.js` | Agents UI, debate, judge, autocomplete, completed-match shortcut |
-| `server.mjs` | Static host + LLM proxy + match APIs |
-| `match_suggestions.json` | Fixture catalog |
-| `judge_service/` | Python FastAPI — predictions + accuracy (optional) |
-| `ingestion_service/` | Python FastAPI — RSS/CricAPI data ingestion (optional) |
+| `ai_cricket_war_room.js` | Agents UI, debate, judge client, autocomplete, completed-match shortcut, `MATCH_SUGGESTIONS_FALLBACK_ROWS` |
+| `sw.js` | Service worker; build injects precache list / static asset version |
+| `server.mjs` | Static host + LLM proxy + match/judge/live APIs; `SERVE_DIST` toggles `dist/` |
+| `scripts/build.mjs` | esbuild (JS/CSS) + HTML minify + gzip/brotli siblings + `dist/build-manifest.json` |
+| `scripts/generate-pwa-icons.mjs` | PWA icon generation (sharp) |
+| `match_suggestions.json` | Fixture catalog for server + build copy |
+| `manifest.webmanifest` | PWA manifest |
+| `icons/` | PNG icons referenced by the manifest |
+| `sitemap.xml`, `robots.txt` | Static SEO files copied to `dist/` |
+| `dist/` | **Build output only** — do not edit by hand; gitignore recommended for clean clones |
+| `judge_service/` | Python FastAPI — `app.py`, `judge.py`, `models.py`, `predictions_db.py` |
+| `ingestion_service/` | Python FastAPI — `app.py`, `build.py`, `rss.py`, `cache.py` |
+| `requirements-ingestion.txt` | `fastapi`, `uvicorn`, `httpx` |
+| `requirements-judge.txt` | `fastapi`, `uvicorn`, `pydantic`, `anthropic` (+ Groq via `httpx` in judge) |
+| `package.json` | `type: "module"`; devDependencies: esbuild, html-minifier-terser, sharp |
 | `render.yaml` | Render Blueprint — one-click deploy of all 3 services |
-| `Dockerfile` | Node.js production image |
-| `Dockerfile.python` | Shared Python image (ingestion + judge) |
-| `docker-compose.yml` | Local Docker orchestration |
+| `Dockerfile` | Multi-stage Node 20 Alpine: `npm run build` then runtime with `SERVE_DIST=1` |
+| `Dockerfile.python` | Python image for ingestion + judge |
+| `docker-compose.yml` | Local Docker orchestration (web + ingestion + judge volume) |
 | `.env.example` | Template for required environment variables |
 | `openclaw/README.md` | Optional: re-home services as OpenClaw tool nodes |
 
