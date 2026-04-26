@@ -1038,6 +1038,7 @@ function isSharePreviewBot(ua) {
     s.includes("facebookexternalhit") ||
     s.includes("facebot") ||
     s.includes("whatsapp") ||
+    s.includes("meta-externalagent") ||
     s.includes("twitterbot") ||
     s.includes("linkedinbot") ||
     s.includes("slackbot") ||
@@ -1048,7 +1049,10 @@ function isSharePreviewBot(ua) {
     s.includes("bingpreview") ||
     s.includes("embedly") ||
     s.includes("vkshare") ||
-    s.includes("applebot")
+    s.includes("applebot") ||
+    s.includes("snapchat") ||
+    s.includes("skypeuripreview") ||
+    s.includes("outbrain")
   );
 }
 
@@ -1169,13 +1173,16 @@ async function renderShareOgPng(pack) {
 }
 
 /**
+ * @param {import("http").IncomingMessage} req
  * @param {import("http").ServerResponse} res
  * @param {URL} url
  * @param {string} id
  * @param {Record<string, unknown>} pack
- * @param {string} appHref e.g. /?sid=… or /s/id
+ * @param {string} appHref e.g. /?sid=…
+ * @param {{ clientRedirect?: boolean }} [opts]
  */
-function sendShareOgHtml(res, url, id, pack, appHref) {
+function sendShareOgHtml(req, res, url, id, pack, appHref, opts = {}) {
+  const clientRedirect = opts.clientRedirect === true;
   const base = `${url.protocol}//${url.host}`;
   const canonical = `${base}/s/${id}`;
   const imgUrl = `${base}/api/og/share/${id}.png`;
@@ -1185,11 +1192,15 @@ function sendShareOgHtml(res, url, id, pack, appHref) {
   const desc =
     (pack.s && truncateHard(String(pack.s), 220)) ||
     `Judge pick: ${w} at ${c}% model confidence. Open for Bull vs Bear debate and full verdict.`;
+  const redirectScript = clientRedirect
+    ? `<script>location.replace(${JSON.stringify(appHref)});</script>`
+    : "";
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="canonical" href="${escapeHtmlAttr(canonical)}" />
   <title>${escapeHtmlPcdata(title)}</title>
   <meta name="description" content="${escapeHtmlAttr(desc)}" />
   <meta property="og:type" content="website" />
@@ -1198,6 +1209,7 @@ function sendShareOgHtml(res, url, id, pack, appHref) {
   <meta property="og:description" content="${escapeHtmlAttr(desc)}" />
   <meta property="og:url" content="${escapeHtmlAttr(canonical)}" />
   <meta property="og:image" content="${escapeHtmlAttr(imgUrl)}" />
+  <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="1200" />
   <meta property="og:image:alt" content="Judge verdict and Bull vs Bear debate preview" />
@@ -1207,14 +1219,23 @@ function sendShareOgHtml(res, url, id, pack, appHref) {
   <meta name="twitter:image" content="${escapeHtmlAttr(imgUrl)}" />
 </head>
 <body style="font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;padding:2rem">
+  ${redirectScript}
   <p><a href="${escapeHtmlAttr(appHref)}" style="color:#5eead4">Open this prediction in Cricket War Room</a></p>
 </body>
 </html>`;
-  res.writeHead(200, {
+  const buf = Buffer.from(html, "utf8");
+  const headers = {
     "Content-Type": "text/html; charset=utf-8",
     "Cache-Control": "public, max-age=300",
-  });
-  res.end(html);
+    "Content-Length": String(buf.length),
+  };
+  if (req.method === "HEAD") {
+    res.writeHead(200, headers);
+    res.end();
+    return;
+  }
+  res.writeHead(200, headers);
+  res.end(buf);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -1711,16 +1732,9 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     const row = sharePredictionById.get(id);
-    if (row && isSharePreviewBot(req.headers["user-agent"])) {
-      sendShareOgHtml(res, url, id, row.pack, `/?sid=${encodeURIComponent(id)}`);
-      return;
-    }
-    const absolute = `${url.protocol}//${url.host}/?sid=${encodeURIComponent(id)}`;
-    res.writeHead(302, {
-      Location: absolute,
-      "Cache-Control": "no-store",
-    });
-    res.end();
+    /* Chat apps often fetch /s/… once and do not merge OG tags from a 302 target — always return 200 + og:* here and redirect in-page for real browsers. */
+    const appHref = `/?sid=${encodeURIComponent(id)}`;
+    sendShareOgHtml(req, res, url, id, row.pack, appHref, { clientRedirect: true });
     return;
   }
 
@@ -1734,7 +1748,7 @@ const server = http.createServer(async (req, res) => {
   ) {
     const row2 = sharePredictionById.get(sidOnly);
     if (row2) {
-      sendShareOgHtml(res, url, sidOnly, row2.pack, `/?sid=${encodeURIComponent(sidOnly)}`);
+      sendShareOgHtml(req, res, url, sidOnly, row2.pack, `/?sid=${encodeURIComponent(sidOnly)}`);
       return;
     }
   }
