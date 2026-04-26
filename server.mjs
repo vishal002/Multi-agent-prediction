@@ -871,60 +871,82 @@ function truncateHard(s, max) {
 }
 
 /**
- * 1200×630 card: Judge verdict (left) + debate panel (right) for link previews.
+ * 1200×1200 square: stacked Verdict + Debate cards with padding so square thumbnails
+ * (e.g. WhatsApp) show both sections zoomed-out and readable — not a tight crop of a wide strip.
  * @param {Record<string, unknown>} pack
  */
 function buildShareOgSvg(pack) {
-  const w = String(pack.w || "—").toUpperCase();
+  const team = String(pack.w || "—").toUpperCase();
   const c = Math.min(100, Math.max(0, Math.round(Number(pack.c) || 55)));
-  const fixture = truncateHard(pack.l, 92);
+  const fixture = truncateHard(pack.l, 88);
   const summaryRaw = pack.s ? String(pack.s).trim().replace(/\s+/g, " ") : "";
-  const barW = 900;
-  const barInner = Math.max(8, Math.round((barW * c) / 100));
+  const cardW = 1136;
+  const cardH = 548;
+  const pad = 48;
+  const barW = cardW - pad * 2;
+  const barInner = Math.max(10, Math.round((barW * c) / 100));
 
   /** @type {string[]} */
   const sumLines = [];
   if (summaryRaw) {
-    const a = truncateHard(summaryRaw, 76);
-    sumLines.push(a);
-    if (summaryRaw.length > 76) sumLines.push(truncateHard(summaryRaw.slice(76), 76));
+    const maxL = 62;
+    let pos = 0;
+    for (let i = 0; i < 3 && pos < summaryRaw.length; i++) {
+      sumLines.push(truncateHard(summaryRaw.slice(pos), maxL));
+      pos += maxL;
+    }
   }
   const summaryBlock =
     sumLines.length > 0
-      ? `<text x="64" y="292" fill="#e2e8f0" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="21">${sumLines
-          .map((line, i) => `<tspan x="64" dy="${i === 0 ? "0" : "32"}">${escapeXmlText(line)}</tspan>`)
+      ? `<text x="${pad}" y="268" fill="#cbd5e1" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="19">${sumLines
+          .map((line, i) => `<tspan x="${pad}" dy="${i === 0 ? "0" : "28"}">${escapeXmlText(line)}</tspan>`)
           .join("")}</text>`
       : "";
 
-  const bullLine = truncateHard(`Bull case for ${w}: form, matchups, and intel in the full debate.`, 78);
-  const bearLine = truncateHard(`Bear pushback: conditions, depth, and live state — see transcript in app.`, 78);
+  const bull1 = truncateHard(`Bull backs ${team}: momentum, matchups, and specialist intel.`, 48);
+  const bull2 = truncateHard("Full multi-round argument in the app.", 48);
+  const bear1 = truncateHard("Bear counters: risk factors, conditions, depth.", 48);
+  const bear2 = truncateHard("See transcript for every rebuttal.", 48);
+
+  const vCardY = 32;
+  const cardGap = 16;
+  const dCardY = vCardY + cardH + cardGap;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200">
   <defs>
     <linearGradient id="ogbg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="0" stop-color="#0b1220"/>
       <stop offset="1" stop-color="#020617"/>
     </linearGradient>
   </defs>
-  <rect width="1200" height="630" fill="url(#ogbg)"/>
-  <rect width="1200" height="5" fill="#00e87a" opacity="0.9"/>
-  <text x="64" y="58" fill="#5eead4" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="21" font-weight="600">CRICKET WAR ROOM</text>
-  <text x="64" y="102" fill="#34d399" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="14" font-weight="600" letter-spacing="0.18em">JUDGE VERDICT</text>
-  <text x="64" y="178" fill="#f8fafc" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="50" font-weight="700">${escapeXmlText(w)} WINS</text>
-  <text x="64" y="232" fill="#94a3b8" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="19">${escapeXmlText(fixture)}</text>
-  ${summaryBlock}
-  <text x="64" y="392" fill="#64748b" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="14">MODEL CONFIDENCE (NOT WIN PROBABILITY)</text>
-  <rect x="64" y="408" width="${barW}" height="24" rx="6" fill="#1e293b" stroke="#334155"/>
-  <rect x="64" y="408" width="${barInner}" height="24" rx="6" fill="#06b6d4"/>
-  <text x="64" y="462" fill="#e2e8f0" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="22" font-weight="600">${c}%</text>
-  <rect x="520" y="72" width="616" height="486" rx="18" fill="#0b1220" stroke="#1e293b" stroke-width="2"/>
-  <text x="548" y="118" fill="#94a3b8" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="14" font-weight="600" letter-spacing="0.14em">DEBATE</text>
-  <text x="548" y="168" fill="#fca5a5" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="19" font-weight="700">BULL</text>
-  <text x="548" y="202" fill="#cbd5e1" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="18">${escapeXmlText(bullLine)}</text>
-  <text x="548" y="268" fill="#93c5fd" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="19" font-weight="700">BEAR</text>
-  <text x="548" y="302" fill="#cbd5e1" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="18">${escapeXmlText(bearLine)}</text>
-  <text x="548" y="400" fill="#64748b" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="16">Four rounds + Judge in the app — not betting advice.</text>
+  <rect width="1200" height="1200" fill="url(#ogbg)"/>
+
+  <g transform="translate(32,${vCardY})">
+    <rect width="${cardW}" height="${cardH}" rx="22" fill="#0f172a" stroke="#1e3a5f" stroke-width="2"/>
+    <text x="${pad}" y="42" fill="#5eead4" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="17" font-weight="600">CRICKET WAR ROOM</text>
+    <text x="${pad}" y="78" fill="#34d399" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="12" font-weight="700" letter-spacing="0.2em">JUDGE VERDICT</text>
+    <text x="${pad}" y="148" fill="#f8fafc" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="40" font-weight="700">${escapeXmlText(team)} WINS</text>
+    <text x="${pad}" y="188" fill="#94a3b8" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="17">${escapeXmlText(fixture)}</text>
+    ${summaryBlock}
+    <text x="${pad}" y="378" fill="#64748b" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="12" font-weight="600">MODEL CONFIDENCE (NOT WIN PROBABILITY)</text>
+    <rect x="${pad}" y="394" width="${barW}" height="22" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <rect x="${pad}" y="394" width="${barInner}" height="22" rx="8" fill="#06b6d4"/>
+    <text x="${pad}" y="458" fill="#e2e8f0" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="26" font-weight="700">${c}%</text>
+  </g>
+
+  <g transform="translate(32,${dCardY})">
+    <rect width="${cardW}" height="${cardH}" rx="22" fill="#0f172a" stroke="#1e3a5f" stroke-width="2"/>
+    <text x="${cardW / 2}" y="44" text-anchor="middle" fill="#94a3b8" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="13" font-weight="700" letter-spacing="0.18em">DEBATE</text>
+    <line x1="${pad}" y1="58" x2="${cardW - pad}" y2="58" stroke="#334155" stroke-width="1"/>
+    <text x="${pad}" y="102" fill="#fca5a5" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="17" font-weight="700">BULL</text>
+    <text x="${pad}" y="132" fill="#e2e8f0" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="17">${escapeXmlText(bull1)}</text>
+    <text x="${pad}" y="162" fill="#94a3b8" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="16">${escapeXmlText(bull2)}</text>
+    <text x="${cardW / 2 + 24}" y="102" fill="#93c5fd" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="17" font-weight="700">BEAR</text>
+    <text x="${cardW / 2 + 24}" y="132" fill="#e2e8f0" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="17">${escapeXmlText(bear1)}</text>
+    <text x="${cardW / 2 + 24}" y="162" fill="#94a3b8" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="16">${escapeXmlText(bear2)}</text>
+    <text x="${pad}" y="240" fill="#64748b" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="15">Four Bull vs Bear rounds, then Judge — open link for full replay.</text>
+  </g>
 </svg>`;
 }
 
@@ -934,7 +956,7 @@ function buildShareOgSvg(pack) {
  */
 async function renderShareOgPng(pack) {
   const svg = buildShareOgSvg(pack);
-  return sharp(Buffer.from(svg, "utf8")).resize(1200, 630).png({ compressionLevel: 9 }).toBuffer();
+  return sharp(Buffer.from(svg, "utf8")).resize(1200, 1200).png({ compressionLevel: 9 }).toBuffer();
 }
 
 /**
@@ -968,8 +990,8 @@ function sendShareOgHtml(res, url, id, pack, appHref) {
   <meta property="og:url" content="${escapeHtmlAttr(canonical)}" />
   <meta property="og:image" content="${escapeHtmlAttr(imgUrl)}" />
   <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="Judge verdict and debate preview" />
+  <meta property="og:image:height" content="1200" />
+  <meta property="og:image:alt" content="Judge verdict and Bull vs Bear debate preview" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${escapeHtmlAttr(title)}" />
   <meta name="twitter:description" content="${escapeHtmlAttr(desc)}" />
@@ -1434,7 +1456,7 @@ const server = http.createServer(async (req, res) => {
       const png = await renderShareOgPng(ogRow.pack);
       res.writeHead(200, {
         "Content-Type": "image/png",
-        "Cache-Control": "public, max-age=600",
+        "Cache-Control": "public, max-age=120",
         "Content-Length": String(png.length),
         "Access-Control-Allow-Origin": "*",
       });
