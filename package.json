@@ -9,9 +9,11 @@
     "start:dev": "node server.mjs",
     "icons": "node scripts/generate-pwa-icons.mjs"
   },
+  "dependencies": {
+    "sharp": "^0.33.5"
+  },
   "devDependencies": {
     "esbuild": "^0.28.0",
-    "html-minifier-terser": "^7.2.0",
-    "sharp": "^0.33.5"
+    "html-minifier-terser": "^7.2.0"
   }
 }

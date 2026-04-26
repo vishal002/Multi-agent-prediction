@@ -50,6 +50,7 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
+import sharp from "sharp";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -821,6 +822,170 @@ function newSharePredictionId() {
 
 loadSharePredictionsFromDisk();
 
+/** Chat / social crawlers: return OG HTML for short links instead of a 302 to the SPA. */
+function isSharePreviewBot(ua) {
+  const s = String(ua || "").toLowerCase();
+  return (
+    s.includes("facebookexternalhit") ||
+    s.includes("facebot") ||
+    s.includes("whatsapp") ||
+    s.includes("twitterbot") ||
+    s.includes("linkedinbot") ||
+    s.includes("slackbot") ||
+    s.includes("telegrambot") ||
+    s.includes("discordbot") ||
+    s.includes("pinterest") ||
+    s.includes("googlebot") ||
+    s.includes("bingpreview") ||
+    s.includes("embedly") ||
+    s.includes("vkshare") ||
+    s.includes("applebot")
+  );
+}
+
+function escapeHtmlAttr(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeHtmlPcdata(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function escapeXmlText(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function truncateHard(s, max) {
+  const t = String(s || "")
+    .trim()
+    .replace(/\s+/g, " ");
+  if (t.length <= max) return t;
+  return `${t.slice(0, Math.max(0, max - 1)).trim()}…`;
+}
+
+/**
+ * 1200×630 card: Judge verdict (left) + debate panel (right) for link previews.
+ * @param {Record<string, unknown>} pack
+ */
+function buildShareOgSvg(pack) {
+  const w = String(pack.w || "—").toUpperCase();
+  const c = Math.min(100, Math.max(0, Math.round(Number(pack.c) || 55)));
+  const fixture = truncateHard(pack.l, 92);
+  const summaryRaw = pack.s ? String(pack.s).trim().replace(/\s+/g, " ") : "";
+  const barW = 900;
+  const barInner = Math.max(8, Math.round((barW * c) / 100));
+
+  /** @type {string[]} */
+  const sumLines = [];
+  if (summaryRaw) {
+    const a = truncateHard(summaryRaw, 76);
+    sumLines.push(a);
+    if (summaryRaw.length > 76) sumLines.push(truncateHard(summaryRaw.slice(76), 76));
+  }
+  const summaryBlock =
+    sumLines.length > 0
+      ? `<text x="64" y="292" fill="#e2e8f0" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="21">${sumLines
+          .map((line, i) => `<tspan x="64" dy="${i === 0 ? "0" : "32"}">${escapeXmlText(line)}</tspan>`)
+          .join("")}</text>`
+      : "";
+
+  const bullLine = truncateHard(`Bull case for ${w}: form, matchups, and intel in the full debate.`, 78);
+  const bearLine = truncateHard(`Bear pushback: conditions, depth, and live state — see transcript in app.`, 78);
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="ogbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#020617"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#ogbg)"/>
+  <rect width="1200" height="5" fill="#00e87a" opacity="0.9"/>
+  <text x="64" y="58" fill="#5eead4" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="21" font-weight="600">CRICKET WAR ROOM</text>
+  <text x="64" y="102" fill="#34d399" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="14" font-weight="600" letter-spacing="0.18em">JUDGE VERDICT</text>
+  <text x="64" y="178" fill="#f8fafc" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="50" font-weight="700">${escapeXmlText(w)} WINS</text>
+  <text x="64" y="232" fill="#94a3b8" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="19">${escapeXmlText(fixture)}</text>
+  ${summaryBlock}
+  <text x="64" y="392" fill="#64748b" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="14">MODEL CONFIDENCE (NOT WIN PROBABILITY)</text>
+  <rect x="64" y="408" width="${barW}" height="24" rx="6" fill="#1e293b" stroke="#334155"/>
+  <rect x="64" y="408" width="${barInner}" height="24" rx="6" fill="#06b6d4"/>
+  <text x="64" y="462" fill="#e2e8f0" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="22" font-weight="600">${c}%</text>
+  <rect x="520" y="72" width="616" height="486" rx="18" fill="#0b1220" stroke="#1e293b" stroke-width="2"/>
+  <text x="548" y="118" fill="#94a3b8" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="14" font-weight="600" letter-spacing="0.14em">DEBATE</text>
+  <text x="548" y="168" fill="#fca5a5" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="19" font-weight="700">BULL</text>
+  <text x="548" y="202" fill="#cbd5e1" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="18">${escapeXmlText(bullLine)}</text>
+  <text x="548" y="268" fill="#93c5fd" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="19" font-weight="700">BEAR</text>
+  <text x="548" y="302" fill="#cbd5e1" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="18">${escapeXmlText(bearLine)}</text>
+  <text x="548" y="400" fill="#64748b" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="16">Four rounds + Judge in the app — not betting advice.</text>
+</svg>`;
+}
+
+/**
+ * @param {Record<string, unknown>} pack
+ * @returns {Promise<Buffer>}
+ */
+async function renderShareOgPng(pack) {
+  const svg = buildShareOgSvg(pack);
+  return sharp(Buffer.from(svg, "utf8")).resize(1200, 630).png({ compressionLevel: 9 }).toBuffer();
+}
+
+/**
+ * @param {import("http").ServerResponse} res
+ * @param {URL} url
+ * @param {string} id
+ * @param {Record<string, unknown>} pack
+ * @param {string} appHref e.g. /?sid=… or /s/id
+ */
+function sendShareOgHtml(res, url, id, pack, appHref) {
+  const base = `${url.protocol}//${url.host}`;
+  const canonical = `${base}/s/${id}`;
+  const imgUrl = `${base}/api/og/share/${id}.png`;
+  const w = String(pack.w || "").toUpperCase();
+  const c = Math.min(100, Math.max(0, Math.round(Number(pack.c) || 55)));
+  const title = `${w} wins — Cricket War Room`;
+  const desc =
+    (pack.s && truncateHard(String(pack.s), 220)) ||
+    `Judge pick: ${w} at ${c}% model confidence. Open for Bull vs Bear debate and full verdict.`;
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtmlPcdata(title)}</title>
+  <meta name="description" content="${escapeHtmlAttr(desc)}" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Cricket War Room" />
+  <meta property="og:title" content="${escapeHtmlAttr(title)}" />
+  <meta property="og:description" content="${escapeHtmlAttr(desc)}" />
+  <meta property="og:url" content="${escapeHtmlAttr(canonical)}" />
+  <meta property="og:image" content="${escapeHtmlAttr(imgUrl)}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Judge verdict and debate preview" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${escapeHtmlAttr(title)}" />
+  <meta name="twitter:description" content="${escapeHtmlAttr(desc)}" />
+  <meta name="twitter:image" content="${escapeHtmlAttr(imgUrl)}" />
+</head>
+<body style="font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;padding:2rem">
+  <p><a href="${escapeHtmlAttr(appHref)}" style="color:#5eead4">Open this prediction in Cricket War Room</a></p>
+</body>
+</html>`;
+  res.writeHead(200, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "public, max-age=300",
+  });
+  res.end(html);
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
 
@@ -835,7 +1000,8 @@ const server = http.createServer(async (req, res) => {
       url.pathname === "/api/judge/accuracy" ||
       url.pathname === "/api/version" ||
       url.pathname === "/api/share-prediction" ||
-      url.pathname.startsWith("/api/share/"))
+      url.pathname.startsWith("/api/share/") ||
+      url.pathname.startsWith("/api/og/share/"))
   ) {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
@@ -1255,6 +1421,36 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  const ogShareMatch = url.pathname.match(/^\/api\/og\/share\/([a-f0-9]{8})\.png$/i);
+  if ((req.method === "GET" || req.method === "HEAD") && ogShareMatch) {
+    const ogId = ogShareMatch[1].toLowerCase();
+    const ogRow = sharePredictionById.get(ogId);
+    if (!ogRow) {
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Not found");
+      return;
+    }
+    try {
+      const png = await renderShareOgPng(ogRow.pack);
+      res.writeHead(200, {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=600",
+        "Content-Length": String(png.length),
+        "Access-Control-Allow-Origin": "*",
+      });
+      if (req.method === "HEAD") {
+        res.end();
+        return;
+      }
+      res.end(png);
+    } catch (e) {
+      console.warn("[og/share] render failed:", e instanceof Error ? e.message : e);
+      res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("OG render error");
+    }
+    return;
+  }
+
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.writeHead(405);
     res.end();
@@ -1268,6 +1464,11 @@ const server = http.createServer(async (req, res) => {
       res.end("Share link not found");
       return;
     }
+    const row = sharePredictionById.get(id);
+    if (row && isSharePreviewBot(req.headers["user-agent"])) {
+      sendShareOgHtml(res, url, id, row.pack, `/?sid=${encodeURIComponent(id)}`);
+      return;
+    }
     const absolute = `${url.protocol}//${url.host}/?sid=${encodeURIComponent(id)}`;
     res.writeHead(302, {
       Location: absolute,
@@ -1275,6 +1476,21 @@ const server = http.createServer(async (req, res) => {
     });
     res.end();
     return;
+  }
+
+  const sidOnly = (url.searchParams.get("sid") || "").trim().toLowerCase();
+  if (
+    url.pathname === "/" &&
+    sidOnly &&
+    SHARE_ID_HEX_RX.test(sidOnly) &&
+    sharePredictionById.has(sidOnly) &&
+    isSharePreviewBot(req.headers["user-agent"])
+  ) {
+    const row2 = sharePredictionById.get(sidOnly);
+    if (row2) {
+      sendShareOgHtml(res, url, sidOnly, row2.pack, `/?sid=${encodeURIComponent(sidOnly)}`);
+      return;
+    }
   }
 
   const filePath = safeJoin(STATIC_ROOT, url.pathname);

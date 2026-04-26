@@ -1,7 +1,6 @@
 # ── Node.js production image (two-stage) ─────────────────────────────────────
 # Stage 1 builds the minified, hashed, pre-compressed bundle in dist/.
-# Stage 2 ships only server.mjs + dist/ on top of production node_modules,
-# so the runtime layer never carries esbuild, html-minifier-terser, or sharp.
+# Stage 2 ships server.mjs + dist/ + production node_modules (includes sharp for /api/og/share PNGs).
 # Used by docker-compose.yml; Render uses its native Node runtime + render.yaml.
 # Build: docker build -t cricket-war-room .
 # Run:   docker run -p 3333:3333 -e GROQ_API_KEY=gsk_... cricket-war-room
