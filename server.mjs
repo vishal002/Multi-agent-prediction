@@ -4,15 +4,17 @@
  * FREE (recommended for this PoC): Groq — https://console.groq.com/keys
  *   export GROQ_API_KEY="gsk_..." && node server.mjs
  *
- * Other free-ish options you can wire similarly (not built in here):
- *   - Google Gemini (AI Studio): https://aistudio.google.com/apikey
- *   - OpenRouter: some models with $ in free credits
+ * Google Gemini (optional fallback or primary): https://aistudio.google.com/apikey
+ *   export GEMINI_API_KEY="..."   # or GOOGLE_API_KEY
+ *   With GROQ_API_KEY set, Groq is tried first; on rate limits / quota-style errors the
+ *   proxy retries once via Gemini when a Gemini key is present.
+ *   LLM_PROVIDER=gemini forces Gemini only (no Groq).
  *
  * Paid: Anthropic Claude
  *   export ANTHROPIC_API_KEY="sk-ant-..." && node server.mjs
  *
  * Pick provider explicitly (optional):
- *   LLM_PROVIDER=groq | anthropic
+ *   LLM_PROVIDER=groq | anthropic | gemini
  * Groq models (defaults: 70B for judge/over JSON, 8B for intel/debate/live — saves TPD):
  *   GROQ_MODEL=llama-3.3-70b-versatile
  *   GROQ_MODEL_LIGHT=llama-3.1-8b-instant
@@ -185,6 +187,15 @@ try {
 
 const GROQ_KEY = process.env.GROQ_API_KEY?.trim();
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY?.trim();
+/** AI Studio / Gemini API (same key as Google often labels GOOGLE_API_KEY). */
+const GEMINI_KEY = (process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "").trim();
+/**
+ * Default avoids gemini-2.0-flash: many AI Studio projects show free-tier "limit: 0" for 2.0 on
+ * generate_content_free_tier_* metrics. Override GEMINI_MODEL / GEMINI_MODEL_FALLBACK as needed.
+ */
+const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-2.5-flash-lite";
+/** Comma-separated extra model ids to try after GEMINI_MODEL on quota / 429 (see forwardGemini). */
+const GEMINI_MODEL_FALLBACK = process.env.GEMINI_MODEL_FALLBACK?.trim();
 const LLM_PROVIDER = process.env.LLM_PROVIDER?.toLowerCase();
 
 const GROQ_MODEL = process.env.GROQ_MODEL?.trim() || "llama-3.3-70b-versatile";
@@ -207,8 +218,10 @@ const JUDGE_SERVICE_URL = (process.env.JUDGE_SERVICE_URL || "http://127.0.0.1:80
 function resolveProvider() {
   if (LLM_PROVIDER === "groq") return GROQ_KEY ? "groq" : null;
   if (LLM_PROVIDER === "anthropic") return ANTHROPIC_KEY ? "anthropic" : null;
+  if (LLM_PROVIDER === "gemini") return GEMINI_KEY ? "gemini" : null;
   if (GROQ_KEY) return "groq";
   if (ANTHROPIC_KEY) return "anthropic";
+  if (GEMINI_KEY) return "gemini";
   return null;
 }
 
@@ -284,6 +297,202 @@ function groqResponseToAnthropicShape(groqJson) {
     stop_reason: "end_turn",
     usage: groqJson.usage,
   };
+}
+
+/**
+ * @param {Record<string, unknown>} anthropicJson
+ * @param {string} route
+ */
+function anthropicBodyToGemini(anthropicJson, route) {
+  const requested = Math.min(Number(anthropicJson.max_tokens) || 1024, 8192);
+  const cap = groqMaxTokensCap(route);
+  const maxOutputTokens = Math.min(requested, cap);
+  const temperature = groqTemperature(route);
+  const sys = anthropicJson.system != null ? String(anthropicJson.system).trim() : "";
+
+  /** @type {{ role: string, parts: { text: string }[] }[]} */
+  const contents = [];
+  for (const m of anthropicJson.messages || []) {
+    const role = m.role === "assistant" ? "model" : "user";
+    const raw = contentToString(m.content);
+    const text = raw.trim() || " ";
+    contents.push({ role, parts: [{ text }] });
+  }
+  if (!contents.length) {
+    contents.push({ role: "user", parts: [{ text: "Respond helpfully." }] });
+  }
+
+  /** @type {Record<string, unknown>} */
+  const out = {
+    contents,
+    generationConfig: {
+      maxOutputTokens,
+      temperature,
+    },
+  };
+  if (sys) {
+    out.systemInstruction = { parts: [{ text: sys }] };
+  }
+  if (route === "intel") {
+    /** @type {Record<string, unknown>} */
+    const gc = /** @type {Record<string, unknown>} */ (out.generationConfig);
+    gc.stopSequences = ["\n\n", "\nUser:"];
+  }
+  return out;
+}
+
+/**
+ * @param {Record<string, unknown>} geminiJson
+ * @param {string} modelId model that produced this response (for client metadata)
+ */
+function geminiResponseToAnthropicShape(geminiJson, modelId) {
+  const cand = geminiJson.candidates?.[0];
+  const parts = cand?.content?.parts;
+  let text = "";
+  if (Array.isArray(parts)) {
+    for (const p of parts) {
+      if (p && typeof p === "object" && "text" in p) text += String(/** @type {{ text?: string }} */ (p).text ?? "");
+    }
+  }
+  const meta = geminiJson.usageMetadata;
+  /** @type {Record<string, number> | undefined} */
+  let usage;
+  if (meta && typeof meta === "object") {
+    const prompt = Number(/** @type {{ promptTokenCount?: number }} */ (meta).promptTokenCount) || 0;
+    const outTok = Number(/** @type {{ candidatesTokenCount?: number }} */ (meta).candidatesTokenCount) || 0;
+    usage = { input_tokens: prompt, output_tokens: outTok, total_tokens: prompt + outTok };
+  }
+  return {
+    id: "gemini-msg",
+    type: "message",
+    role: "assistant",
+    content: [{ type: "text", text }],
+    model: modelId,
+    stop_reason: "end_turn",
+    usage,
+  };
+}
+
+/** Ordered list: primary first, then env fallbacks, then built-in alternates (deduped). */
+function geminiModelsToTry() {
+  const builtin = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-1.5-flash"];
+  const fromEnv = GEMINI_MODEL_FALLBACK
+    ? GEMINI_MODEL_FALLBACK.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
+  const merged = [GEMINI_MODEL, ...fromEnv, ...builtin];
+  const seen = new Set();
+  const out = [];
+  for (const m of merged) {
+    if (!m || seen.has(m)) continue;
+    seen.add(m);
+    out.push(m);
+  }
+  return out;
+}
+
+/**
+ * True when trying another model id might succeed (per-model free tier, RPM, unknown model).
+ * @param {number} status
+ * @param {string} bodyText
+ */
+function shouldRetryGeminiWithOtherModel(status, bodyText) {
+  if (status === 401) return false;
+  if (status === 429) return true;
+  if (status === 404) return true;
+  if (status >= 500) return true;
+  const b = (bodyText || "").toLowerCase();
+  if (b.includes("quota exceeded") || b.includes("resource_exhausted")) return true;
+  if (b.includes("limit: 0") && b.includes("free_tier")) return true;
+  if (status === 403 && (b.includes("quota") || b.includes("billing"))) return true;
+  if (status === 400 && (b.includes("quota") || b.includes("exceeded") || b.includes("not available"))) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * When Groq fails with overload / quota / daily token limits, retry once via Gemini if configured.
+ * @param {{ status: number, body: string }} result
+ */
+function shouldFallbackGroqToGemini(result) {
+  if (result.status === 200) return false;
+  if (result.status === 401) return false;
+  if (result.status === 429) return true;
+  if (result.status >= 500) return true;
+  const b = (result.body || "").toLowerCase();
+  if (b.includes("tokens per day") || b.includes("rate limit") || b.includes("resource_exhausted")) return true;
+  if (result.status === 403 && (b.includes("quota") || b.includes("limit"))) return true;
+  if (
+    result.status === 400 &&
+    (b.includes("rate limit") || b.includes("tokens per day") || b.includes("resource_exhausted"))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+async function forwardGemini(anthropicBodyString) {
+  if (!GEMINI_KEY) {
+    return { status: 500, body: JSON.stringify({ error: { message: "GEMINI_API_KEY / GOOGLE_API_KEY is empty." } }) };
+  }
+  let anthropicJson;
+  try {
+    anthropicJson = JSON.parse(anthropicBodyString);
+  } catch {
+    return { status: 400, body: JSON.stringify({ error: { message: "Invalid JSON body" } }) };
+  }
+  const routeRaw = anthropicJson.groq_route;
+  delete anthropicJson.groq_route;
+  const route = typeof routeRaw === "string" && routeRaw.trim() ? routeRaw.trim() : "misc";
+  const geminiBody = anthropicBodyToGemini(anthropicJson, route);
+
+  const models = geminiModelsToTry();
+  /** @type {{ status: number, body: string } | null} */
+  let lastFail = null;
+
+  for (let i = 0; i < models.length; i++) {
+    const modelId = models[i];
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+      modelId
+    )}:generateContent?key=${encodeURIComponent(GEMINI_KEY)}`;
+
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(geminiBody),
+    });
+    const text = await r.text();
+
+    if (!r.ok) {
+      lastFail = { status: r.status, body: text };
+      if (i < models.length - 1 && shouldRetryGeminiWithOtherModel(r.status, text)) {
+        console.warn(`[gemini] ${modelId} failed (HTTP ${r.status}); retrying with next model…`);
+        continue;
+      }
+      return lastFail;
+    }
+
+    let geminiJson;
+    try {
+      geminiJson = JSON.parse(text);
+    } catch {
+      return { status: 502, body: JSON.stringify({ error: { message: "Gemini returned non-JSON" } }) };
+    }
+    const block = geminiJson.promptFeedback?.blockReason;
+    if (block) {
+      return {
+        status: 400,
+        body: JSON.stringify({ error: { message: `Gemini blocked the prompt: ${block}` } }),
+      };
+    }
+    if (i > 0) {
+      console.warn(`[gemini] succeeded with fallback model ${modelId}`);
+    }
+    const shaped = geminiResponseToAnthropicShape(geminiJson, modelId);
+    return { status: 200, body: JSON.stringify(shaped) };
+  }
+
+  return lastFail || { status: 502, body: JSON.stringify({ error: { message: "Gemini: no model attempts" } }) };
 }
 
 // ── Per-model concurrency + sliding-window TPM gate ────────────────────────
@@ -1307,7 +1516,7 @@ const server = http.createServer(async (req, res) => {
           error: {
             type: "config",
             message:
-              "No LLM key set. For a free API: export GROQ_API_KEY from https://console.groq.com — or use ANTHROPIC_API_KEY for Claude. Optional: LLM_PROVIDER=groq|anthropic",
+              "No LLM key set. Free: GROQ_API_KEY (console.groq.com) and/or GEMINI_API_KEY (aistudio.google.com) — Groq is tried first with optional Gemini fallback. Paid: ANTHROPIC_API_KEY. Optional: LLM_PROVIDER=groq|anthropic|gemini",
           },
         })
       );
@@ -1326,6 +1535,15 @@ const server = http.createServer(async (req, res) => {
       );
       return;
     }
+    if (LLM_PROVIDER === "gemini" && !GEMINI_KEY) {
+      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(
+        JSON.stringify({
+          error: { message: "LLM_PROVIDER=gemini but GEMINI_API_KEY / GOOGLE_API_KEY is empty." },
+        })
+      );
+      return;
+    }
 
     let body;
     try {
@@ -1338,10 +1556,16 @@ const server = http.createServer(async (req, res) => {
 
     try {
       let result;
-      if (activeProvider === "groq") {
-        result = await forwardGroq(body);
-      } else {
+      if (activeProvider === "anthropic") {
         result = await forwardAnthropic(body);
+      } else if (activeProvider === "gemini") {
+        result = await forwardGemini(body);
+      } else {
+        result = await forwardGroq(body);
+        if (shouldFallbackGroqToGemini(result) && GEMINI_KEY) {
+          console.warn(`[llm] Groq returned HTTP ${result.status}; falling back to Gemini (${GEMINI_MODEL}).`);
+          result = await forwardGemini(body);
+        }
       }
       res.writeHead(result.status, {
         "Content-Type": "application/json; charset=utf-8",
@@ -1586,13 +1810,16 @@ server.listen(PORT, () => {
   console.log(`War room: http://localhost:${PORT}/`);
   activeProvider = resolveProvider();
   if (activeProvider === "groq") {
+    const fb = GEMINI_KEY ? ` — Gemini fallback enabled (${GEMINI_MODEL})` : "";
     console.log(
-      `LLM: Groq — heavy ${GROQ_MODEL} / light ${GROQ_MODEL_LIGHT} (set GROQ_MODEL_LIGHT to tune TPD) — console.groq.com`
+      `LLM: Groq${fb} — heavy ${GROQ_MODEL} / light ${GROQ_MODEL_LIGHT} — console.groq.com`
     );
   } else if (activeProvider === "anthropic") {
     console.log("LLM: Anthropic Claude");
+  } else if (activeProvider === "gemini") {
+    console.log(`LLM: Gemini — ${GEMINI_MODEL} — aistudio.google.com`);
   } else {
-    console.log("Warning: set GROQ_API_KEY (free) or ANTHROPIC_API_KEY.");
+    console.log("Warning: set GROQ_API_KEY, GEMINI_API_KEY (or GOOGLE_API_KEY), or ANTHROPIC_API_KEY.");
   }
 
   void (async () => {
