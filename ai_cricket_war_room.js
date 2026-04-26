@@ -1762,8 +1762,217 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
         <div class="stat-cell"><div class="stat-label">SWING FACTOR</div><div class="stat-val">${escapeHtml(String(v.swing_factor || "—"))}</div></div>
         <div class="stat-cell"><div class="stat-label">MODEL CONFIDENCE</div><div class="stat-val">${escapeHtml(String(v.confidence ?? "—"))}% <span class="stat-sublabel">not win probability</span></div></div>
       </div>
+      <div class="verdict-share-row">
+        <button type="button" class="verdict-share-btn js-share-prediction" aria-label="Copy link to this prediction">Share this prediction</button>
+      </div>
     </div>`;
   scheduleVerdictWinProbabilityAnimation(verdictRootEl, winProb.pctA, winProb.pctB);
+  const shareBtn = verdictRootEl.querySelector(".js-share-prediction");
+  if (shareBtn) {
+    shareBtn.addEventListener("click", () => {
+      const mi = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+      const label = (mi?.value || "").trim();
+      if (!label) {
+        showAutoDetectToast("Pick a fixture first");
+        return;
+      }
+      void copyPredictionShareLink(label, v);
+    });
+  }
+}
+
+/**
+ * @param {string} text
+ * @param {number} maxLen
+ */
+function clipForShareUrl(text, maxLen) {
+  const s = String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!s) return "";
+  if (s.length <= maxLen) return s;
+  return `${s.slice(0, Math.max(0, maxLen - 1)).trimEnd()}…`;
+}
+
+/**
+ * Map Judge winner field to a short team code for share URLs (e.g. SRH).
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @param {string} winnerField
+ */
+function verdictWinnerToShareCode(teams, winnerField) {
+  const winNorm = String(winnerField || "").trim().toLowerCase();
+  const isA =
+    winNorm === String(teams.teamA).trim().toLowerCase() ||
+    winNorm === String(teams.codeA).trim().toLowerCase();
+  const isB =
+    winNorm === String(teams.teamB).trim().toLowerCase() ||
+    winNorm === String(teams.codeB).trim().toLowerCase();
+  if (isA && !isB) return normalizeShareTeamCode(teams.codeA);
+  if (isB && !isA) return normalizeShareTeamCode(teams.codeB);
+  if (isA && isB) return normalizeShareTeamCode(teams.codeA);
+  const raw = String(winnerField || "").trim().toUpperCase();
+  return raw ? normalizeShareTeamCode(raw.slice(0, 4)) : normalizeShareTeamCode(teams.codeA);
+}
+
+/**
+ * @param {string} verdictParam
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ */
+function verdictParamMatchesTeams(verdictParam, teams) {
+  const raw = String(verdictParam || "").trim();
+  if (!raw) return false;
+  const vCode = normalizeShareTeamCode(raw);
+  const a = normalizeShareTeamCode(teams.codeA);
+  const b = normalizeShareTeamCode(teams.codeB);
+  if (vCode === a || vCode === b) return true;
+  const rl = raw.toLowerCase();
+  if (rl === String(teams.teamA).trim().toLowerCase()) return true;
+  if (rl === String(teams.teamB).trim().toLowerCase()) return true;
+  return false;
+}
+
+/**
+ * @param {string} matchLabel
+ * @param {WarRoomVerdict} v
+ */
+function buildPredictionShareUrl(matchLabel, v) {
+  const label = String(matchLabel || "").trim();
+  const teams = parseTeamsFromMatch(label);
+  const u = new URL(window.location.href);
+  u.hash = "";
+  u.search = "";
+  u.searchParams.set("share", label);
+  u.searchParams.set("verdict", verdictWinnerToShareCode(teams, v.winner));
+  u.searchParams.set("confidence", String(Math.round(Number(v.confidence) || 55)));
+  const sum = clipForShareUrl(v.summary, 200);
+  if (sum) u.searchParams.set("summary", sum);
+  const sr = clipForShareUrl(v.score_range === "—" ? "" : v.score_range, 48);
+  if (sr) u.searchParams.set("score_range", sr);
+  const kp = clipForShareUrl(v.key_player === "—" ? "" : v.key_player, 72);
+  if (kp) u.searchParams.set("key_player", kp);
+  const sf = clipForShareUrl(v.swing_factor === "—" ? "" : v.swing_factor, 72);
+  if (sf) u.searchParams.set("swing_factor", sf);
+  return u.toString();
+}
+
+/**
+ * @param {string} matchLabel
+ * @param {WarRoomVerdict} v
+ */
+async function copyPredictionShareLink(matchLabel, v) {
+  const url = buildPredictionShareUrl(matchLabel, v);
+  try {
+    await navigator.clipboard.writeText(url);
+    showAutoDetectToast("Prediction link copied");
+  } catch {
+    try {
+      window.prompt("Copy this prediction link:", url);
+    } catch {
+      showAutoDetectToast("Could not copy link");
+    }
+  }
+}
+
+/**
+ * Static verdict card when opening a shared prediction URL (?share=…&verdict=…&confidence=…).
+ * @param {HTMLElement} verdictRootEl
+ * @param {WarRoomVerdict} v
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @param {{ verdictMatchesTeams: boolean }} opts
+ */
+function mountSharedPredictionPreviewCard(verdictRootEl, v, teams, opts) {
+  const winDisplay = resolveWinnerDisplay(teams, v.winner);
+  const winNorm = String(v.winner || "").trim().toLowerCase();
+  const pickedA =
+    winNorm === String(teams.teamA).trim().toLowerCase() ||
+    winNorm === String(teams.codeA).trim().toLowerCase();
+  const winnerLogoUrl = resolveTeamLogoUrl(
+    pickedA ? teams.codeA : teams.codeB,
+    pickedA ? teams.teamA : teams.teamB
+  );
+  const verdictLogoHtml = winnerLogoUrl
+    ? `<img class="verdict-winner-logo" src="${escapeHtml(winnerLogoUrl)}" width="44" height="44" alt="" decoding="async" loading="lazy" />`
+    : "";
+  const confRaw = Number(v.confidence);
+  const conf = Number.isFinite(confRaw) ? Math.min(100, Math.max(0, confRaw)) : 55;
+  const pctForTeamA = pickedA ? conf : 100 - conf;
+  const winProb = renderVerdictWinProbabilityBlock(teams, pctForTeamA, { variant: "judge" });
+  const warn = opts.verdictMatchesTeams
+    ? ""
+    : `<p class="verdict-subkicker verdict-subkicker--warn">This shared pick doesn't match the fixture's teams - shown as posted.</p>`;
+  const sub = `<p class="verdict-subkicker">Someone shared this Judge pick. <strong>Run war room</strong> in the command bar for agents, debate, and live updates.</p>${warn}`;
+
+  verdictRootEl.innerHTML = `
+    <div class="verdict-card verdict-card--shared-preview">
+      <div class="verdict-kicker">Shared prediction</div>
+      ${sub}
+      <div class="verdict-winner-row">${verdictLogoHtml}<div class="verdict-winner">${escapeHtml(String(winDisplay).toUpperCase())} WINS</div></div>
+      <div class="verdict-summary">${escapeHtml(v.summary || "")}</div>
+      ${winProb.html}
+      <div class="stat-grid">
+        <div class="stat-cell"><div class="stat-label">PROJECTED SCORE</div><div class="stat-val">${escapeHtml(String(v.score_range || "—"))}</div></div>
+        <div class="stat-cell"><div class="stat-label">KEY PLAYER</div><div class="stat-val">${escapeHtml(String(v.key_player || "—"))}</div></div>
+        <div class="stat-cell"><div class="stat-label">SWING FACTOR</div><div class="stat-val">${escapeHtml(String(v.swing_factor || "—"))}</div></div>
+        <div class="stat-cell"><div class="stat-label">MODEL CONFIDENCE</div><div class="stat-val">${escapeHtml(String(v.confidence ?? "—"))}% <span class="stat-sublabel">not win probability</span></div></div>
+      </div>
+      <div class="verdict-share-row">
+        <button type="button" class="verdict-share-cta js-shared-run-war-room">Run full war room</button>
+      </div>
+    </div>`;
+  scheduleVerdictWinProbabilityAnimation(verdictRootEl, winProb.pctA, winProb.pctB);
+
+  const cta = verdictRootEl.querySelector(".js-shared-run-war-room");
+  if (cta) {
+    cta.addEventListener("click", () => {
+      if (running) return;
+      void runWarRoom();
+    });
+  }
+}
+
+/**
+ * If the URL includes `verdict` (and the fixture was resolved into `#matchInput`), show the shared verdict card immediately.
+ */
+async function applySharedPredictionPreviewFromUrl() {
+  let sp;
+  try {
+    sp = new URLSearchParams(window.location.search);
+  } catch {
+    return;
+  }
+  const verdictRaw = String(sp.get("verdict") || "").trim();
+  if (!verdictRaw) return;
+
+  const input = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+  const verdictEl = document.getElementById("verdictArea");
+  if (!input || !verdictEl) return;
+
+  const matchLabel = input.value.trim();
+  if (!matchLabel) return;
+
+  const teams = parseTeamsFromMatch(matchLabel);
+  const c = Number(sp.get("confidence"));
+  const confidence = Number.isFinite(c) ? Math.min(100, Math.max(0, Math.round(c))) : 55;
+
+  const summary = String(sp.get("summary") || "").trim();
+  const score_range = String(sp.get("score_range") || "").trim();
+  const key_player = String(sp.get("key_player") || "").trim();
+  const swing_factor = String(sp.get("swing_factor") || "").trim();
+
+  /** @type {Record<string, unknown>} */
+  const partial = { winner: verdictRaw, confidence };
+  if (score_range) partial.score_range = score_range;
+  if (key_player) partial.key_player = key_player;
+  if (swing_factor) partial.swing_factor = swing_factor;
+  if (summary) partial.summary = summary;
+
+  const v = normalizeVerdictPartial(partial, teams);
+  const verdictMatchesTeams = verdictParamMatchesTeams(verdictRaw, teams);
+
+  mountSharedPredictionPreviewCard(verdictEl, v, teams, { verdictMatchesTeams });
+  document.getElementById("main-content")?.classList.remove("dashboard--pre-war-room");
+  setMatchBar(matchLabel, teams);
+  scrollVerdictPanelIntoView({ behavior: "auto" });
 }
 
 /** Transient gateway / cold-start statuses when the Node proxy calls the Judge service on Render. */
@@ -4090,6 +4299,7 @@ initLiveScoreBar();
 void refreshJudgeAccuracyFooter();
 void (async () => {
   await applyShareQueryParam();
+  await applySharedPredictionPreviewFromUrl();
   await autoPopulateTodayMatch();
 })();
 
@@ -4232,7 +4442,7 @@ async function tryMatchByLabelApi(label) {
  * Deep link: `?share=` + URL-encoded fixture string pre-fills the search field.
  * Accepts the exact catalog label **or** a looser hand-written line (e.g. `IPL 2026 — SRH vs DC, Hyderabad`
  * → resolves to the real row such as `DC vs SRH — …, Rajiv Gandhi International Stadium, Hyderabad`).
- * User still clicks **Run war room**.
+ * With `verdict` + `confidence`, {@link applySharedPredictionPreviewFromUrl} shows a static Judge-style card immediately; user still runs the room for the full pipeline.
  */
 async function applyShareQueryParam() {
   let raw = "";

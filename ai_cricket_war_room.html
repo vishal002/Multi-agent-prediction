@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="dark" data-ui="classic">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -45,10 +45,11 @@
   <script>
     (function () {
       var saved = localStorage.getItem('acwr-theme');
-      var theme = saved || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      var theme = saved === 'light' || saved === 'dark' ? saved : 'dark';
       document.documentElement.setAttribute('data-theme', theme);
       var uiSaved = localStorage.getItem('acwr-ui');
-      var uiInit = uiSaved === 'classic' || uiSaved === 'ipl' ? uiSaved : 'warroom';
+      var uiInit =
+        uiSaved === 'warroom' || uiSaved === 'classic' || uiSaved === 'ipl' ? uiSaved : 'classic';
       document.documentElement.setAttribute('data-ui', uiInit);
     })();
   </script>
@@ -75,7 +76,7 @@
             <span class="header-badge__dot"></span>
             <span class="header-badge__text">Live ops</span>
           </div>
-          <button type="button" class="ui-toggle" id="uiToggle" aria-label="UI: War room. Next: Classic." title="Cycle UI: War room → Classic → IPL">
+          <button type="button" class="ui-toggle" id="uiToggle" aria-label="UI: Classic. Next: IPL broadcast look." title="Cycle UI: Classic → IPL → War room">
             <svg class="ui-toggle__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="11" width="7" height="10" rx="1"/><rect x="3" y="15" width="7" height="6" rx="1"/></svg>
           </button>
           <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark theme" title="Toggle theme">
@@ -390,8 +391,8 @@
     };
     function syncMetaThemeColor() {
       var theme = document.documentElement.getAttribute('data-theme') || 'dark';
-      var ui = document.documentElement.getAttribute('data-ui') || 'warroom';
-      var map = PAGE[ui] || PAGE.warroom;
+      var ui = document.documentElement.getAttribute('data-ui') || 'classic';
+      var map = PAGE[ui] || PAGE.classic;
       if (metaTheme) metaTheme.setAttribute('content', map[theme] || map.dark);
     }
     function applyTheme(theme) {
@@ -426,13 +427,13 @@
     }
     if (uiBtn) {
       uiBtn.addEventListener('click', function () {
-        var cur = document.documentElement.getAttribute('data-ui') || 'warroom';
+        var cur = document.documentElement.getAttribute('data-ui') || 'classic';
         var next = cur === 'warroom' ? 'classic' : cur === 'classic' ? 'ipl' : 'warroom';
         applyUi(next);
       });
     }
     applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
-    applyUi(document.documentElement.getAttribute('data-ui') || 'warroom');
+    applyUi(document.documentElement.getAttribute('data-ui') || 'classic');
   })();
 </script>
 <script>

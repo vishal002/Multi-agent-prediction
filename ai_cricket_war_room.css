@@ -1755,6 +1755,60 @@ html.acwr-notice-dismissed .notice-strip {
   color: var(--color-accent);
 }
 
+.verdict-card--shared-preview {
+  background: linear-gradient(145deg, rgba(30, 58, 95, 0.42) 0%, rgba(7, 11, 18, 0.92) 100%);
+  border-color: rgba(96, 165, 250, 0.32);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(96, 165, 250, 0.1) inset;
+}
+
+.verdict-card--shared-preview .verdict-kicker {
+  color: #7dd3fc;
+}
+
+.verdict-subkicker--warn {
+  color: #fcd34d !important;
+}
+
+.verdict-share-row {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.verdict-share-btn,
+.verdict-share-cta {
+  font-family: var(--font-ui, var(--font-display));
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: 1px solid rgba(0, 232, 122, 0.35);
+  background: linear-gradient(180deg, rgba(0, 232, 122, 0.18) 0%, rgba(0, 232, 122, 0.08) 100%);
+  color: #ecfdf5;
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+
+.verdict-share-btn:hover,
+.verdict-share-cta:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 0 12px rgba(0, 232, 122, 0.2);
+}
+
+.verdict-share-cta {
+  border-color: rgba(96, 165, 250, 0.45);
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.35) 0%, rgba(37, 99, 235, 0.15) 100%);
+  color: #e0f2fe;
+}
+
+.verdict-share-cta:hover {
+  box-shadow: 0 0 14px rgba(59, 130, 246, 0.28);
+}
+
 .verdict-kicker {
   font-size: 0.625rem;
   font-weight: 600;
@@ -4032,7 +4086,34 @@ html[data-ui="ipl"] .ui-toggle[aria-pressed="true"] {
 [data-theme="light"] .verdict-summary     { color: rgba(15, 23, 42, 0.82); }
 [data-theme="light"] .verdict-kicker      { color: #1d4ed8; }
 [data-theme="light"] .verdict-card--final .verdict-kicker { color: #15803d; }
+
+[data-theme="light"] .verdict-card--shared-preview {
+  background: linear-gradient(145deg, rgba(219, 234, 254, 0.98) 0%, rgba(191, 219, 254, 0.88) 100%);
+  border-color: rgba(37, 99, 235, 0.28);
+  box-shadow: 0 4px 28px rgba(37, 99, 235, 0.12), 0 1px 0 rgba(255, 255, 255, 0.95) inset;
+}
+
+[data-theme="light"] .verdict-card--shared-preview .verdict-kicker {
+  color: #1d4ed8;
+}
+
+[data-theme="light"] .verdict-subkicker--warn {
+  color: #b45309 !important;
+}
+
 [data-theme="light"] .verdict-subkicker   { color: #374151; }
+
+[data-theme="light"] .verdict-share-btn,
+[data-theme="light"] .verdict-share-cta {
+  color: #fff;
+  border-color: rgba(22, 163, 74, 0.4);
+  background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+}
+
+[data-theme="light"] .verdict-share-cta {
+  border-color: rgba(37, 99, 235, 0.45);
+  background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+}
 
 [data-theme="light"] .verdict-win-prob {
   background: rgba(0, 0, 0, 0.04);
@@ -4531,6 +4612,16 @@ html[data-ui="classic"] .verdict-card--final {
   background: rgba(30, 100, 60, 0.35);
   border-color: rgba(129, 201, 149, 0.3);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(129, 201, 149, 0.15) inset;
+}
+
+html[data-ui="classic"] .verdict-card--shared-preview {
+  background: rgba(37, 78, 140, 0.42);
+  border-color: rgba(154, 202, 255, 0.28);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(154, 202, 255, 0.12) inset;
+}
+
+html[data-ui="classic"] .verdict-card--shared-preview .verdict-kicker {
+  color: #9ec9ff;
 }
 
 html[data-ui="classic"] .verdict-kicker {
