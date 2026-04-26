@@ -78,15 +78,36 @@ After loading, the user still clicks **Run war room** (no surprise token spend o
 
 ## Screenshots
 
-### v3 — debate-first flow
+Latest production captures from [cricket-war-room.onrender.com](https://cricket-war-room.onrender.com) (IPL 2026 example: **DC vs RCB, Delhi**). Order: **(3) home** → **(1) after search** → **(2) after full prediction** (over-by-over flow through agents, debate, and Judge).
 
-![Multi-round Bull vs Bear debate, intel strip, and Judge verdict](image/war-room-v3-demo.png)
+### 3) Homepage — before **Run war room**
 
-*v3: the **multi-round Bull vs Bear** transcript is the hero surface; the Judge card closes the loop. Intel agents (Scout, Stats, Weather, Pitch, News) run in parallel earlier in the same session.*
+The disclaimer strip is visible, a fixture is in the search field, live / ground-truth areas are available, and the **Debate** stage is **Ready** (nothing run yet).
 
-**Also:** completed fixtures in `match_suggestions.json` can skip agents and debate and show a **Final result** card only — see `image/war-room-final-result.jpg`.
+![Home — fixture selected, debate stage ready, Run war room not started yet](image/readme-state-03-home-before-run.png)
+
+### 1) After search
+
+Fixture locked in, command row active (**Run war room** / **Reset**), **LIVE MATCH · CURRENT SCORE** / ground-truth block expanded so you can align the model with the real line before a full run.
+
+![After search — match selected, live/ground truth visible, full layout including Intel, Verdict, Debate](image/readme-state-01-after-search.png)
+
+### 2) After over-by-over prediction
+
+Full run: all **intel agents** filled in, **Judge verdict** (winner, confidence, score band, key player, swing factor), and **Bull vs Bear** multi-round debate. Model confidence and sources (RSS / Cricbuzz / CricAPI) surface on the verdict card.
+
+![After prediction — Judge verdict, debate transcript, and confidence split](image/readme-state-02-after-prediction.png)
 
 ---
+
+<!-- Legacy gallery (hidden in rendered README — keep paths for history)
+
+![v3](image/war-room-v3-demo.png)
+![v2](image/war-room-v2-latest.png)
+![v1](image/war-room-screenshot.jpg)
+![final result only](image/war-room-final-result.jpg)
+
+-->
 
 ## Free-tier infrastructure (honest trade-offs)
 
@@ -96,7 +117,7 @@ After loading, the user still clicks **Run war room** (no surprise token spend o
 | SQLite on `/tmp` | Resets → accuracy looks fake | **[Turso](https://turso.tech)** remote libSQL (wired in `judge_service/predictions_db.py`) |
 | CricAPI free tier | ~100 calls/day on busy days | RSS (ESPN + Cricbuzz) already used; CricAPI optional |
 | No product analytics | You cannot improve what you don’t measure | e.g. [Umami](https://umami.is) self-hosted |
-| Social previews | Need stable absolute `og:image` | Served from `/image/war-room-v3-demo.png` in production builds |
+| Social previews | Need stable absolute `og:image` | Use a static PNG under `/image/` (e.g. `readme-state-02-after-prediction.png`); set `og:image` in `ai_cricket_war_room.html` to match. |
 
 ---
 
