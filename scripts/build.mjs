@@ -131,15 +131,15 @@ async function buildHtml(hashed) {
   const cssHashed = hashed[CSS_ENTRY];
   const jsHashed = hashed[JS_ENTRY];
 
-  // <link rel="stylesheet" href="ai_cricket_war_room.css" />
+  // <link rel="stylesheet" href="/ai_cricket_war_room.css" /> (leading / optional)
   html = html.replace(
-    /(<link\b[^>]*\bhref=)(["'])ai_cricket_war_room\.css\2/g,
-    (_m, pre, q) => `${pre}${q}${cssHashed}${q}`
+    /(<link\b[^>]*\bhref=)(["'])\/?ai_cricket_war_room\.css\2/g,
+    (_m, pre, q) => `${pre}${q}/${cssHashed}${q}`
   );
-  // <script src="ai_cricket_war_room.js"></script>
+  // <script src="/ai_cricket_war_room.js"></script>
   html = html.replace(
-    /(<script\b[^>]*\bsrc=)(["'])ai_cricket_war_room\.js\2/g,
-    (_m, pre, q) => `${pre}${q}${jsHashed}${q}`
+    /(<script\b[^>]*\bsrc=)(["'])\/?ai_cricket_war_room\.js\2/g,
+    (_m, pre, q) => `${pre}${q}/${jsHashed}${q}`
   );
 
   const minified = await minifyHtml(html, {

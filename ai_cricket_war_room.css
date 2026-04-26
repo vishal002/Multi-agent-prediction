@@ -3226,6 +3226,28 @@ body::after {
   gap: 0.5rem;
 }
 
+/* PWA: shown when page is not a secure context (e.g. http://LAN-IP) — SW cannot register */
+.pwa-secure-hint {
+  pointer-events: auto;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-md);
+  background: rgba(40, 42, 46, 0.96);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(242, 180, 96, 0.45);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+.pwa-secure-hint strong {
+  color: var(--color-text-primary);
+}
+.pwa-secure-hint code {
+  font-size: 0.85em;
+  word-break: break-all;
+}
+
 .toast--auto-detect {
   display: flex;
   align-items: center;
