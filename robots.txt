@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://cricket-war-room.onrender.com/sitemap.xml

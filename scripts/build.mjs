@@ -35,7 +35,7 @@ const JS_ENTRY = "ai_cricket_war_room.js";
 const CSS_ENTRY = "ai_cricket_war_room.css";
 const SW_ENTRY = "sw.js";
 
-const COPY_FILES = ["match_suggestions.json", "manifest.webmanifest"];
+const COPY_FILES = ["match_suggestions.json", "manifest.webmanifest", "sitemap.xml", "robots.txt"];
 const COPY_DIRS = ["icons"];
 
 // Brotli tuning: quality 11 + text mode is the heaviest setting; fine for a one-shot build.
