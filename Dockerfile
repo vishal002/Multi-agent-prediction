@@ -20,6 +20,7 @@ COPY ai_cricket_war_room.html \
      manifest.webmanifest     \
      ./
 COPY icons ./icons/
+COPY image ./image/
 COPY scripts ./scripts/
 
 RUN npm run build

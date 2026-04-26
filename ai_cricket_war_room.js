@@ -4072,7 +4072,33 @@ initAgentsToggle();
 initLivePanel();
 initLiveScoreBar();
 void refreshJudgeAccuracyFooter();
+applyShareQueryParam();
 void autoPopulateTodayMatch();
+
+/**
+ * Deep link: `?share=` + URL-encoded fixture label pre-fills the search field.
+ * User still clicks Run war room. Label should match `match_suggestions.json` (or fallback rows).
+ */
+function applyShareQueryParam() {
+  let raw = "";
+  try {
+    raw = new URLSearchParams(window.location.search).get("share") || "";
+  } catch {
+    return;
+  }
+  const label = decodeURIComponent(raw).trim();
+  if (!label) return;
+  const input = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+  if (!input) return;
+  input.value = label;
+  const clearBtn = document.getElementById("matchSearchClear");
+  if (clearBtn) /** @type {HTMLElement} */ (clearBtn).hidden = false;
+  try {
+    populateLiveFormFromMatchInput();
+  } catch {
+    /* live panel fields optional */
+  }
+}
 
 /**
  * On page load, detect today's fixture (or the nearest upcoming one) and auto-fill the match

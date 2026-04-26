@@ -1085,9 +1085,13 @@ const server = http.createServer(async (req, res) => {
   const ext = path.extname(filePath);
   const relPath = path.relative(STATIC_ROOT, filePath).split(path.sep).join("/");
 
-  const allowed = SERVE_DIST
-    ? DIST_ALLOWLIST != null && DIST_ALLOWLIST.has(relPath)
-    : DEV_STATIC_FILES.has(path.basename(filePath));
+  const devStaticOk =
+    DEV_STATIC_FILES.has(relPath) ||
+    DEV_STATIC_FILES.has(path.basename(filePath)) ||
+    relPath.startsWith("icons/") ||
+    relPath.startsWith("image/");
+
+  const allowed = SERVE_DIST ? DIST_ALLOWLIST != null && DIST_ALLOWLIST.has(relPath) : devStaticOk;
 
   if (!allowed) {
     res.writeHead(404);

@@ -6,7 +6,7 @@
  *   - ai_cricket_war_room.[hash].css     (esbuild minified)
  *   - ai_cricket_war_room.html           (html-minifier-terser, refs rewritten to hashed names)
  *   - sw.js                              (PRECACHE_URLS rewritten + STATIC_ASSET_VERSION = build hash)
- *   - match_suggestions.json, manifest.webmanifest, icons/*  (copied verbatim, stable URLs)
+ *   - match_suggestions.json, manifest.webmanifest, icons/*, image/*  (copied verbatim, stable URLs)
  *   - build-manifest.json                (original → hashed map)
  *   - <file>.gz / <file>.br              (precomputed text-asset siblings)
  *
@@ -36,7 +36,7 @@ const CSS_ENTRY = "ai_cricket_war_room.css";
 const SW_ENTRY = "sw.js";
 
 const COPY_FILES = ["match_suggestions.json", "manifest.webmanifest", "sitemap.xml", "robots.txt"];
-const COPY_DIRS = ["icons"];
+const COPY_DIRS = ["icons", "image"];
 
 // Brotli tuning: quality 11 + text mode is the heaviest setting; fine for a one-shot build.
 const BROTLI_OPTS = {

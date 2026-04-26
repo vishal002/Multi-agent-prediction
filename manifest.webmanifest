@@ -2,7 +2,7 @@
   "lang": "en",
   "name": "AI Cricket War Room",
   "short_name": "War Room",
-  "description": "Multi-agent cricket intel, debate, and judge verdict in one flow.",
+  "description": "Five intel feeds, Bull vs Bear debate rounds, and a Judge verdict — fan discussion, not betting advice.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

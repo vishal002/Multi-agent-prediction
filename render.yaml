@@ -71,3 +71,8 @@ services:
       # Note: data resets on restart/redeploy on free tier (no persistent disk)
       - key: WAR_ROOM_DB_PATH
         value: /tmp/war_room.db
+      # Optional — persistent predictions on Turso (overrides ephemeral /tmp SQLite)
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false
