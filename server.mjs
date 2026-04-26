@@ -529,6 +529,7 @@ const HASHED_ASSET_RX = /\.[A-Z0-9]{8}\.(js|css)$/;
 
 const DEV_STATIC_FILES = new Set([
   "ai_cricket_war_room.html",
+  "disclaimer.html",
   "ai_cricket_war_room.css",
   "ai_cricket_war_room.js",
   "sw.js",

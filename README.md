@@ -66,13 +66,19 @@ Create a DB in [Turso](https://turso.tech), install deps, run the judge as usual
 
 ## Share links
 
-Open the app with a query string to pre-fill the fixture field (must match a row in `match_suggestions.json` or fallback rows):
+Open the app with `?share=` to pre-fill the fixture field. The value can be the **exact** catalog label, or a **shorter** line: team codes in either order (e.g. `SRH vs DC` or `DC vs SRH`) plus an optional **city/venue** hint after a comma to disambiguate (e.g. `Hyderabad`). The app resolves to the real `match_suggestions` row and fills the search box (no run until the user clicks **Run war room** — no surprise token use).
+
+**Exact label example:**
+
+```text
+https://cricket-war-room.onrender.com/?share=DC%20vs%20SRH%20%E2%80%94%20IPL%202026%20Match%2031%2C%20Rajiv%20Gandhi%20International%20Stadium%2C%20Hyderabad
+```
+
+**Shorter (resolved automatically) example — same match:**
 
 ```text
 https://cricket-war-room.onrender.com/?share=IPL%202026%20%E2%80%94%20SRH%20vs%20DC%2C%20Hyderabad
 ```
-
-After loading, the user still clicks **Run war room** (no surprise token spend on page view).
 
 ---
 

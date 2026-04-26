@@ -1385,6 +1385,21 @@ function openInfoSheet(tab) {
   d.showModal();
 }
 
+function initNoticeStrip() {
+  const btn = document.getElementById("acwrNoticeClose");
+  if (!btn) return;
+  if (btn.dataset.noticeInit === "1") return;
+  btn.dataset.noticeInit = "1";
+  btn.addEventListener("click", () => {
+    try {
+      localStorage.setItem("acwr-notice-dismissed", "1");
+    } catch {
+      /* private mode */
+    }
+    document.documentElement.classList.add("acwr-notice-dismissed");
+  });
+}
+
 function initInfoSheet() {
   const d = document.getElementById("infoSheet");
   if (!d) return;
@@ -4067,36 +4082,204 @@ initIntelAgentRefreshHandlers();
 renderArch();
 renderHowto();
 initMatchAutocomplete();
+initNoticeStrip();
 initInfoSheet();
 initAgentsToggle();
 initLivePanel();
 initLiveScoreBar();
 void refreshJudgeAccuracyFooter();
-applyShareQueryParam();
-void autoPopulateTodayMatch();
+void (async () => {
+  await applyShareQueryParam();
+  await autoPopulateTodayMatch();
+})();
 
 /**
- * Deep link: `?share=` + URL-encoded fixture label pre-fills the search field.
- * User still clicks Run war room. Label should match `match_suggestions.json` (or fallback rows).
+ * @returns {Promise<MatchSuggestionRow[]>}
  */
-function applyShareQueryParam() {
+async function loadAllMatchSuggestionRows() {
+  /** @type {MatchSuggestionRow[]} */
+  let rows = MATCH_SUGGESTIONS_FALLBACK_ROWS;
+  try {
+    const base = apiBase();
+    if (base !== null) {
+      const r = await fetch(`${base}/api/match-suggest?q=&limit=100`, {
+        headers: { Accept: "application/json" },
+      });
+      if (r.ok) {
+        const data = await r.json();
+        if (Array.isArray(data.suggestions) && data.suggestions.length) {
+          rows = data.suggestions.map(normalizeSuggestApiEntry);
+        }
+      }
+    }
+  } catch {
+    /* use bundled */
+  }
+  return rows;
+}
+
+/**
+ * @param {string} c
+ * @returns {string}
+ */
+function normalizeShareTeamCode(c) {
+  const u = String(c || "").toUpperCase().trim();
+  return (MATCH_SUGGEST_TEAM_ALIASES)[u] || u;
+}
+
+/**
+ * @returns {{ a: string, b: string } | null}
+ */
+function extractShareTeamCodePair(s) {
+  const m = String(s).match(/\b([A-Z]{2,4})\s+vs\.?\s+([A-Z]{2,4})\b/i);
+  if (!m) return null;
+  return { a: normalizeShareTeamCode(m[1]), b: normalizeShareTeamCode(m[2]) };
+}
+
+/**
+ * @param {MatchSuggestionRow} row
+ * @param {string} a
+ * @param {string} b
+ */
+function rowCoversTeamCodes(row, a, b) {
+  const A = String(a).toUpperCase();
+  const B = String(b).toUpperCase();
+  /** @type {string[]} */
+  let codes;
+  if (row.teams && row.teams.length >= 2) {
+    codes = row.teams.map((t) => normalizeShareTeamCode(t));
+  } else {
+    const p = parseTeamsFromMatch(row.label);
+    codes = [normalizeShareTeamCode(p.codeA), normalizeShareTeamCode(p.codeB)];
+  }
+  const set = new Set(codes);
+  return set.has(A) && set.has(B);
+}
+
+/**
+ * Last segment after a comma, used to pick among same team-pair (e.g. "Hyderabad").
+ * @param {string} s
+ */
+function venueHintFromShareString(s) {
+  const parts = String(s)
+    .split(/[,;]/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+  if (parts.length < 2) return "";
+  return parts[parts.length - 1].toLowerCase();
+}
+
+/**
+ * Map a hand-typed or shortened ?share= string to a canonical `match_suggestions` label.
+ * @param {string} shareLabel
+ * @param {MatchSuggestionRow[]} rows
+ * @returns {string}
+ */
+function resolveShareStringToLabel(shareLabel, rows) {
+  const t = String(shareLabel).trim();
+  if (!t) return t;
+
+  const ex = rows.find((r) => r.label === t);
+  if (ex) return ex.label;
+  const nk = normalizeFixtureLabelKey(t);
+  const ex2 = rows.find((r) => normalizeFixtureLabelKey(r.label) === nk);
+  if (ex2) return ex2.label;
+
+  const pair = extractShareTeamCodePair(t);
+  if (!pair) {
+    const hits = getMatchSuggestionHits(rows, t, 1);
+    return hits.length ? hits[0].label : t;
+  }
+
+  let cand = rows.filter((r) => rowCoversTeamCodes(r, pair.a, pair.b));
+  if (cand.length === 0) return t;
+  if (cand.length === 1) return cand[0].label;
+
+  const hint = venueHintFromShareString(t);
+  if (hint.length >= 3) {
+    const v = cand.filter(
+      (r) =>
+        String(r.venue).toLowerCase().includes(hint) || String(r.label).toLowerCase().includes(hint)
+    );
+    if (v.length === 1) return v[0].label;
+    if (v.length > 0) cand = v;
+  }
+
+  cand = [...cand].sort(compareMatchSuggestionsNewestFirst);
+  return cand[0].label;
+}
+
+/**
+ * @param {string} label
+ * @returns {Promise<string | null>}
+ */
+async function tryMatchByLabelApi(label) {
+  if (apiBase() === null) return null;
+  const t = String(label).trim();
+  if (!t) return null;
+  try {
+    const r = await fetch(`${apiBase()}/api/match-by-label?label=${encodeURIComponent(t)}`);
+    if (!r.ok) return null;
+    const d = await r.json();
+    const m = d && d.match && d.match.label != null ? String(d.match.label) : "";
+    return m || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Deep link: `?share=` + URL-encoded fixture string pre-fills the search field.
+ * Accepts the exact catalog label **or** a looser hand-written line (e.g. `IPL 2026 — SRH vs DC, Hyderabad`
+ * → resolves to the real row such as `DC vs SRH — …, Rajiv Gandhi International Stadium, Hyderabad`).
+ * User still clicks **Run war room**.
+ */
+async function applyShareQueryParam() {
   let raw = "";
   try {
     raw = new URLSearchParams(window.location.search).get("share") || "";
   } catch {
     return;
   }
-  const label = decodeURIComponent(raw).trim();
+  let label = String(raw).trim();
   if (!label) return;
+  // URLSearchParams usually decodes; this handles raw % sequences / + in edge cases
+  try {
+    label = decodeURIComponent(label.replace(/\+/g, " ")).trim();
+  } catch {
+    label = String(raw).trim();
+  }
+  if (!label) return;
+
   const input = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
   if (!input) return;
-  input.value = label;
+
+  const rows = await loadAllMatchSuggestionRows();
+
+  let final = label;
+  const fromApi = await tryMatchByLabelApi(label);
+  if (fromApi) {
+    final = fromApi;
+  } else {
+    final = resolveShareStringToLabel(label, rows);
+    if (final !== label) {
+      const api2 = await tryMatchByLabelApi(final);
+      if (api2) final = api2;
+    }
+  }
+
+  input.value = final;
   const clearBtn = document.getElementById("matchSearchClear");
   if (clearBtn) /** @type {HTMLElement} */ (clearBtn).hidden = false;
   try {
     populateLiveFormFromMatchInput();
   } catch {
     /* live panel fields optional */
+  }
+  try {
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  } catch {
+    /* */ 
   }
 }
 

@@ -13,6 +13,7 @@ COPY package*.json ./
 RUN npm ci
 
 COPY ai_cricket_war_room.html \
+     disclaimer.html         \
      ai_cricket_war_room.css  \
      ai_cricket_war_room.js   \
      sw.js                    \

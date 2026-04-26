@@ -24,6 +24,14 @@
   <meta name="apple-mobile-web-app-title" content="War Room" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Cricket War Room — AI debate &amp; judge</title>
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem("acwr-notice-dismissed") === "1")
+          document.documentElement.classList.add("acwr-notice-dismissed");
+      } catch (e) { /* private mode */ }
+    })();
+  </script>
   <link rel="manifest" href="/manifest.webmanifest" />
   <!-- Same artwork as manifest `icons` so tab favicon, “Open in app”, and install tile match -->
   <link rel="icon" type="image/png" href="/icons/icon-192.png" sizes="192x192" />
@@ -80,9 +88,15 @@
       </nav>
     </header>
 
-    <p class="notice-strip" role="note">
-      <strong>Not betting or financial advice.</strong> Outputs are AI-generated for entertainment and fan discussion; they may be wrong. Full disclaimer in the footer.
-    </p>
+    <div class="notice-strip" id="acwrNoticeStrip" role="region" aria-label="Notice">
+      <p class="notice-strip__text">
+        Not betting or financial advice. AI content is for entertainment and fan discussion; it may be wrong.
+        <a class="notice-strip__link" href="/disclaimer.html">Disclaimer</a>
+      </p>
+      <button type="button" class="notice-strip__close" id="acwrNoticeClose" aria-label="Dismiss notice" title="Dismiss">
+        <span aria-hidden="true">×</span>
+      </button>
+    </div>
 
     <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
 
@@ -325,6 +339,7 @@
       <p class="app-footer__line" id="judgeAccuracyFooter"></p>
       <p class="app-footer__disclaimer">
         For entertainment and fan discussion only. AI outputs are not advice, may be inaccurate, and must not be used for betting, trading, or other financial decisions.
+        <a class="app-footer__legal" href="/disclaimer.html">Full disclaimer</a>
       </p>
       <p class="app-footer__version" id="appVersionLine" aria-label="Build version">
         <span class="app-footer__version-label">version</span>
