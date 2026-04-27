@@ -46,6 +46,7 @@
  *
  * Short prediction links (no Mongo): POST /api/share-prediction → { id }; GET /api/share/:id → pack JSON;
  * GET /s/:id → 302 to /?sid=:id (pack persisted under data/share_predictions.json by default).
+ * Open Graph PNGs (1200×630, Sharp): GET /og-homepage.png (site preview); GET /api/og/share/{id}.png (per share).
  */
 
 import http from "node:http";
@@ -734,6 +735,33 @@ async function forwardAnthropic(body) {
 const SERVE_DIST = process.env.SERVE_DIST === "1";
 const STATIC_ROOT = SERVE_DIST ? path.join(__dirname, "dist") : __dirname;
 
+/** PNG for OG SVG `<image href>` (Sharp/librsvg); null if file missing. */
+function readOgLogoDataUri() {
+  const candidates = [
+    path.join(STATIC_ROOT, "image", "ai-cricket-war-room-logo.png"),
+    path.join(__dirname, "image", "ai-cricket-war-room-logo.png"),
+    path.join(__dirname, "ai-cricket-war-room-logo.png"),
+  ];
+  for (const p of candidates) {
+    try {
+      if (!fs.existsSync(p) || !fs.statSync(p).isFile()) continue;
+      const buf = fs.readFileSync(p);
+      if (buf.length < 32) continue;
+      return `data:image/png;base64,${buf.toString("base64")}`;
+    } catch {
+      /* try next */
+    }
+  }
+  return null;
+}
+
+const OG_LOGO_DATA_URI = readOgLogoDataUri();
+if (!OG_LOGO_DATA_URI) {
+  console.warn(
+    "War room: ai-cricket-war-room-logo.png not found (image/ or project root) — OG images use WR text / omit logo until the file is present."
+  );
+}
+
 /**
  * Hashed asset filename suffix from build.mjs (8-char SHA-256 prefix).
  * Files matching `name.HASH.{js,css}` are immutable — the URL changes whenever
@@ -1084,82 +1112,292 @@ function truncateHard(s, max) {
 }
 
 /**
- * 1200×1200 square: stacked Verdict + Debate cards with padding so square thumbnails
- * (e.g. WhatsApp) show both sections zoomed-out and readable — not a tight crop of a wide strip.
+ * Same team parsing as the client `parseTeamsFromMatch` (fixture label → short codes).
+ * @returns {{ teamA: string, teamB: string, codeA: string, codeB: string }}
+ */
+function parseShareTeamsFromLabel(match) {
+  const fallback = { teamA: "Team A", teamB: "Team B", codeA: "A", codeB: "B" };
+  const s = String(match || "").trim();
+  if (!s) return fallback;
+
+  const mCodes = s.match(/\b([A-Z]{2,4})\s+vs\.?\s+([A-Z]{2,4})\b/i);
+  if (mCodes) {
+    const a = mCodes[1].toUpperCase();
+    const b = mCodes[2].toUpperCase();
+    return { teamA: a, teamB: b, codeA: a, codeB: b };
+  }
+
+  const mWords = s.match(
+    /\b([A-Za-z]+(?:\s+[A-Za-z]+)?)\s+vs\.?\s+([A-Za-z]+(?:\s+[A-Za-z]+)?)\b/i
+  );
+  if (mWords) {
+    const a = mWords[1].trim();
+    const b = mWords[2].trim();
+    const bad = /^(ipl|match|final|qualifier|eliminator|opener|odi|t20i|test)$/i;
+    if (!bad.test(a) && !bad.test(b)) {
+      const code = (w) => {
+        const parts = w.split(/\s+/).filter(Boolean);
+        const initials = parts.map((x) => x[0]).join("").toUpperCase().slice(0, 4);
+        return initials || w.slice(0, 3).toUpperCase();
+      };
+      return { teamA: a, teamB: b, codeA: code(a), codeB: code(b) };
+    }
+  }
+
+  return fallback;
+}
+
+/**
+ * 1200×630 homepage Open Graph card (logo + headline + agents strip).
+ * @returns {string}
+ */
+function buildHomepageOgSvg() {
+  const W = 1200;
+  const H = 630;
+  const fontUi = "system-ui,Segoe UI,Roboto,Arial,sans-serif";
+  const fontDisplay = "Impact,'Arial Narrow Bold',Arial Black,Arial,sans-serif";
+  const logo = OG_LOGO_DATA_URI
+    ? `<image href="${OG_LOGO_DATA_URI}" x="72" y="195" width="240" height="240" preserveAspectRatio="xMidYMid meet"/>`
+    : `<text x="192" y="320" text-anchor="middle" fill="#64748b" font-family="${fontUi}" font-size="22" font-weight="700">Cricket War Room</text>`;
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <defs>
+    <linearGradient id="hpTop" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1e3a8a" stop-opacity="0"/>
+      <stop offset="0.1" stop-color="#1e3a8a"/>
+      <stop offset="0.22" stop-color="#2563eb"/>
+      <stop offset="0.38" stop-color="#16a34a"/>
+      <stop offset="0.5" stop-color="#22c55e"/>
+      <stop offset="0.65" stop-color="#eab308"/>
+      <stop offset="0.8" stop-color="#f97316"/>
+      <stop offset="0.9" stop-color="#ef4444"/>
+      <stop offset="1" stop-color="#ef4444" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="hpGrid" width="60" height="60" patternUnits="userSpaceOnUse">
+      <path d="M60 0H0V60" fill="none" stroke="#ffffff" stroke-opacity="0.028" stroke-width="1"/>
+    </pattern>
+    <radialGradient id="hpHalo" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#2563eb" stop-opacity="0.38"/>
+      <stop offset="0.45" stop-color="#16a34a" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#16a34a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="hpCta" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#16a34a"/>
+      <stop offset="1" stop-color="#14532d"/>
+    </linearGradient>
+  </defs>
+  <rect width="${W}" height="${H}" fill="#060a12"/>
+  <ellipse cx="600" cy="700" rx="560" ry="380" fill="#16a34a" fill-opacity="0.16"/>
+  <ellipse cx="40" cy="20" rx="220" ry="180" fill="#1e3a8a" fill-opacity="0.22"/>
+  <ellipse cx="1180" cy="30" rx="200" ry="160" fill="#eab308" fill-opacity="0.1"/>
+  <rect width="${W}" height="${H}" fill="url(#hpGrid)" opacity="0.9"/>
+  <rect x="0" y="0" width="${W}" height="4" fill="url(#hpTop)"/>
+  <ellipse cx="192" cy="315" rx="150" ry="150" fill="url(#hpHalo)"/>
+  ${logo}
+  <line x1="880" y1="100" x2="880" y2="530" stroke="#ffffff" stroke-opacity="0.07"/>
+  <text x="380" y="218" fill="rgba(255,255,255,0.32)" font-family="${fontUi}" font-size="13" font-weight="600" letter-spacing="3">IPL 2026 · AI MATCH ANALYSIS</text>
+  <text x="380" y="288" fill="#ffffff" font-family="${fontDisplay}" font-size="86" font-weight="700">6 AIS.</text>
+  <text x="380" y="378" font-family="${fontDisplay}" font-size="86" font-weight="700">
+    <tspan fill="#22c55e">ONE</tspan><tspan fill="#ffffff"> MATCH.</tspan>
+  </text>
+  <text x="380" y="468" fill="#ffffff" font-family="${fontDisplay}" font-size="86" font-weight="700">ZERO BIAS.</text>
+  <text x="380" y="512" fill="rgba(255,255,255,0.48)" font-family="${fontUi}" font-size="18" font-weight="500">Bull vs Bear multi-round debate. Five intel agents, one Judge verdict.</text>
+  <rect x="380" y="528" width="56" height="52" rx="10" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
+  <text x="408" y="562" text-anchor="middle" fill="#22c55e" font-family="${fontDisplay}" font-size="26">6</text>
+  <text x="408" y="578" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="10" font-weight="600" letter-spacing="1">AGENTS</text>
+  <rect x="448" y="528" width="88" height="52" rx="10" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
+  <text x="492" y="562" text-anchor="middle" fill="#fbbf24" font-family="${fontDisplay}" font-size="22">MULTI</text>
+  <text x="492" y="578" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="10" font-weight="600" letter-spacing="1">ROUNDS</text>
+  <rect x="548" y="528" width="72" height="52" rx="10" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
+  <text x="584" y="562" text-anchor="middle" fill="#f87171" font-family="${fontDisplay}" font-size="22">LIVE</text>
+  <text x="584" y="578" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="10" font-weight="600" letter-spacing="1">DATA</text>
+  <rect x="632" y="528" width="72" height="52" rx="10" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
+  <text x="668" y="562" text-anchor="middle" fill="#a78bfa" font-family="${fontDisplay}" font-size="22">FREE</text>
+  <text x="668" y="578" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="10" font-weight="600" letter-spacing="1">ALWAYS</text>
+  <rect x="720" y="528" width="200" height="52" rx="12" fill="url(#hpCta)" stroke="rgba(255,255,255,0.14)"/>
+  <text x="820" y="562" text-anchor="middle" fill="#ffffff" font-family="${fontUi}" font-size="14" font-weight="700" letter-spacing="1.5">ANALYSE MY MATCH \u2192</text>
+  <text x="920" y="168" fill="rgba(255,255,255,0.24)" font-family="${fontUi}" font-size="11" font-weight="600" letter-spacing="2">ACTIVE AI AGENTS</text>
+  <rect x="920" y="186" width="260" height="46" rx="23" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
+  <circle cx="944" cy="209" r="5" fill="#22c55e"/>
+  <text x="968" y="216" fill="rgba(255,255,255,0.72)" font-family="${fontUi}" font-size="14" font-weight="600">Bull Agent</text>
+  <text x="1140" y="216" text-anchor="end" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="11">Makes the case</text>
+  <rect x="920" y="242" width="260" height="46" rx="23" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
+  <circle cx="944" cy="265" r="5" fill="#ef4444"/>
+  <text x="968" y="272" fill="rgba(255,255,255,0.72)" font-family="${fontUi}" font-size="14" font-weight="600">Bear Agent</text>
+  <text x="1140" y="272" text-anchor="end" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="11">Counters hard</text>
+  <rect x="920" y="298" width="260" height="46" rx="23" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
+  <circle cx="944" cy="321" r="5" fill="#818cf8"/>
+  <text x="968" y="328" fill="rgba(255,255,255,0.72)" font-family="${fontUi}" font-size="14" font-weight="600">5 Intel Agents</text>
+  <text x="1140" y="328" text-anchor="end" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="11">Form · Pitch · News</text>
+  <rect x="920" y="354" width="260" height="46" rx="23" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
+  <circle cx="944" cy="377" r="5" fill="#eab308"/>
+  <text x="968" y="384" fill="rgba(255,255,255,0.72)" font-family="${fontUi}" font-size="14" font-weight="600">Judge Agent</text>
+  <text x="1140" y="384" text-anchor="end" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="11">Final verdict</text>
+</svg>`;
+}
+
+/**
+ * @returns {Promise<Buffer>}
+ */
+async function renderHomepageOgPng() {
+  const svg = buildHomepageOgSvg();
+  return sharp(Buffer.from(svg, "utf8")).png({ compressionLevel: 9 }).toBuffer();
+}
+
+/**
+ * 1200×630 Open Graph card: high-contrast verdict, confidence bar, share CTA (Sharp rasterizes SVG).
  * @param {Record<string, unknown>} pack
  */
 function buildShareOgSvg(pack) {
-  const team = String(pack.w || "—").toUpperCase();
+  const W = 1200;
+  const H = 630;
+  const winRaw = String(pack.w || "—").trim().toUpperCase().slice(0, 4);
   const c = Math.min(100, Math.max(0, Math.round(Number(pack.c) || 55)));
-  const fixture = truncateHard(pack.l, 88);
-  const summaryRaw = pack.s ? String(pack.s).trim().replace(/\s+/g, " ") : "";
-  const cardW = 1136;
-  const cardH = 548;
-  const pad = 48;
-  const barW = cardW - pad * 2;
-  const barInner = Math.max(10, Math.round((barW * c) / 100));
+  const label = String(pack.l || "").trim();
+  const teams = parseShareTeamsFromLabel(label);
+  const codeA = String(teams.codeA || "A").toUpperCase().slice(0, 4);
+  const codeB = String(teams.codeB || "B").toUpperCase().slice(0, 4);
+  const win = winRaw || codeA;
 
-  /** @type {string[]} */
-  const sumLines = [];
-  if (summaryRaw) {
-    const maxL = 62;
-    let pos = 0;
-    for (let i = 0; i < 3 && pos < summaryRaw.length; i++) {
-      sumLines.push(truncateHard(summaryRaw.slice(pos), maxL));
-      pos += maxL;
-    }
+  let winnerCode = win;
+  let loserCode = codeB;
+  if (win === codeA) {
+    loserCode = codeB;
+    winnerCode = codeA;
+  } else if (win === codeB) {
+    loserCode = codeA;
+    winnerCode = codeB;
+  } else {
+    winnerCode = win;
+    loserCode = codeA !== win ? codeA : codeB;
+    if (loserCode === winnerCode) loserCode = codeB === winnerCode ? codeA : codeB;
   }
-  const summaryBlock =
-    sumLines.length > 0
-      ? `<text x="${pad}" y="268" fill="#cbd5e1" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="19">${sumLines
-          .map((line, i) => `<tspan x="${pad}" dy="${i === 0 ? "0" : "28"}">${escapeXmlText(line)}</tspan>`)
-          .join("")}</text>`
-      : "";
 
-  const bull1 = truncateHard(`Bull backs ${team}: momentum, matchups, and specialist intel.`, 48);
-  const bull2 = truncateHard("Full multi-round argument in the app.", 48);
-  const bear1 = truncateHard("Bear counters: risk factors, conditions, depth.", 48);
-  const bear2 = truncateHard("See transcript for every rebuttal.", 48);
+  const matchBadge = truncateHard(label.replace(/\s+/g, " "), 40).toUpperCase();
+  const summaryRaw = pack.s ? String(pack.s).trim().replace(/\s+/g, " ") : "";
+  const insight =
+    summaryRaw ||
+    truncateHard(
+      `${winnerCode} favored at ${c}% model confidence — Bull vs Bear debate inside.`,
+      120
+    );
+  const insightLine1 = truncateHard(insight, 72);
+  const insightRest = insight.length > 72 ? truncateHard(insight.slice(72), 72) : "";
 
-  const vCardY = 32;
-  const cardGap = 16;
-  const dCardY = vCardY + cardH + cardGap;
+  const barW = 420;
+  const barInner = Math.max(8, Math.round((barW * c) / 100));
+
+  const fontUi = "system-ui,Segoe UI,Roboto,Arial,sans-serif";
+  const fontDisplay = "Impact,'Arial Narrow Bold',Arial Black,Arial,sans-serif";
+
+  const brandLogoBlock = OG_LOGO_DATA_URI
+    ? `<image href="${OG_LOGO_DATA_URI}" x="72" y="39" width="52" height="52" preserveAspectRatio="xMidYMid meet"/>`
+    : `<rect x="72" y="40" width="48" height="48" rx="12" fill="#ef4444"/>
+  <text x="96" y="76" text-anchor="middle" fill="#ffffff" font-family="${fontUi}" font-size="15" font-weight="700">WR</text>`;
+  const verdictLogoBlock = OG_LOGO_DATA_URI
+    ? `<image href="${OG_LOGO_DATA_URI}" x="1048" y="118" width="80" height="80" preserveAspectRatio="xMidYMid meet"/>`
+    : "";
+
+  const insightBlock =
+    insightRest.length > 0
+      ? `<text x="122" y="548" fill="rgba(255,255,255,0.5)" font-family="${fontUi}" font-size="17">${escapeXmlText(insightLine1)}</text>
+    <text x="122" y="574" fill="rgba(255,255,255,0.5)" font-family="${fontUi}" font-size="17">${escapeXmlText(insightRest)}</text>`
+      : `<text x="122" y="556" fill="rgba(255,255,255,0.5)" font-family="${fontUi}" font-size="17">${escapeXmlText(insightLine1)}</text>`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200">
+<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
-    <linearGradient id="ogbg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#0b1220"/>
-      <stop offset="1" stop-color="#020617"/>
+    <linearGradient id="ogTopAccent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ef4444" stop-opacity="0"/>
+      <stop offset="0.1" stop-color="#ef4444"/>
+      <stop offset="0.28" stop-color="#f97316"/>
+      <stop offset="0.48" stop-color="#eab308"/>
+      <stop offset="0.68" stop-color="#22c55e"/>
+      <stop offset="0.85" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#2563eb" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="verdictGrad" x1="0" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#ef4444"/>
+      <stop offset="0.45" stop-color="#f97316"/>
+      <stop offset="1" stop-color="#eab308"/>
+    </linearGradient>
+    <linearGradient id="confFill" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ef4444"/>
+      <stop offset="1" stop-color="#f97316"/>
+    </linearGradient>
+    <linearGradient id="ctaGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ef4444"/>
+      <stop offset="1" stop-color="#991b1b"/>
+    </linearGradient>
+    <pattern id="shareGrid" width="55" height="55" patternUnits="userSpaceOnUse">
+      <path d="M55 0H0V55" fill="none" stroke="#ffffff" stroke-opacity="0.022" stroke-width="1"/>
+    </pattern>
+    <pattern id="pitchStripe" patternUnits="userSpaceOnUse" width="4" height="19">
+      <rect width="4" height="19" fill="transparent"/>
+      <line x1="0" y1="18" x2="4" y2="18" stroke="#16a34a" stroke-opacity="0.12" stroke-width="1"/>
+    </pattern>
+    <linearGradient id="pitchFade" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#060a12" stop-opacity="1"/>
+      <stop offset="1" stop-color="#060a12" stop-opacity="0"/>
     </linearGradient>
   </defs>
-  <rect width="1200" height="1200" fill="url(#ogbg)"/>
 
-  <g transform="translate(32,${vCardY})">
-    <rect width="${cardW}" height="${cardH}" rx="22" fill="#0f172a" stroke="#1e3a5f" stroke-width="2"/>
-    <text x="${pad}" y="42" fill="#5eead4" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="17" font-weight="600">CRICKET WAR ROOM</text>
-    <text x="${pad}" y="78" fill="#34d399" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="12" font-weight="700" letter-spacing="0.2em">JUDGE VERDICT</text>
-    <text x="${pad}" y="148" fill="#f8fafc" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="40" font-weight="700">${escapeXmlText(team)} WINS</text>
-    <text x="${pad}" y="188" fill="#94a3b8" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="17">${escapeXmlText(fixture)}</text>
-    ${summaryBlock}
-    <text x="${pad}" y="378" fill="#64748b" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="12" font-weight="600">MODEL CONFIDENCE (NOT WIN PROBABILITY)</text>
-    <rect x="${pad}" y="394" width="${barW}" height="22" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
-    <rect x="${pad}" y="394" width="${barInner}" height="22" rx="8" fill="#06b6d4"/>
-    <text x="${pad}" y="458" fill="#e2e8f0" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="26" font-weight="700">${c}%</text>
-  </g>
+  <rect width="${W}" height="${H}" fill="#060a12"/>
 
-  <g transform="translate(32,${dCardY})">
-    <rect width="${cardW}" height="${cardH}" rx="22" fill="#0f172a" stroke="#1e3a5f" stroke-width="2"/>
-    <text x="${cardW / 2}" y="44" text-anchor="middle" fill="#94a3b8" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="13" font-weight="700" letter-spacing="0.18em">DEBATE</text>
-    <line x1="${pad}" y1="58" x2="${cardW - pad}" y2="58" stroke="#334155" stroke-width="1"/>
-    <text x="${pad}" y="102" fill="#fca5a5" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="17" font-weight="700">BULL</text>
-    <text x="${pad}" y="132" fill="#e2e8f0" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="17">${escapeXmlText(bull1)}</text>
-    <text x="${pad}" y="162" fill="#94a3b8" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="16">${escapeXmlText(bull2)}</text>
-    <text x="${cardW / 2 + 24}" y="102" fill="#93c5fd" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="17" font-weight="700">BEAR</text>
-    <text x="${cardW / 2 + 24}" y="132" fill="#e2e8f0" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="17">${escapeXmlText(bear1)}</text>
-    <text x="${cardW / 2 + 24}" y="162" fill="#94a3b8" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="16">${escapeXmlText(bear2)}</text>
-    <text x="${pad}" y="240" fill="#64748b" font-family="system-ui,Segoe UI,Roboto,sans-serif" font-size="15">Four Bull vs Bear rounds, then Judge — open link for full replay.</text>
-  </g>
+  <ellipse cx="600" cy="700" rx="520" ry="360" fill="#16a34a" fill-opacity="0.12"/>
+  <ellipse cx="60" cy="40" rx="200" ry="170" fill="#ef4444" fill-opacity="0.1"/>
+  <ellipse cx="1140" cy="50" rx="180" ry="150" fill="#eab308" fill-opacity="0.09"/>
+  <ellipse cx="80" cy="580" rx="220" ry="160" fill="#1e3a8a" fill-opacity="0.14"/>
+
+  <rect width="${W}" height="${H}" fill="url(#shareGrid)" opacity="0.75"/>
+  <rect x="0" y="430" width="${W}" height="200" fill="url(#pitchStripe)" opacity="0.5"/>
+  <rect x="0" y="430" width="${W}" height="200" fill="url(#pitchFade)"/>
+
+  <rect x="0" y="0" width="${W}" height="4" fill="url(#ogTopAccent)"/>
+
+  <!-- Brand -->
+  ${brandLogoBlock}
+  <text x="138" y="76" fill="rgba(255,255,255,0.65)" font-family="${fontDisplay}" font-size="26" letter-spacing="3">${escapeXmlText("CRICKET WAR ROOM")}</text>
+
+  <!-- Top badges (right) -->
+  <rect x="560" y="46" width="378" height="34" rx="17" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)"/>
+  <text x="749" y="69" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-family="${fontUi}" font-size="12" font-weight="600" letter-spacing="1.5">${escapeXmlText(matchBadge)}</text>
+  <rect x="952" y="46" width="176" height="34" rx="17" fill="rgba(239,68,68,0.15)" stroke="rgba(239,68,68,0.45)"/>
+  <circle cx="974" cy="63" r="4" fill="#ef4444"/>
+  <text x="1040" y="69" text-anchor="middle" fill="#f87171" font-family="${fontUi}" font-size="13" font-weight="700" letter-spacing="2">LIVE AI</text>
+
+  <!-- Teams row: winner left -->
+  <circle cx="108" cy="220" r="38" fill="rgba(239,68,68,0.2)" stroke="rgba(239,68,68,0.55)" stroke-width="2"/>
+  <text x="108" y="232" text-anchor="middle" fill="#f87171" font-family="${fontUi}" font-size="18" font-weight="700">${escapeXmlText(winnerCode)}</text>
+  <text x="168" y="232" fill="#ffffff" font-family="${fontUi}" font-size="52" font-weight="700">${escapeXmlText(winnerCode)}</text>
+
+  <text x="360" y="232" fill="rgba(255,255,255,0.22)" font-family="${fontUi}" font-size="16" font-weight="700" letter-spacing="3">VS</text>
+
+  <circle cx="428" cy="220" r="38" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>
+  <text x="428" y="232" text-anchor="middle" fill="rgba(255,255,255,0.35)" font-family="${fontUi}" font-size="18" font-weight="700">${escapeXmlText(loserCode)}</text>
+  <text x="488" y="232" fill="rgba(255,255,255,0.32)" font-family="${fontUi}" font-size="52" font-weight="700">${escapeXmlText(loserCode)}</text>
+
+  <!-- Confidence -->
+  <text x="72" y="312" fill="rgba(255,255,255,0.32)" font-family="${fontUi}" font-size="12" font-weight="600" letter-spacing="2">AI CONFIDENCE</text>
+  <rect x="200" y="298" width="${barW}" height="8" rx="4" fill="rgba(255,255,255,0.1)"/>
+  <rect x="200" y="298" width="${barInner}" height="8" rx="4" fill="url(#confFill)"/>
+  <text x="${208 + barW + 14}" y="308" fill="#f97316" font-family="${fontUi}" font-size="18" font-weight="700">${c}%</text>
+
+  <!-- Verdict column -->
+  <line x1="752" y1="96" x2="752" y2="440" stroke="rgba(255,255,255,0.08)"/>
+  ${verdictLogoBlock}
+  <text x="1128" y="212" text-anchor="end" fill="rgba(255,255,255,0.32)" font-family="${fontUi}" font-size="12" font-weight="600" letter-spacing="4">AI VERDICT</text>
+  <text x="1128" y="298" text-anchor="end" fill="url(#verdictGrad)" font-family="${fontDisplay}" font-size="88" font-weight="700">${escapeXmlText(winnerCode)}</text>
+  <text x="1128" y="398" text-anchor="end" fill="url(#verdictGrad)" font-family="${fontDisplay}" font-size="88" font-weight="700">WINS</text>
+
+  <!-- Bottom: insight + CTA -->
+  <rect x="72" y="518" width="38" height="38" rx="10" fill="rgba(234,179,8,0.12)" stroke="rgba(234,179,8,0.28)"/>
+  <text x="91" y="544" text-anchor="middle" fill="#eab308" font-family="${fontUi}" font-size="17">\u26a1</text>
+  ${insightBlock}
+
+  <rect x="848" y="508" width="280" height="52" rx="10" fill="url(#ctaGrad)" stroke="rgba(255,255,255,0.15)"/>
+  <text x="988" y="542" text-anchor="middle" fill="#ffffff" font-family="${fontUi}" font-size="14" font-weight="700" letter-spacing="1.5">SEE FULL ANALYSIS \u2192</text>
 </svg>`;
 }
 
@@ -1169,7 +1407,7 @@ function buildShareOgSvg(pack) {
  */
 async function renderShareOgPng(pack) {
   const svg = buildShareOgSvg(pack);
-  return sharp(Buffer.from(svg, "utf8")).resize(1200, 1200).png({ compressionLevel: 9 }).toBuffer();
+  return sharp(Buffer.from(svg, "utf8")).png({ compressionLevel: 9 }).toBuffer();
 }
 
 /**
@@ -1188,10 +1426,10 @@ function sendShareOgHtml(req, res, url, id, pack, appHref, opts = {}) {
   const imgUrl = `${base}/api/og/share/${id}.png`;
   const w = String(pack.w || "").toUpperCase();
   const c = Math.min(100, Math.max(0, Math.round(Number(pack.c) || 55)));
-  const title = `${w} wins — Cricket War Room`;
+  const title = `${w} wins (${c}% AI confidence) — tap for the war room`;
   const desc =
     (pack.s && truncateHard(String(pack.s), 220)) ||
-    `Judge pick: ${w} at ${c}% model confidence. Open for Bull vs Bear debate and full verdict.`;
+    `AI verdict: ${w} at ${c}% model confidence — not win odds. Open for Bull vs Bear and the full Judge card.`;
   const redirectScript = clientRedirect
     ? `<script>location.replace(${JSON.stringify(appHref)});</script>`
     : "";
@@ -1211,8 +1449,8 @@ function sendShareOgHtml(req, res, url, id, pack, appHref, opts = {}) {
   <meta property="og:image" content="${escapeHtmlAttr(imgUrl)}" />
   <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="1200" />
-  <meta property="og:image:alt" content="Judge verdict and Bull vs Bear debate preview" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="${escapeHtmlAttr(`${w} wins — AI verdict preview card`)}" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${escapeHtmlAttr(title)}" />
   <meta name="twitter:description" content="${escapeHtmlAttr(desc)}" />
@@ -1712,6 +1950,28 @@ const server = http.createServer(async (req, res) => {
       res.end(png);
     } catch (e) {
       console.warn("[og/share] render failed:", e instanceof Error ? e.message : e);
+      res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("OG render error");
+    }
+    return;
+  }
+
+  if ((req.method === "GET" || req.method === "HEAD") && url.pathname === "/og-homepage.png") {
+    try {
+      const png = await renderHomepageOgPng();
+      res.writeHead(200, {
+        "Content-Type": "image/png",
+        "Cache-Control": "public, max-age=3600",
+        "Content-Length": String(png.length),
+        "Access-Control-Allow-Origin": "*",
+      });
+      if (req.method === "HEAD") {
+        res.end();
+        return;
+      }
+      res.end(png);
+    } catch (e) {
+      console.warn("[og/homepage] render failed:", e instanceof Error ? e.message : e);
       res.writeHead(500, { "Content-Type": "text/plain; charset=utf-8" });
       res.end("OG render error");
     }

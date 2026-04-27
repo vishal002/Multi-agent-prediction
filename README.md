@@ -80,6 +80,8 @@ https://cricket-war-room.onrender.com/?share=DC%20vs%20SRH%20%E2%80%94%20IPL%202
 https://cricket-war-room.onrender.com/?share=IPL%202026%20%E2%80%94%20SRH%20vs%20DC%2C%20Hyderabad
 ```
 
+**Open Graph:** the main app HTML points `og:image` at **`GET /og-homepage.png`** (1200×630, logo + headline + agent strip, Sharp). For **`/s/{id}`** share links, crawlers get HTML whose `og:image` is **`GET /api/og/share/{id}.png`** (same dimensions; per-match verdict with logo in the brand bar and verdict column). Logo file: `image/ai-cricket-war-room-logo.png` (embedded as base64 in the SVG at render time).
+
 **Share this prediction** (after a full war-room run): the verdict card’s **SHARE THIS PREDICTION** button saves a compact snapshot and returns a short URL under `/s/{id}`. Opening that link loads the **Shared prediction** card (Judge pick, confidence split, score band, key player, swing factor) without re-running agents; use **Run full war room** in the command bar when you want intel agents, live context, and the full Bull vs Bear debate.
 
 [![After opening a shared link — Shared prediction card (DC vs RCB), Run full war room](image/readme-shared-prediction-after-link.png)](https://cricket-war-room.onrender.com/s/ba91b4c5)
