@@ -36,7 +36,7 @@
  *   python -m uvicorn judge_service.app:app --host 127.0.0.1 --port 8000
  * Override upstream URL: JUDGE_SERVICE_URL=http://127.0.0.1:8000
  *   POST /api/judge/predict → POST {JUDGE_SERVICE_URL}/predict
- *   GET /api/judge/accuracy → GET {JUDGE_SERVICE_URL}/accuracy
+ *   GET /api/judge/accuracy → GET {JUDGE_SERVICE_URL}/accuracy (in-process cache + upstream 429/5xx retries; JUDGE_ACCURACY_CACHE_MS)
  *
  * Match autocomplete: GET /api/match-suggest?q=&limit=10 (reads match_suggestions.json).
  * Completed fixtures: optional { completed: true, result: { winner, summary } } — winner is a team code (e.g. CSK).
@@ -239,6 +239,10 @@ const MAX_BODY_SHARE_BYTES = 48_000;
 
 const RL_MESSAGES_PER_MIN = Math.max(0, Number(process.env.RL_MESSAGES_PER_MIN) || 30);
 const RL_JUDGE_PER_MIN = Math.max(0, Number(process.env.RL_JUDGE_PER_MIN) || 15);
+/** In-process cache for GET /api/judge/accuracy → fewer upstream hits (Render cold start / edge 429). 0 = disabled. */
+const JUDGE_ACCURACY_CACHE_MS = Math.max(0, Number(process.env.JUDGE_ACCURACY_CACHE_MS) || 10_000);
+/** Extra attempts after the first upstream GET /accuracy (429/502/503/504 only). */
+const JUDGE_ACCURACY_UPSTREAM_MAX_RETRIES = Math.max(0, Math.floor(Number(process.env.JUDGE_ACCURACY_UPSTREAM_MAX_RETRIES) || 3));
 
 const VERSION_INFO_MINIMAL =
   process.env.VERSION_INFO_MINIMAL === "1" ||
@@ -264,6 +268,63 @@ function clientIp(req) {
 const _rlMessages = new Map();
 /** @type {Map<string, { t: number }[]>} */
 const _rlJudge = new Map();
+
+/** @type {{ text: string, at: number } | null} */
+let judgeAccuracyCache = null;
+
+function sleepMs(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * @param {Headers} headers
+ * @returns {number | null}
+ */
+function parseRetryAfterMsFromHeaders(headers) {
+  const raw = headers.get("retry-after");
+  if (!raw) return null;
+  const sec = Number(raw.trim());
+  if (Number.isFinite(sec)) return Math.min(120_000, Math.max(0, sec * 1000));
+  const d = Date.parse(raw.trim());
+  if (Number.isFinite(d)) return Math.min(120_000, Math.max(0, d - Date.now()));
+  return null;
+}
+
+/** @param {number} status */
+function judgeAccuracyUpstreamTransient(status) {
+  return status === 429 || status === 502 || status === 503 || status === 504;
+}
+
+/**
+ * GET {JUDGE_SERVICE_URL}/accuracy with cold-start–friendly timeout and 429/5xx retries.
+ * @returns {Promise<{ ok: true, text: string } | { ok: false, status: number, text: string }>}
+ */
+async function fetchJudgeAccuracyFromUpstream() {
+  const target = `${JUDGE_SERVICE_URL}/accuracy`;
+  const maxAttempts = JUDGE_ACCURACY_UPSTREAM_MAX_RETRIES + 1;
+  let lastStatus = 503;
+  let lastText = "";
+  for (let i = 0; i < maxAttempts; i++) {
+    const r = await fetch(target, {
+      method: "GET",
+      signal: AbortSignal.timeout(90_000),
+      headers: { Accept: "application/json", ...judgeUpstreamAuthHeaders() },
+    });
+    lastStatus = r.status;
+    lastText = await r.text();
+    if (r.ok) return { ok: true, text: lastText };
+    if (i < maxAttempts - 1 && judgeAccuracyUpstreamTransient(r.status)) {
+      const pauseMs =
+        r.status === 429
+          ? parseRetryAfterMsFromHeaders(r.headers) ?? Math.min(45_000, 2500 * (i + 1) ** 2)
+          : 3000;
+      await sleepMs(pauseMs);
+    } else {
+      return { ok: false, status: lastStatus, text: lastText };
+    }
+  }
+  return { ok: false, status: lastStatus, text: lastText };
+}
 
 function pruneRlEntries(map, ip, windowMs) {
   const now = Date.now();
@@ -1933,23 +1994,60 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "GET" && url.pathname === "/api/judge/accuracy") {
-    const target = `${JUDGE_SERVICE_URL}/accuracy`;
-    // Judge on Render free tier can take 30s+ to cold-start; keep below Node fetch limits but above typical wake time.
-    const ctrl = AbortSignal.timeout(90_000);
-    try {
-      const r = await fetch(target, {
-        method: "GET",
-        signal: ctrl,
-        headers: { Accept: "application/json", ...judgeUpstreamAuthHeaders() },
+    const now = Date.now();
+    if (
+      JUDGE_ACCURACY_CACHE_MS > 0 &&
+      judgeAccuracyCache &&
+      now - judgeAccuracyCache.at < JUDGE_ACCURACY_CACHE_MS
+    ) {
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        ...corsHeaders(req),
+        "Cache-Control": "no-store",
+        "X-Judge-Accuracy-Cache": "hit",
       });
-      const text = await r.text();
-      res.writeHead(r.status, {
+      res.end(judgeAccuracyCache.text);
+      return;
+    }
+    try {
+      const upstream = await fetchJudgeAccuracyFromUpstream();
+      if (upstream.ok) {
+        judgeAccuracyCache = { text: upstream.text, at: Date.now() };
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          ...corsHeaders(req),
+          "Cache-Control": "no-store",
+        });
+        res.end(upstream.text);
+        return;
+      }
+      if (judgeAccuracyCache && judgeAccuracyUpstreamTransient(upstream.status)) {
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          ...corsHeaders(req),
+          "Cache-Control": "no-store",
+          "X-Judge-Accuracy-Stale": "1",
+        });
+        res.end(judgeAccuracyCache.text);
+        return;
+      }
+      res.writeHead(upstream.status, {
         "Content-Type": "application/json; charset=utf-8",
         ...corsHeaders(req),
         "Cache-Control": "no-store",
       });
-      res.end(text);
+      res.end(upstream.text || JSON.stringify({ error: "judge_accuracy_upstream_failed" }));
     } catch (e) {
+      if (judgeAccuracyCache) {
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          ...corsHeaders(req),
+          "Cache-Control": "no-store",
+          "X-Judge-Accuracy-Stale": "1",
+        });
+        res.end(judgeAccuracyCache.text);
+        return;
+      }
       res.writeHead(503, {
         "Content-Type": "application/json; charset=utf-8",
         ...corsHeaders(req),
