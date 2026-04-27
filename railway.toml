@@ -1,0 +1,14 @@
+# Railway — main Node web service (UI + /api/*).
+# Build: root Dockerfile (multi-stage: npm run build → node server.mjs).
+# For ingestion/judge Python services from the same repo, create separate Railway
+# services and set Dockerfile path to Dockerfile.python + start command (see README).
+#
+# https://docs.railway.com/reference/config-as-code
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
