@@ -128,8 +128,12 @@ Full run: all **intel agents** filled in, **Judge verdict** (winner, confidence,
 | Render free web | Cold start ~30s after idle | [Railway](https://railway.app) ($5/mo credit), paid Render, or self-host Docker |
 | SQLite on `/tmp` | Resets → accuracy looks fake | **[Turso](https://turso.tech)** remote libSQL (wired in `judge_service/predictions_db.py`) |
 | CricAPI free tier | ~100 calls/day on busy days | RSS (ESPN + Cricbuzz) already used; CricAPI optional |
-| No product analytics | You cannot improve what you don’t measure | e.g. [Umami](https://umami.is) self-hosted |
 | Social previews | Need stable absolute `og:image` | Use a static PNG under `/image/` (e.g. `readme-state-02-after-prediction.png`); set `og:image` in `ai_cricket_war_room.html` to match. |
+
+### Monitoring & analytics (implemented)
+
+- **[UptimeRobot](https://dashboard.uptimerobot.com/monitors)** — Monitors the live site’s HTTP availability and sends alerts when checks fail or recover.
+- **[Umami](https://cloud.umami.is/analytics/us/websites/256a7586-1d61-4adc-b10f-9b1a322e3cac)** — Privacy-friendly web analytics (page views, referrers, traffic) for the deployed app without heavy third-party tracking scripts.
 
 ---
 
