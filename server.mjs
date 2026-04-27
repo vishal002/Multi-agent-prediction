@@ -735,8 +735,10 @@ async function forwardAnthropic(body) {
 const SERVE_DIST = process.env.SERVE_DIST === "1";
 const STATIC_ROOT = SERVE_DIST ? path.join(__dirname, "dist") : __dirname;
 
-/** PNG for OG SVG `<image href>` (Sharp/librsvg); null if file missing. */
-function readOgLogoDataUri() {
+/** OG card background (#060a12) — flatten logo alpha onto this so librsvg does not render transparency as white/checkerboard. */
+const OG_LOGO_FLATTEN_BG = { r: 6, g: 10, b: 18 };
+
+function findOgLogoPath() {
   const candidates = [
     path.join(STATIC_ROOT, "image", "ai-cricket-war-room-logo.png"),
     path.join(__dirname, "image", "ai-cricket-war-room-logo.png"),
@@ -744,22 +746,61 @@ function readOgLogoDataUri() {
   ];
   for (const p of candidates) {
     try {
-      if (!fs.existsSync(p) || !fs.statSync(p).isFile()) continue;
-      const buf = fs.readFileSync(p);
-      if (buf.length < 32) continue;
-      return `data:image/png;base64,${buf.toString("base64")}`;
+      if (fs.existsSync(p) && fs.statSync(p).isFile()) return p;
     } catch {
-      /* try next */
+      /* next */
     }
   }
   return null;
 }
 
-const OG_LOGO_DATA_URI = readOgLogoDataUri();
-if (!OG_LOGO_DATA_URI) {
-  console.warn(
-    "War room: ai-cricket-war-room-logo.png not found (image/ or project root) — OG images use WR text / omit logo until the file is present."
-  );
+/**
+ * Trim transparent padding, flatten alpha to OG navy (fixes SVG raster white box),
+ * return data URI for embedding. Cached after first successful read.
+ * @type {string | null | undefined}
+ */
+let ogLogoDataUriMemo = undefined;
+/** @type {Promise<string | null> | null} */
+let ogLogoPreparePromise = null;
+
+async function getOgLogoDataUri() {
+  if (ogLogoDataUriMemo !== undefined) return ogLogoDataUriMemo;
+  if (ogLogoPreparePromise) return ogLogoPreparePromise;
+  ogLogoPreparePromise = (async () => {
+    const logoPath = findOgLogoPath();
+    if (!logoPath) {
+      console.warn(
+        "War room: ai-cricket-war-room-logo.png not found (image/ or project root) — OG images use WR text / omit logo until the file is present."
+      );
+      ogLogoDataUriMemo = null;
+      return null;
+    }
+    try {
+      const raw = fs.readFileSync(logoPath);
+      let buf;
+      try {
+        buf = await sharp(raw)
+          .ensureAlpha()
+          .trim({ threshold: 18 })
+          .flatten({ background: OG_LOGO_FLATTEN_BG })
+          .png({ compressionLevel: 9 })
+          .toBuffer();
+      } catch {
+        buf = await sharp(raw)
+          .ensureAlpha()
+          .flatten({ background: OG_LOGO_FLATTEN_BG })
+          .png({ compressionLevel: 9 })
+          .toBuffer();
+      }
+      ogLogoDataUriMemo = `data:image/png;base64,${buf.toString("base64")}`;
+      return ogLogoDataUriMemo;
+    } catch (e) {
+      console.warn("War room: OG logo preprocess failed:", e instanceof Error ? e.message : e);
+      ogLogoDataUriMemo = null;
+      return null;
+    }
+  })();
+  return ogLogoPreparePromise;
 }
 
 /**
@@ -1149,20 +1190,25 @@ function parseShareTeamsFromLabel(match) {
 
 /**
  * 1200×630 homepage Open Graph card (logo + headline + agents strip).
- * @returns {string}
+ * @returns {Promise<string>}
  */
-function buildHomepageOgSvg() {
+async function buildHomepageOgSvg() {
   const W = 1200;
   const H = 630;
   const fontUi = "system-ui,Segoe UI,Roboto,Arial,sans-serif";
   const fontDisplay = "Impact,'Arial Narrow Bold',Arial Black,Arial,sans-serif";
-  const logo = OG_LOGO_DATA_URI
-    ? `<image href="${OG_LOGO_DATA_URI}" x="72" y="195" width="240" height="240" preserveAspectRatio="xMidYMid meet"/>`
+  const logoUri = await getOgLogoDataUri();
+  const logo = logoUri
+    ? `<clipPath id="hpLogoClip"><rect x="72" y="195" width="240" height="240" rx="18"/></clipPath>`
+    : "";
+  const logoG = logoUri
+    ? `<g clip-path="url(#hpLogoClip)"><image href="${logoUri}" x="72" y="195" width="240" height="240" preserveAspectRatio="xMidYMid slice"/></g>`
     : `<text x="192" y="320" text-anchor="middle" fill="#64748b" font-family="${fontUi}" font-size="22" font-weight="700">Cricket War Room</text>`;
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
+    ${logo}
     <linearGradient id="hpTop" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#1e3a8a" stop-opacity="0"/>
       <stop offset="0.1" stop-color="#1e3a8a"/>
@@ -1194,7 +1240,7 @@ function buildHomepageOgSvg() {
   <rect width="${W}" height="${H}" fill="url(#hpGrid)" opacity="0.9"/>
   <rect x="0" y="0" width="${W}" height="4" fill="url(#hpTop)"/>
   <ellipse cx="192" cy="315" rx="150" ry="150" fill="url(#hpHalo)"/>
-  ${logo}
+  ${logoG}
   <line x1="880" y1="100" x2="880" y2="530" stroke="#ffffff" stroke-opacity="0.07"/>
   <text x="380" y="218" fill="rgba(255,255,255,0.32)" font-family="${fontUi}" font-size="13" font-weight="600" letter-spacing="3">IPL 2026 · AI MATCH ANALYSIS</text>
   <text x="380" y="288" fill="#ffffff" font-family="${fontDisplay}" font-size="86" font-weight="700">6 AIS.</text>
@@ -1241,15 +1287,16 @@ function buildHomepageOgSvg() {
  * @returns {Promise<Buffer>}
  */
 async function renderHomepageOgPng() {
-  const svg = buildHomepageOgSvg();
+  const svg = await buildHomepageOgSvg();
   return sharp(Buffer.from(svg, "utf8")).png({ compressionLevel: 9 }).toBuffer();
 }
 
 /**
  * 1200×630 Open Graph card: high-contrast verdict, confidence bar, share CTA (Sharp rasterizes SVG).
  * @param {Record<string, unknown>} pack
+ * @returns {Promise<string>}
  */
-function buildShareOgSvg(pack) {
+async function buildShareOgSvg(pack) {
   const W = 1200;
   const H = 630;
   const winRaw = String(pack.w || "—").trim().toUpperCase().slice(0, 4);
@@ -1291,12 +1338,19 @@ function buildShareOgSvg(pack) {
   const fontUi = "system-ui,Segoe UI,Roboto,Arial,sans-serif";
   const fontDisplay = "Impact,'Arial Narrow Bold',Arial Black,Arial,sans-serif";
 
-  const brandLogoBlock = OG_LOGO_DATA_URI
-    ? `<image href="${OG_LOGO_DATA_URI}" x="72" y="39" width="52" height="52" preserveAspectRatio="xMidYMid meet"/>`
+  const logoUri = await getOgLogoDataUri();
+  const brandLogoBlock = logoUri
+    ? `<clipPath id="ogBrandLogoClip"><rect x="72" y="39" width="52" height="52" rx="12"/></clipPath>`
+    : "";
+  const brandLogoG = logoUri
+    ? `<g clip-path="url(#ogBrandLogoClip)"><image href="${logoUri}" x="72" y="39" width="52" height="52" preserveAspectRatio="xMidYMid slice"/></g>`
     : `<rect x="72" y="40" width="48" height="48" rx="12" fill="#ef4444"/>
   <text x="96" y="76" text-anchor="middle" fill="#ffffff" font-family="${fontUi}" font-size="15" font-weight="700">WR</text>`;
-  const verdictLogoBlock = OG_LOGO_DATA_URI
-    ? `<image href="${OG_LOGO_DATA_URI}" x="1048" y="118" width="80" height="80" preserveAspectRatio="xMidYMid meet"/>`
+  const verdictLogoClip = logoUri
+    ? `<clipPath id="ogVerdictLogoClip"><rect x="1048" y="118" width="80" height="80" rx="12"/></clipPath>`
+    : "";
+  const verdictLogoBlock = logoUri
+    ? `<g clip-path="url(#ogVerdictLogoClip)"><image href="${logoUri}" x="1048" y="118" width="80" height="80" preserveAspectRatio="xMidYMid slice"/></g>`
     : "";
 
   const insightBlock =
@@ -1308,6 +1362,8 @@ function buildShareOgSvg(pack) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
+    ${brandLogoBlock}
+    ${verdictLogoClip}
     <linearGradient id="ogTopAccent" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#ef4444" stop-opacity="0"/>
       <stop offset="0.1" stop-color="#ef4444"/>
@@ -1357,7 +1413,7 @@ function buildShareOgSvg(pack) {
   <rect x="0" y="0" width="${W}" height="4" fill="url(#ogTopAccent)"/>
 
   <!-- Brand -->
-  ${brandLogoBlock}
+  ${brandLogoG}
   <text x="138" y="76" fill="rgba(255,255,255,0.65)" font-family="${fontDisplay}" font-size="26" letter-spacing="3">${escapeXmlText("CRICKET WAR ROOM")}</text>
 
   <!-- Top badges (right) -->
@@ -1406,7 +1462,7 @@ function buildShareOgSvg(pack) {
  * @returns {Promise<Buffer>}
  */
 async function renderShareOgPng(pack) {
-  const svg = buildShareOgSvg(pack);
+  const svg = await buildShareOgSvg(pack);
   return sharp(Buffer.from(svg, "utf8")).png({ compressionLevel: 9 }).toBuffer();
 }
 
