@@ -39,7 +39,8 @@
  *   GET /api/judge/accuracy → GET {JUDGE_SERVICE_URL}/accuracy (in-process cache + upstream 429/5xx retries; JUDGE_ACCURACY_CACHE_MS)
  *
  * Match autocomplete: GET /api/match-suggest?q=&limit=10 (reads match_suggestions.json).
- * Completed fixtures: optional { completed: true, result: { winner, summary } } — winner is a team code (e.g. CSK).
+ * Completed fixtures: optional { completed: true, result: { winner, summary, key_player? } } — winner is a team code (e.g. CSK).
+ * key_player (or man_of_the_match) is shown as Man of the match when skipping agents for finished fixtures.
  * GET /api/match-by-label?label=… returns the full row for an exact label (404 if unknown).
  * Response: { suggestions: [{ label, date, venue, completed?, result? }] }.
  * With a non-empty q, results are filtered and sorted by fixture date (newest first), then venue.
@@ -64,7 +65,7 @@ const MATCH_SUGGESTIONS_PATH = path.join(__dirname, "match_suggestions.json");
 
 /**
  * @param {unknown} raw
- * @returns {{ winner: string, summary: string } | null}
+ * @returns {{ winner: string, summary: string, key_player?: string } | null}
  */
 function normalizeMatchResult(raw) {
   if (!raw || typeof raw !== "object") return null;
@@ -72,12 +73,17 @@ function normalizeMatchResult(raw) {
   const winner = o.winner != null ? String(o.winner).trim() : "";
   if (!winner) return null;
   const summary = o.summary != null ? String(o.summary).trim() : "";
-  return { winner, summary };
+  const keySrc = o.key_player ?? o.man_of_the_match;
+  const key_player = keySrc != null ? String(keySrc).trim() : "";
+  /** @type {{ winner: string, summary: string, key_player?: string }} */
+  const out = { winner, summary };
+  if (key_player) out.key_player = key_player;
+  return out;
 }
 
 /**
  * @param {unknown} parsed
- * @returns {{ label: string, date: string, venue: string, teams: string[], order: number, completed: boolean, result: { winner: string, summary: string } | null }[]}
+ * @returns {{ label: string, date: string, venue: string, teams: string[], order: number, completed: boolean, result: { winner: string, summary: string, key_player?: string } | null }[]}
  */
 function normalizeMatchSuggestions(parsed) {
   if (!Array.isArray(parsed)) return [];
@@ -586,7 +592,8 @@ function geminiResponseToAnthropicShape(geminiJson, modelId) {
 
 /** Ordered list: primary first, then env fallbacks, then built-in alternates (deduped). */
 function geminiModelsToTry() {
-  const builtin = ["gemini-2.5-flash-lite", "gemini-2.5-flash", "gemini-1.5-flash"];
+  // Omit gemini-1.5-flash: often returns 404 / not supported for generateContent on v1beta for new keys.
+  const builtin = ["gemini-2.5-flash-lite", "gemini-2.5-flash"];
   const fromEnv = GEMINI_MODEL_FALLBACK
     ? GEMINI_MODEL_FALLBACK.split(",").map((s) => s.trim()).filter(Boolean)
     : [];
@@ -1761,22 +1768,30 @@ function sendShareOgHtml(req, res, url, id, pack, appHref, opts = {}) {
   res.end(buf);
 }
 
+/** Strip trailing slashes so `/api/messages/` matches `/api/messages`. Leaves `"/"` unchanged. */
+function normalizeRequestPathname(p) {
+  if (!p || p === "/") return "/";
+  const t = p.replace(/\/+$/, "");
+  return t === "" ? "/" : t;
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
+  const pathname = normalizeRequestPathname(url.pathname);
 
   if (
     req.method === "OPTIONS" &&
-    (url.pathname === "/api/messages" ||
-      url.pathname === "/api/match-suggest" ||
-      url.pathname === "/api/match-by-label" ||
-      url.pathname === "/api/match-context" ||
-      url.pathname === "/api/live-score" ||
-      url.pathname === "/api/judge/predict" ||
-      url.pathname === "/api/judge/accuracy" ||
-      url.pathname === "/api/version" ||
-      url.pathname === "/api/share-prediction" ||
-      url.pathname.startsWith("/api/share/") ||
-      url.pathname.startsWith("/api/og/share/"))
+    (pathname === "/api/messages" ||
+      pathname === "/api/match-suggest" ||
+      pathname === "/api/match-by-label" ||
+      pathname === "/api/match-context" ||
+      pathname === "/api/live-score" ||
+      pathname === "/api/judge/predict" ||
+      pathname === "/api/judge/accuracy" ||
+      pathname === "/api/version" ||
+      pathname === "/api/share-prediction" ||
+      pathname.startsWith("/api/share/") ||
+      pathname.startsWith("/api/og/share/"))
   ) {
     res.writeHead(204, {
       ...corsHeaders(req),
@@ -1788,7 +1803,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "GET" && url.pathname === "/api/version") {
+  if (req.method === "GET" && pathname === "/api/version") {
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
       ...corsHeaders(req),
@@ -1799,7 +1814,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "GET" && url.pathname === "/api/match-suggest") {
+  if (req.method === "GET" && pathname === "/api/match-suggest") {
     const qRaw = (url.searchParams.get("q") || "").trim();
     const q = normalizeMatchSuggestQuery(qRaw);
     let limit = Number(url.searchParams.get("limit"));
@@ -1829,13 +1844,18 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "GET" && url.pathname === "/api/live-score") {
-    // Fresh fetch (nocache=1) from the ingestion service so we always get latest RSS data.
+  if (req.method === "GET" && pathname === "/api/live-score") {
+    // Default: same cache as GET /api/match-context (fast after a recent context build).
+    // fresh=1 or nocache=1 forces a new RSS+CricAPI fetch for manual refresh / live polling.
     const teamsParam = url.searchParams.get("teams") || "";
     const labelParam = url.searchParams.get("label") || "";
-    const target =
-      `${INGESTION_SERVICE_URL}/api/match-context` +
-      `?nocache=1&teams=${encodeURIComponent(teamsParam)}&label=${encodeURIComponent(labelParam)}`;
+    const fresh =
+      url.searchParams.get("fresh") === "1" || url.searchParams.get("nocache") === "1";
+    const qs = new URLSearchParams();
+    if (fresh) qs.set("nocache", "1");
+    if (teamsParam) qs.set("teams", teamsParam);
+    if (labelParam) qs.set("label", labelParam);
+    const target = `${INGESTION_SERVICE_URL}/api/match-context?${qs.toString()}`;
     const ctrl = AbortSignal.timeout(20_000);
     try {
       const r = await fetch(target, { method: "GET", signal: ctrl, headers: { Accept: "application/json" } });
@@ -1901,7 +1921,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "GET" && url.pathname === "/api/match-context") {
+  if (req.method === "GET" && pathname === "/api/match-context") {
     const target = `${INGESTION_SERVICE_URL}/api/match-context${url.search}`;
     const ctrl = AbortSignal.timeout(25_000);
     try {
@@ -1934,7 +1954,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "POST" && url.pathname === "/api/judge/predict") {
+  if (req.method === "POST" && pathname === "/api/judge/predict") {
     if (!rateLimitAllow(clientIp(req), "judge").ok) {
       res.writeHead(429, {
         "Content-Type": "application/json; charset=utf-8",
@@ -1993,7 +2013,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "GET" && url.pathname === "/api/judge/accuracy") {
+  if (req.method === "GET" && pathname === "/api/judge/accuracy") {
     const now = Date.now();
     if (
       JUDGE_ACCURACY_CACHE_MS > 0 &&
@@ -2064,7 +2084,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "GET" && url.pathname === "/api/match-by-label") {
+  if (req.method === "GET" && pathname === "/api/match-by-label") {
     const label = (url.searchParams.get("label") || "").trim();
     const dashNorm = (s) =>
       String(s)
@@ -2101,7 +2121,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "POST" && url.pathname === "/api/messages") {
+  if (req.method === "POST" && pathname === "/api/messages") {
     if (!rateLimitAllow(clientIp(req), "messages").ok) {
       res.writeHead(429, {
         "Content-Type": "application/json; charset=utf-8",
@@ -2194,7 +2214,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "POST" && url.pathname === "/api/share-prediction") {
+  if (req.method === "POST" && pathname === "/api/share-prediction") {
     const rbShare = await readBody(req, { maxBytes: MAX_BODY_SHARE_BYTES });
     if (!rbShare.ok) {
       res.writeHead(413, {
@@ -2238,8 +2258,8 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === "GET" && url.pathname.startsWith("/api/share/")) {
-    const id = url.pathname.slice("/api/share/".length).trim().toLowerCase();
+  if (req.method === "GET" && pathname.startsWith("/api/share/")) {
+    const id = pathname.slice("/api/share/".length).trim().toLowerCase();
     if (!SHARE_ID_HEX_RX.test(id)) {
       res.writeHead(400, {
         "Content-Type": "application/json; charset=utf-8",
@@ -2266,7 +2286,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  const ogShareMatch = url.pathname.match(/^\/api\/og\/share\/([a-f0-9]{8})\.png$/i);
+  const ogShareMatch = pathname.match(/^\/api\/og\/share\/([a-f0-9]{8})\.png$/i);
   if ((req.method === "GET" || req.method === "HEAD") && ogShareMatch) {
     const ogId = ogShareMatch[1].toLowerCase();
     const ogRow = sharePredictionById.get(ogId);
@@ -2296,7 +2316,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if ((req.method === "GET" || req.method === "HEAD") && url.pathname === "/og-homepage.png") {
+  if ((req.method === "GET" || req.method === "HEAD") && pathname === "/og-homepage.png") {
     try {
       const png = await renderHomepageOgPng();
       res.writeHead(200, {
@@ -2324,8 +2344,8 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (url.pathname.startsWith("/s/")) {
-    const id = url.pathname.slice(3).trim().toLowerCase();
+  if (pathname.startsWith("/s/")) {
+    const id = pathname.slice(3).trim().toLowerCase();
     if (!SHARE_ID_HEX_RX.test(id) || !sharePredictionById.has(id)) {
       res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
       res.end("Share link not found");
@@ -2340,7 +2360,7 @@ const server = http.createServer(async (req, res) => {
 
   const sidOnly = (url.searchParams.get("sid") || "").trim().toLowerCase();
   if (
-    url.pathname === "/" &&
+    pathname === "/" &&
     sidOnly &&
     SHARE_ID_HEX_RX.test(sidOnly) &&
     sharePredictionById.has(sidOnly) &&
@@ -2353,7 +2373,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  const filePath = safeJoin(STATIC_ROOT, url.pathname);
+  const filePath = safeJoin(STATIC_ROOT, pathname);
   if (!filePath) {
     res.writeHead(403);
     res.end("Forbidden");

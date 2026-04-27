@@ -223,7 +223,7 @@ Opening `ai_cricket_war_room.html` over `file://` uses bundled fallback fixtures
 - `POST /api/messages` — LLM proxy.
 - `GET /api/match-suggest`, `GET /api/match-by-label` — fixtures.
 - `GET /api/match-context` — proxy to ingestion.
-- `GET /api/live-score` — fresh score snippet JSON.
+- `GET /api/live-score` — score snippet JSON; uses ingestion cache by default. Add `fresh=1` to force a new RSS+CricAPI fetch (UI uses this for manual refresh and live polling).
 - `POST /api/judge/predict`, `GET /api/judge/accuracy` — Judge proxy.
 - `GET /api/version` — build metadata.
 

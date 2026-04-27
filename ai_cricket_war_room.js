@@ -19,10 +19,11 @@ const ARCH = [
  * Offline / file:// fallback — keep in sync with match_suggestions.json on the server.
  * When served via `node server.mjs`, suggestions load from GET /api/match-suggest.
  */
-/** @typedef {{ label: string, date: string, venue: string, teams: string[], completed?: boolean, result?: { winner: string, summary?: string } }} MatchSuggestionRow */
+/** @typedef {{ label: string, date: string, venue: string, teams: string[], completed?: boolean, result?: { winner: string, summary?: string, key_player?: string } }} MatchSuggestionRow */
 
 /** Same rows as match_suggestions.json (order preserved for empty search). */
 const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
+
     {
       "label": "IPL 2026 Final — TBD",
       "date": "2026-06-01",
@@ -355,7 +356,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "GT",
-        "summary": "Gujarat Titans won by 8 wickets (CSK 158/7 in 20 ov, GT 162/2 in 16.4 ov)"
+        "summary": "Gujarat Titans won by 8 wickets (CSK 158/7 in 20 ov, GT 162/2 in 16.4 ov)",
+        "key_player": "S Gill"
       }
     },
     {
@@ -369,7 +371,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "SRH",
-        "summary": "Sunrisers Hyderabad won by 5 wickets (RR 228/6 in 20 ov, SRH 229/5 in 18.3 ov)"
+        "summary": "Sunrisers Hyderabad won by 5 wickets (RR 228/6 in 20 ov, SRH 229/5 in 18.3 ov)",
+        "key_player": "T Head"
       }
     },
     {
@@ -410,7 +413,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "RR",
-        "summary": "Rajasthan Royals won by 40 runs (RR 159/6, LSG 119 in 18 ov)"
+        "summary": "Rajasthan Royals won by 40 runs (RR 159/6, LSG 119 in 18 ov)",
+        "key_player": "Y Jaiswal"
       }
     },
     {
@@ -424,7 +428,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "SRH",
-        "summary": "Sunrisers Hyderabad won by 47 runs (SRH 242/2, DC 195/9 in 20 ov)"
+        "summary": "Sunrisers Hyderabad won by 47 runs (SRH 242/2, DC 195/9 in 20 ov)",
+        "key_player": "T Head"
       }
     },
     {
@@ -438,7 +443,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "MI",
-        "summary": "Mumbai Indians won by 99 runs (MI 199/5, GT 100 in 15.5 ov)"
+        "summary": "Mumbai Indians won by 99 runs (MI 199/5, GT 100 in 15.5 ov)",
+        "key_player": "T Varma"
       }
     },
     {
@@ -452,7 +458,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "PBKS",
-        "summary": "Punjab Kings won by 54 runs (PBKS 254/7, LSG 200/5 in 20 ov)"
+        "summary": "Punjab Kings won by 54 runs (PBKS 254/7, LSG 200/5 in 20 ov)",
+        "key_player": "S Dhawan"
       }
     },
     {
@@ -466,7 +473,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "KKR",
-        "summary": "Kolkata Knight Riders won by 4 wickets (RR 155/9, KKR 161/6 in 19.4 ov)"
+        "summary": "Kolkata Knight Riders won by 4 wickets (RR 155/9, KKR 161/6 in 19.4 ov)",
+        "key_player": "A Russell"
       }
     },
     {
@@ -480,7 +488,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "SRH",
-        "summary": "Sunrisers Hyderabad won by 10 runs (SRH 194/9, CSK 184/8 in 20 ov)"
+        "summary": "Sunrisers Hyderabad won by 10 runs (SRH 194/9, CSK 184/8 in 20 ov)",
+        "key_player": "T Head"
       }
     },
     {
@@ -494,7 +503,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "DC",
-        "summary": "Delhi Capitals won by 6 wickets (RCB 175/8, DC 179/4 in 19.5 ov)"
+        "summary": "Delhi Capitals won by 6 wickets (RCB 175/8, DC 179/4 in 19.5 ov)",
+        "key_player": "K Ahmed"
       }
     },
     {
@@ -508,7 +518,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "GT",
-        "summary": "Gujarat Titans won by 5 wickets (KKR 180, GT 181/5 in 19.4 ov)"
+        "summary": "Gujarat Titans won by 5 wickets (KKR 180, GT 181/5 in 19.4 ov)",
+        "key_player": "S Gill"
       }
     },
     {
@@ -522,7 +533,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "PBKS",
-        "summary": "Punjab Kings won by 7 wickets (MI 195/6, PBKS 198/3 in 16.3 ov)"
+        "summary": "Punjab Kings won by 7 wickets (MI 195/6, PBKS 198/3 in 16.3 ov)",
+        "key_player": "S Dhawan"
       }
     },
     {
@@ -536,7 +548,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "RCB",
-        "summary": "Royal Challengers Bengaluru won by 5 wickets (LSG 146, RCB 149/5 in 15.1 ov)"
+        "summary": "Royal Challengers Bengaluru won by 5 wickets (LSG 146, RCB 149/5 in 15.1 ov)",
+        "key_player": "V Kohli"
       }
     },
     {
@@ -550,7 +563,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "CSK",
-        "summary": "Chennai Super Kings won by 32 runs (CSK 192/5, KKR 160/7 in 20 ov)"
+        "summary": "Chennai Super Kings won by 32 runs (CSK 192/5, KKR 160/7 in 20 ov)",
+        "key_player": "R Ravindra"
       }
     },
     {
@@ -564,7 +578,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "SRH",
-        "summary": "Sunrisers Hyderabad won by 57 runs (SRH 216/6, RR 159 in 19 ov)"
+        "summary": "Sunrisers Hyderabad won by 57 runs (SRH 216/6, RR 159 in 19 ov)",
+        "key_player": "T Head"
       }
     },
     {
@@ -578,7 +593,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "RCB",
-        "summary": "Royal Challengers Bengaluru won by 18 runs (RCB 240/4, MI 222/5 in 20 ov)"
+        "summary": "Royal Challengers Bengaluru won by 18 runs (RCB 240/4, MI 222/5 in 20 ov)",
+        "key_player": "V Kohli"
       }
     },
     {
@@ -592,7 +608,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "GT",
-        "summary": "Gujarat Titans won by 7 wickets (LSG 164/8, GT 165/3 in 18.4 ov)"
+        "summary": "Gujarat Titans won by 7 wickets (LSG 164/8, GT 165/3 in 18.4 ov)",
+        "key_player": "S Gill"
       }
     },
     {
@@ -606,7 +623,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "CSK",
-        "summary": "Chennai Super Kings won by 23 runs (CSK 212/2, DC 189 in 20 ov)"
+        "summary": "Chennai Super Kings won by 23 runs (CSK 212/2, DC 189 in 20 ov)",
+        "key_player": "R Ravindra"
       }
     },
     {
@@ -620,7 +638,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "PBKS",
-        "summary": "Punjab Kings won by 6 wickets (SRH 219/6, PBKS 223/4 in 18.5 ov)"
+        "summary": "Punjab Kings won by 6 wickets (SRH 219/6, PBKS 223/4 in 18.5 ov)",
+        "key_player": "S Dhawan"
       }
     },
     {
@@ -634,7 +653,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "RR",
-        "summary": "Rajasthan Royals won by 6 wickets (RCB 201/8, RR 202/4 in 18 ov)"
+        "summary": "Rajasthan Royals won by 6 wickets (RCB 201/8, RR 202/4 in 18 ov)",
+        "key_player": "Y Jaiswal"
       }
     },
     {
@@ -648,7 +668,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "LSG",
-        "summary": "Lucknow Super Giants won by 3 wickets (KKR 181/4, LSG 182/7 in 20 ov)"
+        "summary": "Lucknow Super Giants won by 3 wickets (KKR 181/4, LSG 182/7 in 20 ov)",
+        "key_player": "N Pooran"
       }
     },
     {
@@ -662,7 +683,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "GT",
-        "summary": "Gujarat Titans won by 1 run (GT 210/4, DC 209/8 in 20 ov)"
+        "summary": "Gujarat Titans won by 1 run (GT 210/4, DC 209/8 in 20 ov)",
+        "key_player": "S Gill"
       }
     },
     {
@@ -676,7 +698,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "RR",
-        "summary": "Rajasthan Royals won by 27 runs D/L (RR 150/3 in 11 ov, MI 123/9 in 11 ov)"
+        "summary": "Rajasthan Royals won by 27 runs D/L (RR 150/3 in 11 ov, MI 123/9 in 11 ov)",
+        "key_player": "Y Jaiswal"
       }
     },
     {
@@ -704,7 +727,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "RCB",
-        "summary": "Royal Challengers Bengaluru won by 43 runs (RCB 250/3, CSK 207 in 19.4 ov)"
+        "summary": "Royal Challengers Bengaluru won by 43 runs (RCB 250/3, CSK 207 in 19.4 ov)",
+        "key_player": "V Kohli"
       }
     },
     {
@@ -718,7 +742,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "LSG",
-        "summary": "Lucknow Super Giants won by 5 wickets (SRH 156/9, LSG 160/5 in 19.5 ov)"
+        "summary": "Lucknow Super Giants won by 5 wickets (SRH 156/9, LSG 160/5 in 19.5 ov)",
+        "key_player": "N Pooran"
       }
     },
     {
@@ -732,7 +757,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "RR",
-        "summary": "Rajasthan Royals won by 6 runs (RR 210/6, GT 204/8 in 20 ov)"
+        "summary": "Rajasthan Royals won by 6 runs (RR 210/6, GT 204/8 in 20 ov)",
+        "key_player": "Y Jaiswal"
       }
     },
     {
@@ -746,7 +772,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "DC",
-        "summary": "Delhi Capitals won by 6 wickets (MI 162/6, DC 164/4 in 18.1 ov)"
+        "summary": "Delhi Capitals won by 6 wickets (MI 162/6, DC 164/4 in 18.1 ov)",
+        "key_player": "K Ahmed"
       }
     },
     {
@@ -760,7 +787,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "PBKS",
-        "summary": "Punjab Kings won by 5 wickets (CSK 209/5, PBKS 210/5 in 18.4 ov)"
+        "summary": "Punjab Kings won by 5 wickets (CSK 209/5, PBKS 210/5 in 18.4 ov)",
+        "key_player": "S Dhawan"
       }
     },
     {
@@ -774,7 +802,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "SRH",
-        "summary": "Sunrisers Hyderabad won by 65 runs (SRH 226/8, KKR 161 in 16 ov)"
+        "summary": "Sunrisers Hyderabad won by 65 runs (SRH 226/8, KKR 161 in 16 ov)",
+        "key_player": "T Head"
       }
     },
     {
@@ -788,7 +817,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "DC",
-        "summary": "Delhi Capitals won by 6 wickets (LSG 141, DC 145/4 in 17.1 ov)"
+        "summary": "Delhi Capitals won by 6 wickets (LSG 141, DC 145/4 in 17.1 ov)",
+        "key_player": "K Ahmed"
       }
     },
     {
@@ -802,7 +832,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "PBKS",
-        "summary": "Punjab Kings won by 3 wickets (GT 162/6, PBKS 165/7 in 19.1 ov)"
+        "summary": "Punjab Kings won by 3 wickets (GT 162/6, PBKS 165/7 in 19.1 ov)",
+        "key_player": "S Dhawan"
       }
     },
     {
@@ -816,7 +847,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "RR",
-        "summary": "Rajasthan Royals won by 8 wickets (CSK 127, RR 128/2 in 12.1 ov)"
+        "summary": "Rajasthan Royals won by 8 wickets (CSK 127, RR 128/2 in 12.1 ov)",
+        "key_player": "Y Jaiswal"
       }
     },
     {
@@ -830,7 +862,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "MI",
-        "summary": "Mumbai Indians won by 6 wickets (KKR 220/4, MI 224/4 in 19.1 ov)"
+        "summary": "Mumbai Indians won by 6 wickets (KKR 220/4, MI 224/4 in 19.1 ov)",
+        "key_player": "T Varma"
       }
     },
     {
@@ -844,7 +877,8 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "completed": true,
       "result": {
         "winner": "RCB",
-        "summary": "Royal Challengers Bengaluru won by 6 wickets (SRH 201/9, RCB 203/4 in 15.4 ov)"
+        "summary": "Royal Challengers Bengaluru won by 6 wickets (SRH 201/9, RCB 203/4 in 15.4 ov)",
+        "key_player": "V Kohli"
       }
     },
     {
@@ -955,6 +989,7 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
         "IND"
       ]
     }
+
 ]);
 
 const MATCH_SUGGEST_TEAM_ALIASES = { KXIP: "PBKS", DD: "DC" };
@@ -999,7 +1034,7 @@ function compareMatchSuggestionsNewestFirst(a, b) {
 }
 
 /**
- * @typedef {{ label: string, date: string, venue: string, completed?: boolean, result?: { winner: string, summary: string } }} MatchSuggestHit
+ * @typedef {{ label: string, date: string, venue: string, completed?: boolean, result?: { winner: string, summary: string, key_player?: string } }} MatchSuggestHit
  */
 
 /**
@@ -1022,9 +1057,11 @@ function getMatchSuggestionHits(rows, q, limit) {
     const hit = { label: row.label, date: row.date, venue: row.venue };
     if (row.completed && row.result && String(row.result.winner || "").trim()) {
       hit.completed = true;
+      const kp = String(row.result.key_player ?? "").trim();
       hit.result = {
         winner: String(row.result.winner).trim(),
         summary: row.result.summary != null ? String(row.result.summary) : "",
+        ...(kp ? { key_player: kp } : {}),
       };
     }
     return hit;
@@ -2399,9 +2436,16 @@ function normalizeSuggestApiEntry(x) {
     const w = r && r.winner != null ? String(r.winner).trim() : "";
     if (x.completed === true && w) {
       base.completed = true;
+      const kp =
+        r.key_player != null
+          ? String(r.key_player).trim()
+          : r.man_of_the_match != null
+            ? String(r.man_of_the_match).trim()
+            : "";
       base.result = {
         winner: w,
         summary: r.summary != null ? String(r.summary) : "",
+        ...(kp ? { key_player: kp } : {}),
       };
     }
     return base;
@@ -2444,6 +2488,13 @@ async function lookupCompletedMatchRow(label) {
     const d = await r.json();
     const m = d.match;
     if (!isDone(m)) return null;
+    const mr = m.result && typeof m.result === "object" ? m.result : {};
+    const kp =
+      mr.key_player != null
+        ? String(mr.key_player).trim()
+        : mr.man_of_the_match != null
+          ? String(mr.man_of_the_match).trim()
+          : "";
     return {
       label: String(m.label),
       date: m.date != null ? String(m.date) : "",
@@ -2453,6 +2504,7 @@ async function lookupCompletedMatchRow(label) {
       result: {
         winner: String(m.result.winner).trim(),
         summary: m.result.summary != null ? String(m.result.summary) : "",
+        ...(kp ? { key_player: kp } : {}),
       },
     };
   } catch {
@@ -3068,19 +3120,23 @@ function extractLiveStateFromCtx(ctx) {
 }
 
 /**
- * Call the server's /api/live-score endpoint (fresh RSS fetch, no cache).
+ * Call the server's /api/live-score endpoint.
  * @param {string} match
  * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @param {{ fresh?: boolean }} [opts] fresh=true bypasses ingestion cache (manual fetch + live monitor polls).
  * @returns {Promise<{ snippet: string, hint?: string, unreachable?: boolean }>}
  */
-async function fetchLiveScoreDetail(match, teams) {
+async function fetchLiveScoreDetail(match, teams, opts) {
   const base = apiBase();
   if (!base) return { snippet: "" };
+  const fresh = Boolean(opts && opts.fresh);
   try {
     const teamsParam = `${teams.codeA},${teams.codeB}`;
-    const r = await fetch(
-      `${base}/api/live-score?teams=${encodeURIComponent(teamsParam)}&label=${encodeURIComponent(match)}`
-    );
+    const u = new URL(`${base}/api/live-score`, window.location.href);
+    u.searchParams.set("teams", teamsParam);
+    u.searchParams.set("label", match);
+    if (fresh) u.searchParams.set("fresh", "1");
+    const r = await fetch(u.toString());
     let data = /** @type {Record<string, unknown>} */ ({});
     try {
       data = /** @type {Record<string, unknown>} */ (JSON.parse(await r.text()));
@@ -3107,10 +3163,11 @@ async function fetchLiveScoreDetail(match, teams) {
 /**
  * @param {string} match
  * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @param {{ fresh?: boolean }} [opts]
  * @returns {Promise<string>}
  */
-async function fetchLiveScore(match, teams) {
-  const d = await fetchLiveScoreDetail(match, teams);
+async function fetchLiveScore(match, teams, opts) {
+  const d = await fetchLiveScoreDetail(match, teams, opts);
   return d.snippet;
 }
 
@@ -3259,7 +3316,7 @@ function stopLiveMonitor() {
  * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
  */
 async function runLiveMonitorCycle(match, teams) {
-  const snippet = await fetchLiveScore(match, teams);
+  const snippet = await fetchLiveScore(match, teams, { fresh: true });
   if (!snippet || snippet === _lastLiveSnippet) return;
   _lastLiveSnippet = snippet;
 
@@ -3415,6 +3472,7 @@ async function runWarRoom() {
       const winProbFinal = renderVerdictWinProbabilityBlock(teams, pickedA ? 100 : 0, {
         variant: "final",
       });
+      const mom = String(completedRow.result.key_player || "").trim() || "—";
       const verdictEl = document.getElementById('verdictArea');
       verdictEl.innerHTML = `
     <div class="verdict-card verdict-card--final">
@@ -3422,6 +3480,9 @@ async function runWarRoom() {
       <div class="verdict-winner-row">${verdictLogoHtml}<div class="verdict-winner">${escapeHtml(winDisplay.toUpperCase())} WINS</div></div>
       <div class="verdict-summary">${escapeHtml(completedRow.result.summary || '')}</div>
       ${winProbFinal.html}
+      <div class="stat-grid">
+        <div class="stat-cell"><div class="stat-label">MAN OF THE MATCH</div><div class="stat-val">${escapeHtml(mom)}</div></div>
+      </div>
     </div>`;
       scheduleVerdictWinProbabilityAnimation(verdictEl, winProbFinal.pctA, winProbFinal.pctB);
 
@@ -3471,7 +3532,7 @@ async function runWarRoom() {
     }
   }
 
-  // Additional fallback: hit /api/live-score directly (a fresh RSS scrape, no ingestion cache)
+  // Additional fallback: hit /api/live-score (cached when match-context just warmed ingestion)
   if (!liveState) {
     try {
       const directSnippet = await fetchLiveScore(match, teams);
@@ -5012,7 +5073,7 @@ function initLiveScoreBar() {
 
       try {
         const teams = parseTeamsFromMatch(match);
-        const d = await fetchLiveScoreDetail(match, teams);
+        const d = await fetchLiveScoreDetail(match, teams, { fresh: true });
         if (d.snippet) {
           input.value = d.snippet;
           syncClear();

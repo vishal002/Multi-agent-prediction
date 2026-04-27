@@ -331,7 +331,8 @@
     "completed": true,
     "result": {
       "winner": "GT",
-      "summary": "Gujarat Titans won by 8 wickets (CSK 158/7 in 20 ov, GT 162/2 in 16.4 ov)"
+      "summary": "Gujarat Titans won by 8 wickets (CSK 158/7 in 20 ov, GT 162/2 in 16.4 ov)",
+      "key_player": "S Gill"
     }
   },
   {
@@ -345,7 +346,8 @@
     "completed": true,
     "result": {
       "winner": "SRH",
-      "summary": "Sunrisers Hyderabad won by 5 wickets (RR 228/6 in 20 ov, SRH 229/5 in 18.3 ov)"
+      "summary": "Sunrisers Hyderabad won by 5 wickets (RR 228/6 in 20 ov, SRH 229/5 in 18.3 ov)",
+      "key_player": "T Head"
     }
   },
   {
@@ -386,7 +388,8 @@
     "completed": true,
     "result": {
       "winner": "RR",
-      "summary": "Rajasthan Royals won by 40 runs (RR 159/6, LSG 119 in 18 ov)"
+      "summary": "Rajasthan Royals won by 40 runs (RR 159/6, LSG 119 in 18 ov)",
+      "key_player": "Y Jaiswal"
     }
   },
   {
@@ -400,7 +403,8 @@
     "completed": true,
     "result": {
       "winner": "SRH",
-      "summary": "Sunrisers Hyderabad won by 47 runs (SRH 242/2, DC 195/9 in 20 ov)"
+      "summary": "Sunrisers Hyderabad won by 47 runs (SRH 242/2, DC 195/9 in 20 ov)",
+      "key_player": "T Head"
     }
   },
   {
@@ -414,7 +418,8 @@
     "completed": true,
     "result": {
       "winner": "MI",
-      "summary": "Mumbai Indians won by 99 runs (MI 199/5, GT 100 in 15.5 ov)"
+      "summary": "Mumbai Indians won by 99 runs (MI 199/5, GT 100 in 15.5 ov)",
+      "key_player": "T Varma"
     }
   },
   {
@@ -428,7 +433,8 @@
     "completed": true,
     "result": {
       "winner": "PBKS",
-      "summary": "Punjab Kings won by 54 runs (PBKS 254/7, LSG 200/5 in 20 ov)"
+      "summary": "Punjab Kings won by 54 runs (PBKS 254/7, LSG 200/5 in 20 ov)",
+      "key_player": "S Dhawan"
     }
   },
   {
@@ -442,7 +448,8 @@
     "completed": true,
     "result": {
       "winner": "KKR",
-      "summary": "Kolkata Knight Riders won by 4 wickets (RR 155/9, KKR 161/6 in 19.4 ov)"
+      "summary": "Kolkata Knight Riders won by 4 wickets (RR 155/9, KKR 161/6 in 19.4 ov)",
+      "key_player": "A Russell"
     }
   },
   {
@@ -456,7 +463,8 @@
     "completed": true,
     "result": {
       "winner": "SRH",
-      "summary": "Sunrisers Hyderabad won by 10 runs (SRH 194/9, CSK 184/8 in 20 ov)"
+      "summary": "Sunrisers Hyderabad won by 10 runs (SRH 194/9, CSK 184/8 in 20 ov)",
+      "key_player": "T Head"
     }
   },
   {
@@ -470,7 +478,8 @@
     "completed": true,
     "result": {
       "winner": "DC",
-      "summary": "Delhi Capitals won by 6 wickets (RCB 175/8, DC 179/4 in 19.5 ov)"
+      "summary": "Delhi Capitals won by 6 wickets (RCB 175/8, DC 179/4 in 19.5 ov)",
+      "key_player": "K Ahmed"
     }
   },
   {
@@ -484,7 +493,8 @@
     "completed": true,
     "result": {
       "winner": "GT",
-      "summary": "Gujarat Titans won by 5 wickets (KKR 180, GT 181/5 in 19.4 ov)"
+      "summary": "Gujarat Titans won by 5 wickets (KKR 180, GT 181/5 in 19.4 ov)",
+      "key_player": "S Gill"
     }
   },
   {
@@ -498,7 +508,8 @@
     "completed": true,
     "result": {
       "winner": "PBKS",
-      "summary": "Punjab Kings won by 7 wickets (MI 195/6, PBKS 198/3 in 16.3 ov)"
+      "summary": "Punjab Kings won by 7 wickets (MI 195/6, PBKS 198/3 in 16.3 ov)",
+      "key_player": "S Dhawan"
     }
   },
   {
@@ -512,7 +523,8 @@
     "completed": true,
     "result": {
       "winner": "RCB",
-      "summary": "Royal Challengers Bengaluru won by 5 wickets (LSG 146, RCB 149/5 in 15.1 ov)"
+      "summary": "Royal Challengers Bengaluru won by 5 wickets (LSG 146, RCB 149/5 in 15.1 ov)",
+      "key_player": "V Kohli"
     }
   },
   {
@@ -526,7 +538,8 @@
     "completed": true,
     "result": {
       "winner": "CSK",
-      "summary": "Chennai Super Kings won by 32 runs (CSK 192/5, KKR 160/7 in 20 ov)"
+      "summary": "Chennai Super Kings won by 32 runs (CSK 192/5, KKR 160/7 in 20 ov)",
+      "key_player": "R Ravindra"
     }
   },
   {
@@ -540,7 +553,8 @@
     "completed": true,
     "result": {
       "winner": "SRH",
-      "summary": "Sunrisers Hyderabad won by 57 runs (SRH 216/6, RR 159 in 19 ov)"
+      "summary": "Sunrisers Hyderabad won by 57 runs (SRH 216/6, RR 159 in 19 ov)",
+      "key_player": "T Head"
     }
   },
   {
@@ -554,7 +568,8 @@
     "completed": true,
     "result": {
       "winner": "RCB",
-      "summary": "Royal Challengers Bengaluru won by 18 runs (RCB 240/4, MI 222/5 in 20 ov)"
+      "summary": "Royal Challengers Bengaluru won by 18 runs (RCB 240/4, MI 222/5 in 20 ov)",
+      "key_player": "V Kohli"
     }
   },
   {
@@ -568,7 +583,8 @@
     "completed": true,
     "result": {
       "winner": "GT",
-      "summary": "Gujarat Titans won by 7 wickets (LSG 164/8, GT 165/3 in 18.4 ov)"
+      "summary": "Gujarat Titans won by 7 wickets (LSG 164/8, GT 165/3 in 18.4 ov)",
+      "key_player": "S Gill"
     }
   },
   {
@@ -582,7 +598,8 @@
     "completed": true,
     "result": {
       "winner": "CSK",
-      "summary": "Chennai Super Kings won by 23 runs (CSK 212/2, DC 189 in 20 ov)"
+      "summary": "Chennai Super Kings won by 23 runs (CSK 212/2, DC 189 in 20 ov)",
+      "key_player": "R Ravindra"
     }
   },
   {
@@ -596,7 +613,8 @@
     "completed": true,
     "result": {
       "winner": "PBKS",
-      "summary": "Punjab Kings won by 6 wickets (SRH 219/6, PBKS 223/4 in 18.5 ov)"
+      "summary": "Punjab Kings won by 6 wickets (SRH 219/6, PBKS 223/4 in 18.5 ov)",
+      "key_player": "S Dhawan"
     }
   },
   {
@@ -610,7 +628,8 @@
     "completed": true,
     "result": {
       "winner": "RR",
-      "summary": "Rajasthan Royals won by 6 wickets (RCB 201/8, RR 202/4 in 18 ov)"
+      "summary": "Rajasthan Royals won by 6 wickets (RCB 201/8, RR 202/4 in 18 ov)",
+      "key_player": "Y Jaiswal"
     }
   },
   {
@@ -624,7 +643,8 @@
     "completed": true,
     "result": {
       "winner": "LSG",
-      "summary": "Lucknow Super Giants won by 3 wickets (KKR 181/4, LSG 182/7 in 20 ov)"
+      "summary": "Lucknow Super Giants won by 3 wickets (KKR 181/4, LSG 182/7 in 20 ov)",
+      "key_player": "N Pooran"
     }
   },
   {
@@ -638,7 +658,8 @@
     "completed": true,
     "result": {
       "winner": "GT",
-      "summary": "Gujarat Titans won by 1 run (GT 210/4, DC 209/8 in 20 ov)"
+      "summary": "Gujarat Titans won by 1 run (GT 210/4, DC 209/8 in 20 ov)",
+      "key_player": "S Gill"
     }
   },
   {
@@ -652,7 +673,8 @@
     "completed": true,
     "result": {
       "winner": "RR",
-      "summary": "Rajasthan Royals won by 27 runs D/L (RR 150/3 in 11 ov, MI 123/9 in 11 ov)"
+      "summary": "Rajasthan Royals won by 27 runs D/L (RR 150/3 in 11 ov, MI 123/9 in 11 ov)",
+      "key_player": "Y Jaiswal"
     }
   },
   {
@@ -680,7 +702,8 @@
     "completed": true,
     "result": {
       "winner": "RCB",
-      "summary": "Royal Challengers Bengaluru won by 43 runs (RCB 250/3, CSK 207 in 19.4 ov)"
+      "summary": "Royal Challengers Bengaluru won by 43 runs (RCB 250/3, CSK 207 in 19.4 ov)",
+      "key_player": "V Kohli"
     }
   },
   {
@@ -694,7 +717,8 @@
     "completed": true,
     "result": {
       "winner": "LSG",
-      "summary": "Lucknow Super Giants won by 5 wickets (SRH 156/9, LSG 160/5 in 19.5 ov)"
+      "summary": "Lucknow Super Giants won by 5 wickets (SRH 156/9, LSG 160/5 in 19.5 ov)",
+      "key_player": "N Pooran"
     }
   },
   {
@@ -708,7 +732,8 @@
     "completed": true,
     "result": {
       "winner": "RR",
-      "summary": "Rajasthan Royals won by 6 runs (RR 210/6, GT 204/8 in 20 ov)"
+      "summary": "Rajasthan Royals won by 6 runs (RR 210/6, GT 204/8 in 20 ov)",
+      "key_player": "Y Jaiswal"
     }
   },
   {
@@ -722,7 +747,8 @@
     "completed": true,
     "result": {
       "winner": "DC",
-      "summary": "Delhi Capitals won by 6 wickets (MI 162/6, DC 164/4 in 18.1 ov)"
+      "summary": "Delhi Capitals won by 6 wickets (MI 162/6, DC 164/4 in 18.1 ov)",
+      "key_player": "K Ahmed"
     }
   },
   {
@@ -736,7 +762,8 @@
     "completed": true,
     "result": {
       "winner": "PBKS",
-      "summary": "Punjab Kings won by 5 wickets (CSK 209/5, PBKS 210/5 in 18.4 ov)"
+      "summary": "Punjab Kings won by 5 wickets (CSK 209/5, PBKS 210/5 in 18.4 ov)",
+      "key_player": "S Dhawan"
     }
   },
   {
@@ -750,7 +777,8 @@
     "completed": true,
     "result": {
       "winner": "SRH",
-      "summary": "Sunrisers Hyderabad won by 65 runs (SRH 226/8, KKR 161 in 16 ov)"
+      "summary": "Sunrisers Hyderabad won by 65 runs (SRH 226/8, KKR 161 in 16 ov)",
+      "key_player": "T Head"
     }
   },
   {
@@ -764,7 +792,8 @@
     "completed": true,
     "result": {
       "winner": "DC",
-      "summary": "Delhi Capitals won by 6 wickets (LSG 141, DC 145/4 in 17.1 ov)"
+      "summary": "Delhi Capitals won by 6 wickets (LSG 141, DC 145/4 in 17.1 ov)",
+      "key_player": "K Ahmed"
     }
   },
   {
@@ -778,7 +807,8 @@
     "completed": true,
     "result": {
       "winner": "PBKS",
-      "summary": "Punjab Kings won by 3 wickets (GT 162/6, PBKS 165/7 in 19.1 ov)"
+      "summary": "Punjab Kings won by 3 wickets (GT 162/6, PBKS 165/7 in 19.1 ov)",
+      "key_player": "S Dhawan"
     }
   },
   {
@@ -792,7 +822,8 @@
     "completed": true,
     "result": {
       "winner": "RR",
-      "summary": "Rajasthan Royals won by 8 wickets (CSK 127, RR 128/2 in 12.1 ov)"
+      "summary": "Rajasthan Royals won by 8 wickets (CSK 127, RR 128/2 in 12.1 ov)",
+      "key_player": "Y Jaiswal"
     }
   },
   {
@@ -806,7 +837,8 @@
     "completed": true,
     "result": {
       "winner": "MI",
-      "summary": "Mumbai Indians won by 6 wickets (KKR 220/4, MI 224/4 in 19.1 ov)"
+      "summary": "Mumbai Indians won by 6 wickets (KKR 220/4, MI 224/4 in 19.1 ov)",
+      "key_player": "T Varma"
     }
   },
   {
@@ -820,7 +852,8 @@
     "completed": true,
     "result": {
       "winner": "RCB",
-      "summary": "Royal Challengers Bengaluru won by 6 wickets (SRH 201/9, RCB 203/4 in 15.4 ov)"
+      "summary": "Royal Challengers Bengaluru won by 6 wickets (SRH 201/9, RCB 203/4 in 15.4 ov)",
+      "key_player": "V Kohli"
     }
   },
   {
