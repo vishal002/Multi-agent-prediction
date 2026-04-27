@@ -237,11 +237,11 @@ body::after {
   width: 2.85rem;
   height: 2.85rem;
   border-radius: 12px;
-  padding: 3px;
+  padding: 0;
   background: linear-gradient(
     145deg,
-    color-mix(in srgb, var(--color-accent) 38%, transparent),
-    color-mix(in srgb, var(--color-accent) 8%, transparent)
+    color-mix(in srgb, var(--color-accent) 42%, rgba(18, 27, 48, 0.86)),
+    color-mix(in srgb, var(--color-accent) 12%, rgba(10, 16, 30, 0.94))
   );
   box-shadow:
     0 0 0 1px var(--brand-logo-ring),
@@ -253,19 +253,24 @@ body::after {
   justify-content: center;
   line-height: 0;
   flex-shrink: 0;
+  overflow: hidden;
   transform: translateZ(0) scale(1.02);
 }
 
 .brand__logo-img {
-  width: 100%;
-  height: 100%;
+  width: 86%;
+  height: 86%;
   border-radius: 9px;
   display: block;
   pointer-events: none;
-  background-image: var(--acwr-icon-app);
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: cover;
+  background: radial-gradient(circle at 35% 30%, rgba(150, 195, 255, 0.28), rgba(33, 50, 84, 0.72) 60%, rgba(13, 22, 38, 0.9));
+  box-shadow:
+    0 0 0 1px rgba(145, 188, 255, 0.3) inset,
+    0 6px 12px rgba(0, 0, 0, 0.35);
+  object-fit: contain;
+  object-position: center;
+  transform: scale(1.5);
+  transform-origin: center;
 }
 
 .brand__text-block {
@@ -4545,13 +4550,14 @@ html[data-ui="classic"] .live-panel {
   padding: 0 var(--gap);
 }
 
-html[data-ui="classic"] .brand__logo-icon,
 html[data-ui="classic"] .header-badge {
   display: none;
 }
 
 html[data-ui="classic"] .brand--war-room {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
 }
 
 html[data-ui="classic"] .brand__eyebrow {
