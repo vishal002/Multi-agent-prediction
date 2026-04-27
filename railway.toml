@@ -5,9 +5,10 @@
 # so ingestion/judge would still build the Node image while your start command runs
 # uvicorn → "The executable `uvicorn` could not be found."
 #
-# - Web (Node): leave Build empty or pick Dockerfile → repo root Dockerfile (auto-detected).
-# - Ingestion / Judge: Settings → Build → Dockerfile path = Dockerfile.python
-#   and Deploy → uvicorn … --port $PORT (see README).
+# - Web (Node): root Dockerfile (auto-detected). Do not set RAILWAY_DOCKERFILE_PATH.
+# - Ingestion / Judge: Railway always prefers root Dockerfile unless you set this
+#   on THAT service only → Variables: RAILWAY_DOCKERFILE_PATH=Dockerfile.python
+#   (see https://docs.railway.com/guides/dockerfiles ). Then Deploy → uvicorn … --port $PORT.
 #
 # https://docs.railway.com/reference/config-as-code
 

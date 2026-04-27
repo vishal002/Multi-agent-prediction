@@ -1,6 +1,8 @@
 # ── Python services base image ─────────────────────────────────────────────────
 # Shared image for both ingestion_service and judge_service.
-# Used by docker-compose.yml; Render uses its native Python runtime instead.
+# Used by docker-compose.yml, Fly.io, and Railway (set service variable
+# RAILWAY_DOCKERFILE_PATH=Dockerfile.python on ingestion/judge so Railway does not
+# use the root Node Dockerfile). Render uses its native Python runtime instead.
 #
 # docker-compose overrides CMD per service:
 #   ingestion: uvicorn ingestion_service.app:app --host 0.0.0.0 --port 3334

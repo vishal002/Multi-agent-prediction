@@ -198,7 +198,7 @@ Same three-process layout as [render.yaml](render.yaml): **Node web** (UI + `/ap
 
 6. **Add Ingestion (Python)** — In the project: **New** → **GitHub Repo** → **same repository** again. This creates a second service; rename it to `ingestion`.
 
-7. **Ingestion — build & start** — Select `ingestion` → **Settings → Build**: set **Dockerfile path** to **`Dockerfile.python`** (required). If the image was built with the Node Dockerfile, deploy logs show **`The executable uvicorn could not be found`** — fix the Dockerfile path and redeploy. Under **Deploy**, set **Custom Start Command** to:  
+7. **Ingestion — build & start** — Railway often **ignores** the Build panel and always uses the root **Node** `Dockerfile`, which produces logs like **`Using Detected Dockerfile`** + **`node:20-alpine`** and then **`The executable uvicorn could not be found`**. Fix it on the **ingestion** service only: **Variables** → add **`RAILWAY_DOCKERFILE_PATH`** = **`Dockerfile.python`** (see [Railway Dockerfiles](https://docs.railway.com/guides/dockerfiles)). Redeploy; build logs should show **`python:3.11-slim`** and `pip install`, not `npm run build`. Optionally also set **Settings → Build → Dockerfile path** to `Dockerfile.python` if your UI offers it. Under **Deploy**, set **Custom Start Command** to:  
    `uvicorn ingestion_service.app:app --host 0.0.0.0 --port $PORT`  
    Railway injects `$PORT`; do not hard-code `3334` here.
 
@@ -206,7 +206,7 @@ Same three-process layout as [render.yaml](render.yaml): **Node web** (UI + `/ap
 
 9. **Add Judge (Python)** — **New** → **GitHub Repo** → same repo again. Rename the service to `judge`.
 
-10. **Judge — build & start** — Same as ingestion: **Dockerfile path** = `Dockerfile.python`, **Custom Start Command**:  
+10. **Judge — build & start** — Same as ingestion: on the **judge** service add **`RAILWAY_DOCKERFILE_PATH`** = **`Dockerfile.python`**, redeploy, then **Custom Start Command**:  
     `uvicorn judge_service.app:app --host 0.0.0.0 --port $PORT`
 
 11. **Judge — persistence (pick one)**  
@@ -235,6 +235,7 @@ Same three-process layout as [render.yaml](render.yaml): **Node web** (UI + `/ap
 | Web | `GROQ_API_KEY` / `ANTHROPIC_API_KEY` | At least one required. |
 | Web | `INGESTION_SERVICE_URL` / `JUDGE_SERVICE_URL` | Public URLs of the two Python services. |
 | Web | `TRUST_PROXY` | Set to `1` behind Railway’s proxy. |
+| Ingestion / Judge | `RAILWAY_DOCKERFILE_PATH` | Set to **`Dockerfile.python`** on each Python service so Railway does not build the Node image. |
 | Ingestion | `CRICAPI_KEY` | Optional live scores. |
 | Judge | LLM keys, optional `JUDGE_SERVICE_SECRET` | Match secrets used on the web service when set. |
 | Judge | `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` | Optional; preferred over file SQLite on ephemeral disk. |
