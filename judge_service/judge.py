@@ -9,6 +9,9 @@ Provider priority:
 import json
 import os
 import re
+import time
+from datetime import timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -47,6 +50,10 @@ def _extract_json_object(text: str) -> str:
     return s
 
 
+_MAX_GROQ_BACKOFF_MS = 60_000
+_MAX_GROQ_429_RETRIES = 2  # 3 attempts total; mirrors server.mjs Groq gate
+
+
 def _call_anthropic(debate_transcript: str, api_key: str) -> str:
     """Call Anthropic Claude and return raw text response."""
     from anthropic import Anthropic  # imported lazily so Groq path works without anthropic
@@ -74,6 +81,35 @@ def _call_anthropic(debate_transcript: str, api_key: str) -> str:
     return "".join(parts)
 
 
+def _parse_groq_retry_after_ms(response: httpx.Response) -> int | None:
+    """Parse Retry-After header or Groq body hints into milliseconds (capped)."""
+    h = (response.headers.get("retry-after") or "").strip()
+    if h.isdigit():
+        sec = int(h)
+        if sec > 0:
+            return min(_MAX_GROQ_BACKOFF_MS, sec * 1000)
+    if h:
+        try:
+            dt = parsedate_to_datetime(h)
+            if dt is not None:
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                delta_ms = int((dt.timestamp() - time.time()) * 1000)
+                if delta_ms > 0:
+                    return min(_MAX_GROQ_BACKOFF_MS, delta_ms)
+        except (TypeError, ValueError, OSError):
+            pass
+    body = response.text or ""
+    m = re.search(r"try again in\s+([\d.]+)\s*(ms|s)\b", body, re.I)
+    if m:
+        val = float(m.group(1))
+        unit = m.group(2).lower()
+        ms = val if unit == "ms" else val * 1000
+        if ms > 0:
+            return min(_MAX_GROQ_BACKOFF_MS, int(ms))
+    return None
+
+
 def _call_groq(debate_transcript: str, api_key: str) -> str:
     """Call Groq via its OpenAI-compatible endpoint and return raw text response."""
     model = os.environ.get("GROQ_JUDGE_MODEL", os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")).strip()
@@ -91,15 +127,22 @@ def _call_groq(debate_transcript: str, api_key: str) -> str:
         "max_tokens": 1024,
         "temperature": 0.2,
     }
-    with httpx.Client(timeout=60.0) as client:
-        r = client.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json=payload,
-        )
+    for attempt in range(_MAX_GROQ_429_RETRIES + 1):
+        with httpx.Client(timeout=90.0) as client:
+            r = client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload,
+            )
+        if r.status_code == 429 and attempt < _MAX_GROQ_429_RETRIES:
+            wait_ms = _parse_groq_retry_after_ms(r) or min(
+                _MAX_GROQ_BACKOFF_MS, 1000 * (attempt + 1) ** 2
+            )
+            time.sleep(wait_ms / 1000.0)
+            continue
         r.raise_for_status()
-    data = r.json()
-    return str(data["choices"][0]["message"]["content"])
+        data = r.json()
+        return str(data["choices"][0]["message"]["content"])
 
 
 def run_judge(debate_transcript: str) -> Verdict:

@@ -1722,7 +1722,7 @@ function formatVerdictIngestionMetaHtml(ctx) {
  * @param {HTMLElement} verdictRootEl
  * @param {WarRoomVerdict} v
  * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
- * @param {{ source: 'service' | 'browser', predictionId?: number, ingestionCtx?: Record<string, unknown> }} meta
+ * @param {{ source: 'service' | 'browser', predictionId?: number, ingestionCtx?: Record<string, unknown>, judgeApiNote?: string }} meta
  */
 function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
   const winDisplay = resolveWinnerDisplay(teams, v.winner);
@@ -1746,12 +1746,19 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
     meta.source === "service" && meta.predictionId != null
       ? `<p class="verdict-subkicker">Saved · prediction #${escapeHtml(String(meta.predictionId))} (Judge service)</p>`
       : meta.source === "browser"
-        ? `<p class="verdict-subkicker">Browser judge — start Judge service on port 8000 to persist picks via the Node proxy.</p>`
+        ? meta.judgeApiNote != null && String(meta.judgeApiNote).trim()
+          ? `<p class="verdict-subkicker">Browser judge (fallback)</p>`
+          : `<p class="verdict-subkicker">Browser judge — start Judge service on port 8000 to persist picks via the Node proxy.</p>`
         : "";
+  const judgeNote =
+    meta.judgeApiNote != null && String(meta.judgeApiNote).trim()
+      ? `<p class="verdict-subkicker verdict-subkicker--warn">${escapeHtml(String(meta.judgeApiNote).trim())}</p>`
+      : "";
   verdictRootEl.innerHTML = `
     <div class="verdict-card">
       <div class="verdict-kicker">Judge verdict</div>
       ${sub}
+      ${judgeNote}
       <div class="verdict-winner-row">${verdictLogoHtml}<div class="verdict-winner">${escapeHtml(String(winDisplay).toUpperCase())} WINS</div></div>
       <div class="verdict-summary">${escapeHtml(v.summary || "")}</div>
       ${ingestionBlock}
@@ -2121,17 +2128,53 @@ async function applySharedPredictionPreviewFromUrl() {
 
 /** Transient gateway / cold-start statuses when the Node proxy calls the Judge service on Render. */
 function isJudgeTransientHttpStatus(status) {
-  return status === 502 || status === 503 || status === 504;
+  return status === 502 || status === 503 || status === 504 || status === 429;
+}
+
+/**
+ * @param {Response} r
+ * @returns {number | null} milliseconds to wait, capped
+ */
+function parseRetryAfterMsFromResponse(r) {
+  const h = (r.headers.get("retry-after") || "").trim();
+  if (h) {
+    const n = Number(h);
+    if (Number.isFinite(n) && n > 0) return Math.min(60_000, Math.ceil(n * 1000));
+    const dateMs = Date.parse(h);
+    if (Number.isFinite(dateMs)) {
+      const delta = dateMs - Date.now();
+      if (delta > 0) return Math.min(60_000, delta);
+    }
+  }
+  return null;
+}
+
+/**
+ * Plain-language copy for common HTTP failures (ingestion, proxy, LLM APIs).
+ * @param {number} status
+ * @param {string} [serverDetail] optional message from JSON body (not used for 429; keeps copy short)
+ */
+function humanReadableHttpFailureMessage(status, serverDetail) {
+  if (status === 429) {
+    return "Rate limited — the API is busy. Try again in a minute.";
+  }
+  if (status === 502 || status === 503 || status === 504) {
+    return "Service temporarily unavailable. Try again shortly.";
+  }
+  const d = serverDetail != null && String(serverDetail).trim();
+  if (d) return d;
+  return `Request failed (HTTP ${status}).`;
 }
 
 /**
  * Judge routes are proxied to a separate Python service; free-tier cold starts often return 502 briefly.
+ * Groq (used by the Judge) may return 429 — retry with backoff so the UI can recover without a full refresh.
  * @param {string} url
  * @param {RequestInit} init
  */
 async function fetchJudgeProxyWithRetry(url, init) {
-  const maxAttempts = 3;
-  const pauseMs = 3000;
+  const maxAttempts = 4;
+  const coldStartPauseMs = 3000;
   /** @type {Response|undefined} */
   let last;
   for (let i = 0; i < maxAttempts; i++) {
@@ -2139,6 +2182,17 @@ async function fetchJudgeProxyWithRetry(url, init) {
     last = r;
     if (r.ok) return r;
     if (i < maxAttempts - 1 && isJudgeTransientHttpStatus(r.status)) {
+      if (r.status === 429) {
+        const runLbl = document.getElementById("runningLabel");
+        if (runLbl) {
+          runLbl.style.display = "";
+          runLbl.textContent = "Rate limited — retrying…";
+        }
+      }
+      const pauseMs =
+        r.status === 429
+          ? parseRetryAfterMsFromResponse(r) ?? Math.min(45_000, 2500 * (i + 1) ** 2)
+          : coldStartPauseMs;
       await new Promise((resolve) => setTimeout(resolve, pauseMs));
     } else {
       return r;
@@ -2148,9 +2202,14 @@ async function fetchJudgeProxyWithRetry(url, init) {
 }
 
 /**
+ * @typedef {{ ok: true, prediction_id: number, verdict: WarRoomVerdict, accuracy?: { total_settled: number, correct: number, accuracy: number | null } }} JudgePredictOk
+ * @typedef {{ ok: false, status: number }} JudgePredictErr
+ */
+
+/**
  * @param {string} matchId
  * @param {string} debateTranscript
- * @returns {Promise<{ prediction_id: number, verdict: WarRoomVerdict, accuracy: { total_settled: number, correct: number, accuracy: number | null } } | null>}
+ * @returns {Promise<JudgePredictOk | JudgePredictErr>}
  */
 async function postJudgePredict(matchId, debateTranscript) {
   try {
@@ -2159,12 +2218,17 @@ async function postJudgePredict(matchId, debateTranscript) {
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ match_id: matchId, debate_transcript: debateTranscript }),
     });
-    if (!r.ok) return null;
+    if (!r.ok) return { ok: false, status: r.status };
     const data = await r.json();
-    if (!data || typeof data !== "object" || !data.verdict) return null;
-    return /** @type {any} */ (data);
+    if (!data || typeof data !== "object" || !data.verdict) return { ok: false, status: 0 };
+    return {
+      ok: true,
+      prediction_id: Number(data.prediction_id) || 0,
+      verdict: /** @type {WarRoomVerdict} */ (data.verdict),
+      accuracy: data.accuracy,
+    };
   } catch {
-    return null;
+    return { ok: false, status: 0 };
   }
 }
 
@@ -2419,11 +2483,15 @@ async function callClaude(messages, system, maxTokens = 1000, groqRoute = 'misc'
     throw new Error(`Bad response (HTTP ${r.status}). Use http://localhost:3333 via "node server.mjs", not a raw .html file.`);
   }
   if (!r.ok) {
-    const msg =
+    const raw =
       d.error?.message ||
-      (typeof d.error === 'string' ? d.error : null) ||
+      (typeof d.error === "string" ? d.error : null) ||
       d.message ||
       `Request failed (${r.status})`;
+    const msg =
+      r.status === 429 || r.status === 502 || r.status === 503 || r.status === 504
+        ? humanReadableHttpFailureMessage(r.status, typeof raw === "string" ? raw : "")
+        : raw;
     throw new Error(msg);
   }
   return (d.content || []).map((b) => (b && b.text != null ? b.text : '')).join('');
@@ -2757,13 +2825,17 @@ async function fetchMatchContextFromServer(match, teams) {
   try {
     const r = await fetch(u.toString());
     if (!r.ok) {
-      let msg = `HTTP ${r.status}`;
+      let serverMsg = "";
       try {
         const err = await r.json();
-        if (err && err.message != null) msg = String(err.message);
+        if (err && err.message != null) serverMsg = String(err.message);
       } catch {
         /* ignore */
       }
+      const msg =
+        r.status === 429 || r.status === 502 || r.status === 503 || r.status === 504
+          ? humanReadableHttpFailureMessage(r.status, serverMsg)
+          : serverMsg || humanReadableHttpFailureMessage(r.status);
       return emptyMatchContext(msg);
     }
     return await r.json();
@@ -3575,23 +3647,23 @@ async function runWarRoom() {
       .join('\n\n');
 
     const vDiv = document.getElementById('verdictArea');
-    const svc = await postJudgePredict(match, debateStr);
+    const judgePr = await postJudgePredict(match, debateStr);
     hideTyping();
 
-    if (svc && svc.verdict) {
-      const v = normalizeVerdictPartial(svc.verdict, teams);
+    if (judgePr.ok) {
+      const v = normalizeVerdictPartial(judgePr.verdict, teams);
       mountJudgeVerdictCard(vDiv, v, teams, {
         source: 'service',
-        predictionId: svc.prediction_id,
+        predictionId: judgePr.prediction_id,
         ingestionCtx: ingestedCtx,
       });
-      if (svc.accuracy && typeof svc.accuracy === 'object') {
+      if (judgePr.accuracy && typeof judgePr.accuracy === 'object') {
         updateJudgeAccuracyFooterFromStats({
-          total_settled: Number(svc.accuracy.total_settled) || 0,
-          correct: Number(svc.accuracy.correct) || 0,
+          total_settled: Number(judgePr.accuracy.total_settled) || 0,
+          correct: Number(judgePr.accuracy.correct) || 0,
           accuracy:
-            svc.accuracy.accuracy != null && Number.isFinite(Number(svc.accuracy.accuracy))
-              ? Number(svc.accuracy.accuracy)
+            judgePr.accuracy.accuracy != null && Number.isFinite(Number(judgePr.accuracy.accuracy))
+              ? Number(judgePr.accuracy.accuracy)
               : null,
         });
       } else {
@@ -3629,7 +3701,17 @@ async function runWarRoom() {
         },
         teams
       );
-      mountJudgeVerdictCard(vDiv, v, teams, { source: 'browser', ingestionCtx: ingestedCtx });
+      const judgeApiNote =
+        judgePr.status === 429
+          ? "Judge API was rate-limited after automatic retries — verdict below is from the browser judge."
+          : judgePr.status > 0
+            ? `Judge API was unavailable (${humanReadableHttpFailureMessage(judgePr.status)}) — verdict below is from the browser judge.`
+            : undefined;
+      mountJudgeVerdictCard(vDiv, v, teams, {
+        source: 'browser',
+        ingestionCtx: ingestedCtx,
+        judgeApiNote,
+      });
     }
 
     scrollVerdictPanelIntoView({ behavior: "smooth" });
