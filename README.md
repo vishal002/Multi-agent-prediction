@@ -48,6 +48,21 @@ flowchart LR
 4. **Bull vs Bear** multi-round debate uses the same context with opposing goals.
 5. **Judge** returns strict JSON; optional **Judge service** stores predictions for accuracy.
 
+### Server hardening (optional)
+
+The Node gateway enforces **max body sizes** on `POST /api/messages`, Judge proxy, and share payloads; **sliding-window rate limits** per IP on LLM and Judge predict routes; and **minimal `/api/version`** when `NODE_ENV=production` or `VERSION_INFO_MINIMAL=1` (no git hashes in JSON).
+
+| Variable | Purpose |
+|----------|---------|
+| `WAR_ROOM_API_SECRET` | If set, `POST /api/messages` and `POST /api/judge/predict` require `Authorization: Bearer <secret>`. The UI reads the same value from **`localStorage.WAR_ROOM_API_SECRET`** when present (for locked demos). |
+| `JUDGE_SERVICE_SECRET` | If set on the **Judge** Python service, all Judge HTTP routes require that Bearer token (or `X-Judge-Secret`). The Node server sends it automatically when this env is set on the web process. Use the **same** value on web + judge. |
+| `TRUST_PROXY` | `1` or `true`: use `X-Forwarded-For` first hop for rate-limit client IP (e.g. behind Render). |
+| `RL_MESSAGES_PER_MIN` / `RL_JUDGE_PER_MIN` | Per-IP caps in a 60s window (defaults **30** / **15**; set `0` to disable that limit). |
+| `MAX_BODY_MESSAGES_BYTES` / `MAX_BODY_JUDGE_BYTES` | Request body caps (defaults **1 MiB** / **2 MiB**). |
+| `ALLOWED_ORIGINS` | Comma-separated list; when set, CORS reflects a matching `Origin` instead of `*`. |
+| `INGESTION_EXPOSE_ERRORS` | `1` on ingestion: return real exception text in 502 JSON (default: generic `ingestion_failed`). |
+| `INGESTION_RSS_MAX_BYTES` | Max RSS download size before parse (default **2 MiB**). |
+
 ---
 
 ## Judge accuracy & persistence
@@ -199,6 +214,7 @@ Opening `ai_cricket_war_room.html` over `file://` uses bundled fallback fixtures
 | `WAR_ROOM_DB_PATH` | Judge **file** SQLite when Turso env is **not** set. |
 | `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` | Judge **remote** DB (preferred on ephemeral disks). |
 | `GROQ_JUDGE_MODEL` / `ANTHROPIC_JUDGE_MODEL` | Judge-only model overrides. |
+| `WAR_ROOM_API_SECRET` / `JUDGE_SERVICE_SECRET` / `TRUST_PROXY` / `RL_*` / `MAX_BODY_*` / `ALLOWED_ORIGINS` | See [Server hardening](#server-hardening-optional). |
 
 ---
 

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import html
+import os
 import re
-import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import Any
 
+import defusedxml.ElementTree as ET
 import httpx
 
 STRIP_TAGS = re.compile(r"<[^>]+>")
@@ -108,6 +109,16 @@ def parse_rss_xml(xml_text: str) -> list[dict[str, Any]]:
     return items_out
 
 
+def _rss_max_bytes() -> int:
+    raw = os.environ.get("INGESTION_RSS_MAX_BYTES", "").strip()
+    if raw:
+        try:
+            return max(64_000, min(10 * 1024 * 1024, int(raw)))
+        except ValueError:
+            pass
+    return 2 * 1024 * 1024
+
+
 async def fetch_feed(
     client: httpx.AsyncClient,
     *,
@@ -116,10 +127,19 @@ async def fetch_feed(
     feed_url: str,
     timeout_sec: float,
 ) -> FetchOutcome:
+    max_b = _rss_max_bytes()
     try:
-        r = await client.get(feed_url, timeout=timeout_sec)
-        r.raise_for_status()
-        items = parse_rss_xml(r.text)
+        async with client.stream("GET", feed_url, timeout=timeout_sec) as r:
+            r.raise_for_status()
+            chunks: list[bytes] = []
+            total = 0
+            async for chunk in r.aiter_bytes():
+                total += len(chunk)
+                if total > max_b:
+                    raise ValueError("rss response exceeds INGESTION_RSS_MAX_BYTES cap")
+                chunks.append(chunk)
+        text = b"".join(chunks).decode("utf-8", errors="replace")
+        items = parse_rss_xml(text)
         return FetchOutcome(
             source_id=source_id,
             display_name=display_name,

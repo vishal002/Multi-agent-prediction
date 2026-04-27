@@ -216,6 +216,155 @@ const INGESTION_SERVICE_URL = (process.env.INGESTION_SERVICE_URL || "http://127.
 
 const JUDGE_SERVICE_URL = (process.env.JUDGE_SERVICE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
 
+/** Optional: require `Authorization: Bearer <secret>` on POST /api/messages and POST /api/judge/predict. */
+const WAR_ROOM_API_SECRET = (process.env.WAR_ROOM_API_SECRET || "").trim();
+/** Forwarded to Judge on proxied requests when set (Judge must set same `JUDGE_SERVICE_SECRET`). */
+const JUDGE_SERVICE_SECRET = (process.env.JUDGE_SERVICE_SECRET || "").trim();
+const TRUST_PROXY = process.env.TRUST_PROXY === "1" || process.env.TRUST_PROXY === "true";
+
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+const MAX_BODY_MESSAGES_BYTES = Math.min(
+  8 * 1024 * 1024,
+  Math.max(64 * 1024, Number(process.env.MAX_BODY_MESSAGES_BYTES) || 1024 * 1024)
+);
+const MAX_BODY_JUDGE_BYTES = Math.min(
+  8 * 1024 * 1024,
+  Math.max(64 * 1024, Number(process.env.MAX_BODY_JUDGE_BYTES) || 2 * 1024 * 1024)
+);
+const MAX_BODY_SHARE_BYTES = 48_000;
+
+const RL_MESSAGES_PER_MIN = Math.max(0, Number(process.env.RL_MESSAGES_PER_MIN) || 30);
+const RL_JUDGE_PER_MIN = Math.max(0, Number(process.env.RL_JUDGE_PER_MIN) || 15);
+
+const VERSION_INFO_MINIMAL =
+  process.env.VERSION_INFO_MINIMAL === "1" ||
+  process.env.VERSION_INFO_MINIMAL === "true" ||
+  process.env.NODE_ENV === "production";
+
+/**
+ * @param {import("http").IncomingMessage} req
+ * @returns {string}
+ */
+function clientIp(req) {
+  if (TRUST_PROXY) {
+    const xff = req.headers["x-forwarded-for"];
+    if (typeof xff === "string" && xff.trim()) {
+      const first = xff.split(",")[0].trim();
+      if (first) return first;
+    }
+  }
+  return req.socket?.remoteAddress || "unknown";
+}
+
+/** @type {Map<string, { t: number }[]>} */
+const _rlMessages = new Map();
+/** @type {Map<string, { t: number }[]>} */
+const _rlJudge = new Map();
+
+function pruneRlEntries(map, ip, windowMs) {
+  const now = Date.now();
+  const arr = map.get(ip);
+  if (!arr) return [];
+  const kept = arr.filter((e) => now - e.t < windowMs);
+  if (kept.length) map.set(ip, kept);
+  else map.delete(ip);
+  return kept;
+}
+
+/**
+ * @param {string} ip
+ * @param {"messages" | "judge"} kind
+ * @returns {{ ok: boolean }}
+ */
+function rateLimitAllow(ip, kind) {
+  const windowMs = 60_000;
+  const limit = kind === "messages" ? RL_MESSAGES_PER_MIN : RL_JUDGE_PER_MIN;
+  if (!limit) return { ok: true };
+  const map = kind === "messages" ? _rlMessages : _rlJudge;
+  const entries = pruneRlEntries(map, ip, windowMs);
+  if (entries.length >= limit) return { ok: false };
+  entries.push({ t: Date.now() });
+  map.set(ip, entries);
+  return { ok: true };
+}
+
+/**
+ * @param {import("http").IncomingMessage} req
+ * @returns {Record<string, string>}
+ */
+function corsHeaders(req) {
+  if (!ALLOWED_ORIGINS.length) {
+    return { "Access-Control-Allow-Origin": "*" };
+  }
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    return { "Access-Control-Allow-Origin": origin, Vary: "Origin" };
+  }
+  return {};
+}
+
+/**
+ * @param {import("http").IncomingMessage} req
+ * @returns {boolean}
+ */
+function warRoomBearerOk(req) {
+  if (!WAR_ROOM_API_SECRET) return true;
+  const h = req.headers.authorization;
+  if (!h || typeof h !== "string") return false;
+  const m = h.match(/^\s*Bearer\s+(.+)$/i);
+  return Boolean(m && m[1].trim() === WAR_ROOM_API_SECRET);
+}
+
+/**
+ * @param {import("http").IncomingMessage} req
+ * @param {import("http").ServerResponse} res
+ * @returns {boolean} true if caller should continue
+ */
+function denyUnlessWarRoomSecret(req, res) {
+  if (warRoomBearerOk(req)) return true;
+  res.writeHead(401, {
+    "Content-Type": "application/json; charset=utf-8",
+    ...corsHeaders(req),
+  });
+  res.end(JSON.stringify({ error: { message: "Unauthorized — set Authorization: Bearer or unset WAR_ROOM_API_SECRET." } }));
+  return false;
+}
+
+/**
+ * @returns {Record<string, string>}
+ */
+function judgeUpstreamAuthHeaders() {
+  if (!JUDGE_SERVICE_SECRET) return {};
+  return { Authorization: `Bearer ${JUDGE_SERVICE_SECRET}` };
+}
+
+/**
+ * @param {import("http").IncomingMessage} req
+ * @param {{ maxBytes: number }} opts
+ * @returns {Promise<{ ok: true; body: string } | { ok: false; code: "payload_too_large" }>}
+ */
+async function readBody(req, opts) {
+  const maxBytes = opts.maxBytes;
+  const chunks = [];
+  let total = 0;
+  try {
+    for await (const c of req) {
+      total += c.length;
+      if (total > maxBytes) {
+        return { ok: false, code: "payload_too_large" };
+      }
+      chunks.push(c);
+    }
+  } catch {
+    return { ok: false, code: "payload_too_large" };
+  }
+  return { ok: true, body: Buffer.concat(chunks).toString("utf8") };
+}
+
 function resolveProvider() {
   if (LLM_PROVIDER === "groq") return GROQ_KEY ? "groq" : null;
   if (LLM_PROVIDER === "anthropic") return ANTHROPIC_KEY ? "anthropic" : null;
@@ -883,12 +1032,25 @@ function resolveVersionInfo() {
     /* package.json missing in some weird container — fall through with empty */
   }
 
+  /** @type {Record<string, unknown>} */
+  let full = {
+    appVersion: pkg.version || "0.0.0",
+    buildHash: null,
+    builtAt: null,
+    commit: null,
+    commitShort: null,
+    branch: null,
+    dirty: null,
+    mode: SERVE_DIST ? "production" : "development",
+  };
+
   if (SERVE_DIST) {
     const manifestPath = path.join(__dirname, "dist", "build-manifest.json");
     try {
       const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-      return {
-        appVersion: manifest.appVersion || pkg.version || "0.0.0",
+      full = {
+        ...full,
+        appVersion: manifest.appVersion || full.appVersion,
         buildHash: manifest.buildHash || null,
         builtAt: manifest.builtAt || null,
         commit: manifest.git?.commit ?? null,
@@ -902,32 +1064,44 @@ function resolveVersionInfo() {
     }
   }
 
-  // Dev (or prod-without-manifest) fallback: probe git directly.
-  let commit = null;
-  let branch = null;
-  let dirty = null;
-  try {
-    commit = execSync("git rev-parse HEAD", { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
-    try {
-      branch = execSync("git rev-parse --abbrev-ref HEAD", { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
-    } catch { /* detached HEAD */ }
-    try {
-      dirty = execSync("git status --porcelain", { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().length > 0;
-    } catch { /* not a git repo */ }
-  } catch {
-    /* git missing or not a repo */
+  if (!VERSION_INFO_MINIMAL) {
+    let commit = /** @type {string | null} */ (full.commit);
+    if (!commit) {
+      try {
+        commit = execSync("git rev-parse HEAD", { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+        full.commit = commit;
+        full.commitShort = commit.slice(0, 7);
+        try {
+          full.branch = execSync("git rev-parse --abbrev-ref HEAD", {
+            cwd: __dirname,
+            stdio: ["ignore", "pipe", "ignore"],
+          })
+            .toString()
+            .trim();
+        } catch {
+          /* detached HEAD */
+        }
+        try {
+          full.dirty =
+            execSync("git status --porcelain", { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().length > 0;
+        } catch {
+          /* not a git repo */
+        }
+      } catch {
+        /* git missing or not a repo */
+      }
+    }
   }
 
-  return {
-    appVersion: pkg.version || "0.0.0",
-    buildHash: null,
-    builtAt: null,
-    commit,
-    commitShort: commit ? commit.slice(0, 7) : null,
-    branch,
-    dirty,
-    mode: SERVE_DIST ? "production" : "development",
-  };
+  if (VERSION_INFO_MINIMAL) {
+    return {
+      appVersion: full.appVersion,
+      buildHash: full.buildHash,
+      builtAt: full.builtAt,
+      mode: full.mode,
+    };
+  }
+  return full;
 }
 
 const VERSION_INFO = resolveVersionInfo();
@@ -994,12 +1168,6 @@ function safeJoin(root, reqPath) {
   const full = path.join(root, normalized);
   if (!full.startsWith(root)) return null;
   return full;
-}
-
-async function readBody(req) {
-  const chunks = [];
-  for await (const c of req) chunks.push(c);
-  return Buffer.concat(chunks).toString("utf8");
 }
 
 // ── Short share links: POST pack → id; GET /s/:id → app with ?sid= ─────────
@@ -1550,9 +1718,9 @@ const server = http.createServer(async (req, res) => {
       url.pathname.startsWith("/api/og/share/"))
   ) {
     res.writeHead(204, {
-      "Access-Control-Allow-Origin": "*",
+      ...corsHeaders(req),
       "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
       "Access-Control-Max-Age": "86400",
     });
     res.end();
@@ -1562,7 +1730,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && url.pathname === "/api/version") {
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
+      ...corsHeaders(req),
       // Always fresh — version flips on every deploy and the payload is tiny.
       "Cache-Control": "no-cache",
     });
@@ -1593,7 +1761,7 @@ const server = http.createServer(async (req, res) => {
     });
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
+      ...corsHeaders(req),
       "Cache-Control": "public, max-age=60",
     });
     res.end(JSON.stringify({ suggestions }));
@@ -1647,7 +1815,7 @@ const server = http.createServer(async (req, res) => {
         bestScore >= 5 || (bestScore >= 4 && best && SCORE_RX.test(best)) ? best.slice(0, 400) : "";
       res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
         "Cache-Control": "no-store",
       });
       res.end(
@@ -1664,7 +1832,7 @@ const server = http.createServer(async (req, res) => {
     } catch (e) {
       res.writeHead(503, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
         "Cache-Control": "no-store",
       });
       res.end(JSON.stringify({ snippet: "", error: e instanceof Error ? e.message : String(e) }));
@@ -1684,14 +1852,14 @@ const server = http.createServer(async (req, res) => {
       const text = await r.text();
       res.writeHead(r.status, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
         "Cache-Control": "no-store",
       });
       res.end(text);
     } catch (e) {
       res.writeHead(503, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
         "Cache-Control": "no-store",
       });
       res.end(
@@ -1706,37 +1874,51 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/api/judge/predict") {
-    const target = `${JUDGE_SERVICE_URL}/predict`;
-    let body;
-    try {
-      body = await readBody(req);
-    } catch {
-      res.writeHead(400, {
+    if (!rateLimitAllow(clientIp(req), "judge").ok) {
+      res.writeHead(429, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
+        "Retry-After": "60",
       });
-      res.end(JSON.stringify({ error: "invalid_body" }));
+      res.end(JSON.stringify({ error: "rate_limited", message: "Too many judge requests; try again shortly." }));
       return;
     }
+    if (!denyUnlessWarRoomSecret(req, res)) return;
+
+    const target = `${JUDGE_SERVICE_URL}/predict`;
+    const rb = await readBody(req, { maxBytes: MAX_BODY_JUDGE_BYTES });
+    if (!rb.ok) {
+      res.writeHead(413, {
+        "Content-Type": "application/json; charset=utf-8",
+        ...corsHeaders(req),
+      });
+      res.end(JSON.stringify({ error: "payload_too_large", message: `Body exceeds ${MAX_BODY_JUDGE_BYTES} bytes` }));
+      return;
+    }
+    const body = rb.body;
     const ctrl = AbortSignal.timeout(120_000);
     try {
       const r = await fetch(target, {
         method: "POST",
         signal: ctrl,
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          ...judgeUpstreamAuthHeaders(),
+        },
         body: body && body.trim() ? body : "{}",
       });
       const text = await r.text();
       res.writeHead(r.status, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
         "Cache-Control": "no-store",
       });
       res.end(text);
     } catch (e) {
       res.writeHead(503, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
         "Cache-Control": "no-store",
       });
       res.end(
@@ -1758,19 +1940,19 @@ const server = http.createServer(async (req, res) => {
       const r = await fetch(target, {
         method: "GET",
         signal: ctrl,
-        headers: { Accept: "application/json" },
+        headers: { Accept: "application/json", ...judgeUpstreamAuthHeaders() },
       });
       const text = await r.text();
       res.writeHead(r.status, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
         "Cache-Control": "no-store",
       });
       res.end(text);
     } catch (e) {
       res.writeHead(503, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
         "Cache-Control": "no-store",
       });
       res.end(
@@ -1799,7 +1981,7 @@ const server = http.createServer(async (req, res) => {
     if (!row) {
       res.writeHead(404, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
       });
       res.end(JSON.stringify({ error: "not_found" }));
       return;
@@ -1814,7 +1996,7 @@ const server = http.createServer(async (req, res) => {
     };
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
+      ...corsHeaders(req),
       "Cache-Control": "public, max-age=60",
     });
     res.end(JSON.stringify({ match: payload }));
@@ -1822,10 +2004,21 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/api/messages") {
+    if (!rateLimitAllow(clientIp(req), "messages").ok) {
+      res.writeHead(429, {
+        "Content-Type": "application/json; charset=utf-8",
+        ...corsHeaders(req),
+        "Retry-After": "60",
+      });
+      res.end(JSON.stringify({ error: { message: "Too many requests; try again shortly." } }));
+      return;
+    }
+    if (!denyUnlessWarRoomSecret(req, res)) return;
+
     activeProvider = resolveProvider();
 
     if (!activeProvider) {
-      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8", ...corsHeaders(req) });
       res.end(
         JSON.stringify({
           error: {
@@ -1839,19 +2032,19 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (LLM_PROVIDER === "groq" && !GROQ_KEY) {
-      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8", ...corsHeaders(req) });
       res.end(JSON.stringify({ error: { message: "LLM_PROVIDER=groq but GROQ_API_KEY is empty." } }));
       return;
     }
     if (LLM_PROVIDER === "anthropic" && !ANTHROPIC_KEY) {
-      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8", ...corsHeaders(req) });
       res.end(
         JSON.stringify({ error: { message: "LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is empty." } })
       );
       return;
     }
     if (LLM_PROVIDER === "gemini" && !GEMINI_KEY) {
-      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8", ...corsHeaders(req) });
       res.end(
         JSON.stringify({
           error: { message: "LLM_PROVIDER=gemini but GEMINI_API_KEY / GOOGLE_API_KEY is empty." },
@@ -1860,14 +2053,16 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    let body;
-    try {
-      body = await readBody(req);
-    } catch {
-      res.writeHead(400, { "Content-Type": "application/json; charset=utf-8" });
-      res.end(JSON.stringify({ error: { message: "Invalid body" } }));
+    const rbMsg = await readBody(req, { maxBytes: MAX_BODY_MESSAGES_BYTES });
+    if (!rbMsg.ok) {
+      res.writeHead(413, {
+        "Content-Type": "application/json; charset=utf-8",
+        ...corsHeaders(req),
+      });
+      res.end(JSON.stringify({ error: { message: `Body exceeds ${MAX_BODY_MESSAGES_BYTES} bytes` } }));
       return;
     }
+    const body = rbMsg.body;
 
     try {
       let result;
@@ -1884,13 +2079,13 @@ const server = http.createServer(async (req, res) => {
       }
       res.writeHead(result.status, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
       });
       res.end(result.body);
     } catch (e) {
       res.writeHead(502, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
       });
       res.end(
         JSON.stringify({
@@ -1902,32 +2097,23 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (req.method === "POST" && url.pathname === "/api/share-prediction") {
-    let raw = "";
-    try {
-      raw = await readBody(req);
-    } catch {
-      res.writeHead(400, {
-        "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
-      });
-      res.end(JSON.stringify({ error: { message: "Empty body" } }));
-      return;
-    }
-    if (raw.length > 48_000) {
+    const rbShare = await readBody(req, { maxBytes: MAX_BODY_SHARE_BYTES });
+    if (!rbShare.ok) {
       res.writeHead(413, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
       });
-      res.end(JSON.stringify({ error: { message: "Body too large" } }));
+      res.end(JSON.stringify({ error: { message: `Body exceeds ${MAX_BODY_SHARE_BYTES} bytes` } }));
       return;
     }
+    const raw = rbShare.body;
     let parsed;
     try {
       parsed = JSON.parse(raw);
     } catch {
       res.writeHead(400, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
       });
       res.end(JSON.stringify({ error: { message: "Invalid JSON" } }));
       return;
@@ -1936,7 +2122,7 @@ const server = http.createServer(async (req, res) => {
     if (!pack) {
       res.writeHead(400, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
       });
       res.end(JSON.stringify({ error: { message: "Invalid share payload" } }));
       return;
@@ -1947,7 +2133,7 @@ const server = http.createServer(async (req, res) => {
     persistSharePredictions();
     res.writeHead(201, {
       "Content-Type": "application/json; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
+      ...corsHeaders(req),
       "Cache-Control": "no-store",
     });
     res.end(JSON.stringify({ id }));
@@ -1959,7 +2145,7 @@ const server = http.createServer(async (req, res) => {
     if (!SHARE_ID_HEX_RX.test(id)) {
       res.writeHead(400, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
       });
       res.end(JSON.stringify({ error: { message: "Invalid id" } }));
       return;
@@ -1968,14 +2154,14 @@ const server = http.createServer(async (req, res) => {
     if (!row) {
       res.writeHead(404, {
         "Content-Type": "application/json; charset=utf-8",
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
       });
       res.end(JSON.stringify({ error: { message: "Not found" } }));
       return;
     }
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Access-Control-Allow-Origin": "*",
+      ...corsHeaders(req),
       "Cache-Control": "no-store",
     });
     res.end(JSON.stringify(row.pack));
@@ -1997,7 +2183,7 @@ const server = http.createServer(async (req, res) => {
         "Content-Type": "image/png",
         "Cache-Control": "public, max-age=120",
         "Content-Length": String(png.length),
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
       });
       if (req.method === "HEAD") {
         res.end();
@@ -2019,7 +2205,7 @@ const server = http.createServer(async (req, res) => {
         "Content-Type": "image/png",
         "Cache-Control": "public, max-age=3600",
         "Content-Length": String(png.length),
-        "Access-Control-Allow-Origin": "*",
+        ...corsHeaders(req),
       });
       if (req.method === "HEAD") {
         res.end();

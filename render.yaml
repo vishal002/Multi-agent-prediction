@@ -10,8 +10,10 @@
 ##   cricket-war-room:   GROQ_API_KEY (or ANTHROPIC_API_KEY)
 ##                       INGESTION_SERVICE_URL  → https://cricket-ingestion.onrender.com
 ##                       JUDGE_SERVICE_URL      → https://cricket-judge.onrender.com
+##                       Optional: WAR_ROOM_API_SECRET, JUDGE_SERVICE_SECRET (same on web+judge),
+##                       TRUST_PROXY=1 for rate limits behind Render proxy
 ##   cricket-ingestion:  CRICAPI_KEY (optional — free tier at cricapi.com)
-##   cricket-judge:      GROQ_API_KEY or ANTHROPIC_API_KEY
+##   cricket-judge:      GROQ_API_KEY or ANTHROPIC_API_KEY, optional JUDGE_SERVICE_SECRET
 
 services:
   # ── 1. Main web service (Node.js) ────────────────────────────────────────────
@@ -37,6 +39,12 @@ services:
       - key: INGESTION_SERVICE_URL
         sync: false
       - key: JUDGE_SERVICE_URL
+        sync: false
+      - key: WAR_ROOM_API_SECRET
+        sync: false
+      - key: JUDGE_SERVICE_SECRET
+        sync: false
+      - key: TRUST_PROXY
         sync: false
 
   # ── 2. Ingestion service (Python) — optional ──────────────────────────────────
@@ -75,4 +83,6 @@ services:
       - key: TURSO_DATABASE_URL
         sync: false
       - key: TURSO_AUTH_TOKEN
+        sync: false
+      - key: JUDGE_SERVICE_SECRET
         sync: false

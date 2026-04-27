@@ -2154,6 +2154,18 @@ function parseRetryAfterMsFromResponse(r) {
  * @param {number} status
  * @param {string} [serverDetail] optional message from JSON body (not used for 429; keeps copy short)
  */
+/** When the server has `WAR_ROOM_API_SECRET`, set the same value in localStorage under this key (dev / locked deploys). */
+function warRoomOptionalAuthHeaders() {
+  try {
+    if (typeof localStorage === "undefined") return {};
+    const t = localStorage.getItem("WAR_ROOM_API_SECRET");
+    if (t && String(t).trim()) return { Authorization: `Bearer ${String(t).trim()}` };
+  } catch {
+    /* private mode */
+  }
+  return {};
+}
+
 function humanReadableHttpFailureMessage(status, serverDetail) {
   if (status === 429) {
     return "Rate limited — the API is busy. Try again in a minute.";
@@ -2178,7 +2190,10 @@ async function fetchJudgeProxyWithRetry(url, init) {
   /** @type {Response|undefined} */
   let last;
   for (let i = 0; i < maxAttempts; i++) {
-    const r = await fetch(url, init);
+    const r = await fetch(url, {
+      ...init,
+      headers: { ...warRoomOptionalAuthHeaders(), ...(init.headers && typeof init.headers === "object" ? init.headers : {}) },
+    });
     last = r;
     if (r.ok) return r;
     if (i < maxAttempts - 1 && isJudgeTransientHttpStatus(r.status)) {
@@ -2467,7 +2482,7 @@ function resolveWinnerDisplay(teams, winnerCodeOrName) {
 async function callClaude(messages, system, maxTokens = 1000, groqRoute = 'misc') {
   const r = await fetch(`${apiBase()}/api/messages`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...warRoomOptionalAuthHeaders() },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
       max_tokens: maxTokens,

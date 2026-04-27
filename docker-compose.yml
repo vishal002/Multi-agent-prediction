@@ -17,6 +17,10 @@ services:
       - LLM_PROVIDER=${LLM_PROVIDER:-}
       - INGESTION_SERVICE_URL=http://ingestion:3334
       - JUDGE_SERVICE_URL=http://judge:8000
+      # Optional hardening (same value on web + judge for JUDGE_SERVICE_SECRET)
+      - WAR_ROOM_API_SECRET=${WAR_ROOM_API_SECRET:-}
+      - JUDGE_SERVICE_SECRET=${JUDGE_SERVICE_SECRET:-}
+      - TRUST_PROXY=${TRUST_PROXY:-}
     depends_on:
       ingestion:
         condition: service_healthy
@@ -45,6 +49,7 @@ services:
     environment:
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - JUDGE_SERVICE_SECRET=${JUDGE_SERVICE_SECRET:-}
       - WAR_ROOM_DB_PATH=/data/war_room.db
       # Optional: set both to use Turso instead of the volume for predictions
       - TURSO_DATABASE_URL=${TURSO_DATABASE_URL:-}
