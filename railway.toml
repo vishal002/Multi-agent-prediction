@@ -1,13 +1,15 @@
-# Railway — main Node web service (UI + /api/*).
-# Build: root Dockerfile (multi-stage: npm run build → node server.mjs).
-# For ingestion/judge Python services from the same repo, create separate Railway
-# services and set Dockerfile path to Dockerfile.python + start command (see README).
+# Railway — optional deploy defaults for services that attach this file.
+#
+# IMPORTANT (multi-service monorepo): Do NOT set [build] dockerfilePath here.
+# A root [build] pins the Node Dockerfile for every service that reads this repo,
+# so ingestion/judge would still build the Node image while your start command runs
+# uvicorn → "The executable `uvicorn` could not be found."
+#
+# - Web (Node): leave Build empty or pick Dockerfile → repo root Dockerfile (auto-detected).
+# - Ingestion / Judge: Settings → Build → Dockerfile path = Dockerfile.python
+#   and Deploy → uvicorn … --port $PORT (see README).
 #
 # https://docs.railway.com/reference/config-as-code
-
-[build]
-builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
 
 [deploy]
 restartPolicyType = "ON_FAILURE"

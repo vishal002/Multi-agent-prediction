@@ -192,13 +192,13 @@ Same three-process layout as [render.yaml](render.yaml): **Node web** (UI + `/ap
 
 3. **Rename services (recommended)** — In the project canvas, rename the first service to something like `web`. You will add two more services next.
 
-4. **Web (Node) service — build** — Select the web service → **Settings** (or **Build**). Ensure the image builds from the root **[Dockerfile](Dockerfile)**. If the repo has [railway.toml](railway.toml) at the root, Railway often picks **Dockerfile** automatically for services using that config. If Railway tries **Nixpacks** instead, switch the builder to **Dockerfile** and set the Dockerfile path to `Dockerfile`. No custom start command is required (the Dockerfile already runs `node server.mjs`). **Redeploy** if you changed build settings.
+4. **Web (Node) service — build** — Select the web service → **Settings → Build**. Use the repo root **[Dockerfile](Dockerfile)** (Railway usually auto-detects it). If Railway offers **Nixpacks**, switch to **Dockerfile** and path `Dockerfile`. No custom start command is required (the image already runs `node server.mjs`). Optional [railway.toml](railway.toml) at the repo root only sets **[deploy]** restart rules — it does **not** pin a Dockerfile so ingestion/judge can use **Dockerfile.python**. **Redeploy** if you changed build settings.
 
 5. **Web — public URL** — Same service → **Networking** (or **Settings → Networking**) → **Generate domain** (or attach a custom domain). Copy the HTTPS base URL (e.g. `https://web-production-xxxx.up.railway.app`). You will open this in the browser after Python URLs exist.
 
 6. **Add Ingestion (Python)** — In the project: **New** → **GitHub Repo** → **same repository** again. This creates a second service; rename it to `ingestion`.
 
-7. **Ingestion — build & start** — Select `ingestion` → **Settings → Build**: set **Dockerfile path** to `Dockerfile.python` (not the root Node Dockerfile). If Railway still builds the wrong image because it reads [railway.toml](railway.toml), look for an option to **override** the Dockerfile / builder for this service only (wording varies; the goal is **Dockerfile.python**). Under **Deploy** (or **Settings → Deploy**), set **Custom Start Command** to:  
+7. **Ingestion — build & start** — Select `ingestion` → **Settings → Build**: set **Dockerfile path** to **`Dockerfile.python`** (required). If the image was built with the Node Dockerfile, deploy logs show **`The executable uvicorn could not be found`** — fix the Dockerfile path and redeploy. Under **Deploy**, set **Custom Start Command** to:  
    `uvicorn ingestion_service.app:app --host 0.0.0.0 --port $PORT`  
    Railway injects `$PORT`; do not hard-code `3334` here.
 
