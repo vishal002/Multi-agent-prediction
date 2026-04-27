@@ -4510,6 +4510,40 @@ function initLivePanel() {
   }
 }
 
+function initUmamiButtonTracking() {
+  /** @param {string} name @param {Record<string, string|null>} data */
+  function umamiTrack(name, data) {
+    if (typeof window.umami !== "undefined" && typeof window.umami.track === "function") {
+      window.umami.track(name, data);
+    }
+  }
+
+  /** @param {HTMLButtonElement} btn */
+  function buttonLabel(btn) {
+    const fromAria = (btn.getAttribute("aria-label") || "").trim();
+    if (fromAria) return fromAria.slice(0, 80);
+    const txt = (btn.textContent || "").trim().replace(/\s+/g, " ");
+    if (txt) return txt.slice(0, 80);
+    return btn.id || "button";
+  }
+
+  document.addEventListener(
+    "click",
+    (ev) => {
+      const t = ev.target;
+      if (!(t instanceof Element)) return;
+      const btn = t.closest("button");
+      if (!btn) return;
+      umamiTrack("button-click", {
+        id: btn.id || null,
+        label: buttonLabel(/** @type {HTMLButtonElement} */ (btn)),
+        class: btn.className || null,
+      });
+    },
+    true
+  );
+}
+
 renderAgents();
 initIntelAgentRefreshHandlers();
 renderArch();
@@ -4520,6 +4554,7 @@ initInfoSheet();
 initAgentsToggle();
 initLivePanel();
 initLiveScoreBar();
+initUmamiButtonTracking();
 void refreshJudgeAccuracyFooter();
 void (async () => {
   await applyShareQueryParam();
