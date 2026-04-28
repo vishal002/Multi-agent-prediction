@@ -1202,6 +1202,15 @@ html.acwr-notice-dismissed .notice-strip {
 /* ─── Google-style match search ───────────────────────────────────── */
 .match-field {
   position: relative;
+  z-index: 60;
+}
+
+/* Lift the whole command bar above the dashboard so the autocomplete
+   dropdown overlaps the agents column below instead of being painted
+   over by the agent cards' background. */
+.command-bar {
+  position: relative;
+  z-index: 60;
 }
 
 .g-search__shell {
@@ -1264,11 +1273,11 @@ html.acwr-notice-dismissed .notice-strip {
   left: 0;
   right: 0;
   top: calc(100% + 8px);
-  z-index: 50;
+  z-index: 1000;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border-strong);
   border-radius: calc(var(--radius-lg) + 4px);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-md), 0 18px 48px rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
 
