@@ -4,7 +4,7 @@
 
 Scout → Stats → Weather → Pitch → News → **multi-round Bull vs Bear** → structured prediction (winner, confidence, score band, key player, swing factor).
 
-**[Live demo](https://cricket-war-room.onrender.com)** · **[Deploy to Render](#deploy-to-render-free)** · **[Railway / Fly.io](#alternative-hosts-railway-and-flyio)** · **[Share a fixture](#share-links)**
+**[Live demo](https://cricket-war-room.onrender.com)** · **[Deploy your own](#deploy-to-render-free)** · **[Share a fixture](#share-links)**
 
 **Disclaimer (read first):** this product is for **entertainment and fan discussion only**. AI outputs are **not** betting, trading, financial, or professional advice; they can be wrong. The live app repeats this below the header and in the footer.
 
@@ -176,87 +176,6 @@ Full run: all **intel agents** filled in, **Judge verdict** (winner, confidence,
 
 ---
 
-## Alternative hosts: Railway and Fly.io
-
-Same three-process layout as [render.yaml](render.yaml): **Node web** (UI + `/api/*`), optional **ingestion** and **judge** Python services. Env vars match the [Render deploy table](#deploy-to-render-free) (`INGESTION_SERVICE_URL`, `JUDGE_SERVICE_URL`, LLM keys, optional `JUDGE_SERVICE_SECRET`, `TRUST_PROXY=1` behind a reverse proxy).
-
-**Choosing:** use **Railway** when you want the quickest dashboard-driven setup and usage-based billing. Use **Fly.io** when you want **Machines**, explicit **volumes** for Judge SQLite, and more control over region and scale. Either way, **Turso** on the judge process is still the most reliable persistence on ephemeral disks ([Judge accuracy & persistence](#judge-accuracy--persistence)).
-
-### Railway
-
-#### Step-by-step (dashboard)
-
-1. **Account** — Go to [railway.app](https://railway.app), sign in (GitHub is easiest), and approve Railway’s access to your GitHub account if prompted.
-
-2. **New project from this repo** — **New Project** → **Deploy from GitHub repo** → pick this repository and branch (usually `main`). Railway creates an initial **service**; treat it as the **web (Node)** service.
-
-3. **Rename services (recommended)** — In the project canvas, rename the first service to something like `web`. You will add two more services next.
-
-4. **Web (Node) service — build** — Select the web service → **Settings → Build**. Use the repo root **[Dockerfile](Dockerfile)** (Railway usually auto-detects it). If Railway offers **Nixpacks**, switch to **Dockerfile** and path `Dockerfile`. No custom start command is required (the image already runs `node server.mjs`). Optional [railway.toml](railway.toml) at the repo root only sets **[deploy]** restart rules — it does **not** pin a Dockerfile so ingestion/judge can use **Dockerfile.python**. **Redeploy** if you changed build settings.
-
-5. **Web — public URL** — Same service → **Networking** (or **Settings → Networking**) → **Generate domain** (or attach a custom domain). Copy the HTTPS base URL (e.g. `https://web-production-xxxx.up.railway.app`). You will open this in the browser after Python URLs exist.
-
-6. **Add Ingestion (Python)** — In the project: **New** → **GitHub Repo** → **same repository** again. This creates a second service; rename it to `ingestion`.
-
-7. **Ingestion — build & start** — Railway often **ignores** the Build panel and always uses the root **Node** `Dockerfile`, which produces logs like **`Using Detected Dockerfile`** + **`node:20-alpine`** and then **`The executable uvicorn could not be found`**. Fix it on the **ingestion** service only: **Variables** → add **`RAILWAY_DOCKERFILE_PATH`** = **`Dockerfile.python`** (see [Railway Dockerfiles](https://docs.railway.com/guides/dockerfiles)). Redeploy; build logs should show **`python:3.11-slim`** and `pip install`, not `npm run build`. Optionally also set **Settings → Build → Dockerfile path** to `Dockerfile.python` if your UI offers it. Under **Deploy**, set **Custom Start Command** to:  
-   `uvicorn ingestion_service.app:app --host 0.0.0.0 --port $PORT`  
-   Railway injects `$PORT`; do not hard-code `3334` here.
-
-8. **Ingestion — networking & env** — **Generate domain** for `ingestion`. In **Variables**, optionally add `CRICAPI_KEY` for live scores. Redeploy and confirm `https://…/healthz` returns JSON in a browser.
-
-9. **Add Judge (Python)** — **New** → **GitHub Repo** → same repo again. Rename the service to `judge`.
-
-10. **Judge — build & start** — Same as ingestion: on the **judge** service add **`RAILWAY_DOCKERFILE_PATH`** = **`Dockerfile.python`**, redeploy, then **Custom Start Command**:  
-    `uvicorn judge_service.app:app --host 0.0.0.0 --port $PORT`
-
-11. **Judge — persistence (pick one)**  
-    - **Recommended:** In **Variables**, set `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` ([Judge accuracy & persistence](#judge-accuracy--persistence)). No volume required.  
-    - **Alternative:** Add a **Volume** on this service (Railway UI: attach volume, mount e.g. `/data`), then set `WAR_ROOM_DB_PATH=/data/war_room.db`.
-
-12. **Judge — networking & secrets** — **Generate domain**. In **Variables**, set at least one of `GROQ_API_KEY` or `ANTHROPIC_API_KEY` (Judge calls the LLM). Optionally set `JUDGE_SERVICE_SECRET`; if you do, set the **same** value on the **web** service as `JUDGE_SERVICE_SECRET` so the Node proxy can authenticate.
-
-13. **Wire the web service to Python** — On the **web** service → **Variables** (raw values, no trailing slash on URLs):
-
-    | Variable | Value |
-    |----------|--------|
-    | `GROQ_API_KEY` and/or `ANTHROPIC_API_KEY` | Your keys (required for LLM). |
-    | `INGESTION_SERVICE_URL` | Full HTTPS base of the ingestion service (step 8). |
-    | `JUDGE_SERVICE_URL` | Full HTTPS base of the judge service (step 12). |
-    | `TRUST_PROXY` | `1` (so rate limits see the real client IP behind Railway). |
-
-    Optional: `LLM_PROVIDER`, `WAR_ROOM_API_SECRET`, `ALLOWED_ORIGINS` — see [Configuration](#configuration) and [Server hardening](#server-hardening-optional).
-
-14. **Redeploy web** — Trigger a new deploy on the web service after variables are saved. Open the web public URL and run a full war room; confirm live context and judge paths work.
-
-15. **Optional — private networking** — If Railway exposes **internal** URLs for services in the same project, you may use those for `INGESTION_SERVICE_URL` / `JUDGE_SERVICE_URL` instead of public HTTPS; the Node server must be able to reach them from its container.
-
-| Service | Variable | Notes |
-|---------|----------|-------|
-| Web | `GROQ_API_KEY` / `ANTHROPIC_API_KEY` | At least one required. |
-| Web | `INGESTION_SERVICE_URL` / `JUDGE_SERVICE_URL` | Public URLs of the two Python services. |
-| Web | `TRUST_PROXY` | Set to `1` behind Railway’s proxy. |
-| Ingestion / Judge | `RAILWAY_DOCKERFILE_PATH` | Set to **`Dockerfile.python`** on each Python service so Railway does not build the Node image. |
-| Ingestion | `CRICAPI_KEY` | Optional live scores. |
-| Judge | LLM keys, optional `JUDGE_SERVICE_SECRET` | Match secrets used on the web service when set. |
-| Judge | `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` | Optional; preferred over file SQLite on ephemeral disk. |
-
-### Fly.io
-
-1. Install [flyctl](https://fly.io/docs/hands-on/install-flyctl/) and run `fly auth login`.
-2. Pick three **globally unique** app names. Either edit the `app` field in [fly.web.toml](fly.web.toml), [fly.ingestion.toml](fly.ingestion.toml), and [fly.judge.toml](fly.judge.toml), or create apps with `fly apps create <name>` and pass `--app <name>` on every `fly deploy` / `fly secrets` command.
-3. **Secrets** (repeat per app, from the repo root), for example:  
-   `fly secrets set GROQ_API_KEY=... --config fly.web.toml --app <web-app>`  
-   On the web app, also set `INGESTION_SERVICE_URL` and `JUDGE_SERVICE_URL` to `https://<ingestion-app>.fly.dev` and `https://<judge-app>.fly.dev` (or your custom domains).
-4. **Judge SQLite:** create a volume in the **same region** as `primary_region` in [fly.judge.toml](fly.judge.toml), e.g.  
-   `fly volumes create war_room_judge_data --region iad --size 1 --app <judge-app>`  
-   The volume name must match `source` under `[mounts]` in [fly.judge.toml](fly.judge.toml). If you use **Turso only**, remove the `[mounts]` block from that file before deploy (or leave the volume unused).
-5. Deploy (from repo root):  
-   `fly deploy --config fly.web.toml --app <web-app>`  
-   `fly deploy --config fly.ingestion.toml --app <ingestion-app>`  
-   `fly deploy --config fly.judge.toml --app <judge-app>`
-
----
-
 ## Run with Docker
 
 ```bash
@@ -326,7 +245,7 @@ Edit **`match_suggestions.json`**. Optional **`completed`** + **`result`** (`win
 | `match_suggestions.json` | Fixture catalog |
 | `ingestion_service/` | FastAPI RSS/CricAPI |
 | `judge_service/` | FastAPI Judge + persistence |
-| `render.yaml`, `railway.toml`, `fly.*.toml`, `docker-compose.yml`, `Dockerfile*` | Deploy |
+| `render.yaml`, `docker-compose.yml`, `Dockerfile*` | Deploy |
 
 ---
 

@@ -6,7 +6,7 @@ __pycache__/
 *.pyd
 .git/
 .gitignore
-# image/ must stay in context: Dockerfile COPY + build embeds assets into dist/
+image/
 data/
 *.db
 *.md

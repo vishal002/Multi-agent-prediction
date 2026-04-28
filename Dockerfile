@@ -18,8 +18,6 @@ COPY ai_cricket_war_room.html \
      sw.js                    \
      match_suggestions.json   \
      manifest.webmanifest     \
-     sitemap.xml              \
-     robots.txt               \
      ./
 COPY icons ./icons/
 COPY image ./image/
