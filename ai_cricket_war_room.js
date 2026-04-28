@@ -1930,6 +1930,150 @@ function resolvePlayerPhotoSrc(name, explicitPhoto) {
   return { src: POTM_PHOTO_PLACEHOLDER, isExplicit: false };
 }
 
+// ─── Wikipedia player-photo lookup ───────────────────────────────────────────
+//
+// The Wikipedia REST `summary` endpoint returns a 320px thumbnail at
+// `data.thumbnail.source`, e.g.
+//   https://upload.wikimedia.org/wikipedia/commons/thumb/X/XX/Foo.jpg/320px-Foo.jpg
+//
+// We rewrite the trailing `<N>px-` segment to request a size that matches the
+// banner avatar at ~3x DPR (56px CSS × 3 ≈ 168 → round to 200 for headroom).
+// Results are cached in-memory (Promise dedupe across renders) and in
+// localStorage so the same player is never re-fetched on page reloads.
+
+const PLAYER_WIKI_PHOTO_TARGET_PX = 200;
+const PLAYER_WIKI_PHOTO_LS_KEY = "war_room.player_wiki_photo.v1";
+const PLAYER_WIKI_PHOTO_LS_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+/** @type {Map<string, Promise<string|null>>} */
+const _playerWikiPhotoFetches = new Map();
+
+function _readPlayerWikiPhotoCache() {
+  if (typeof window === "undefined" || !window.localStorage) return {};
+  try {
+    const raw = window.localStorage.getItem(PLAYER_WIKI_PHOTO_LS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function _writePlayerWikiPhotoCache(cache) {
+  if (typeof window === "undefined" || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(PLAYER_WIKI_PHOTO_LS_KEY, JSON.stringify(cache));
+  } catch { /* quota / privacy mode — silent */ }
+}
+
+/**
+ * Convert a player's display name into a Wikipedia article title.
+ * Strips parenthetical aliases ("Suryakumar Yadav (cricketer)" → still works
+ * because we drop the suffix), diacritics, and punctuation that Wikipedia's
+ * canonical titles omit ("M.S. Dhoni" → "MS_Dhoni").
+ *
+ * @param {string} name
+ */
+function _wikiTitleForPlayer(name) {
+  return String(name || "")
+    .replace(/\([^)]*\)/g, " ")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\./g, "")
+    .trim()
+    .replace(/\s+/g, "_");
+}
+
+/**
+ * Rewrite a Wikipedia thumbnail URL to request a different rendered size.
+ * Wikipedia thumbnail URLs end in `/<N>px-Filename.ext`; replacing `<N>` asks
+ * the thumbnailer to serve that size (cached server-side).
+ *
+ * @param {string} url
+ * @param {number} sizePx
+ */
+function _adjustWikipediaThumbnailSize(url, sizePx) {
+  if (!url) return url;
+  const n = Math.max(32, Math.round(Number(sizePx) || 0));
+  return url.replace(/\/(\d+)px-([^/]+)$/i, `/${n}px-$2`);
+}
+
+/**
+ * Fetch (or read from cache) the Wikipedia thumbnail URL for a player.
+ * Resolves to `null` when the article is missing or has no lead image.
+ *
+ * @param {string} name
+ * @returns {Promise<string|null>}
+ */
+function fetchPlayerWikipediaPhoto(name) {
+  const title = _wikiTitleForPlayer(name);
+  if (!title) return Promise.resolve(null);
+  if (_playerWikiPhotoFetches.has(title)) return _playerWikiPhotoFetches.get(title);
+
+  const job = (async () => {
+    const cache = _readPlayerWikiPhotoCache();
+    const entry = cache[title];
+    if (entry && typeof entry === "object" && typeof entry.t === "number") {
+      if (Date.now() - entry.t < PLAYER_WIKI_PHOTO_LS_TTL_MS) {
+        return entry.src || null;
+      }
+    }
+    try {
+      const res = await fetch(
+        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+        { headers: { Accept: "application/json" } }
+      );
+      if (!res.ok) {
+        cache[title] = { src: null, t: Date.now() };
+        _writePlayerWikiPhotoCache(cache);
+        return null;
+      }
+      const data = await res.json();
+      const src = data && data.thumbnail && typeof data.thumbnail.source === "string"
+        ? data.thumbnail.source
+        : null;
+      cache[title] = { src, t: Date.now() };
+      _writePlayerWikiPhotoCache(cache);
+      return src;
+    } catch {
+      return null;
+    }
+  })();
+
+  _playerWikiPhotoFetches.set(title, job);
+  return job;
+}
+
+/**
+ * Upgrade `.potm-banner__img[data-player-wiki]` images inside `rootEl` from
+ * the local slug-derived asset to a Wikipedia photo (resized to fit the
+ * banner avatar). Failures leave the local photo / placeholder in place.
+ *
+ * @param {ParentNode|null|undefined} rootEl
+ */
+function hydratePlayerOfMatchPhotos(rootEl) {
+  if (!rootEl || typeof rootEl.querySelectorAll !== "function") return;
+  const imgs = rootEl.querySelectorAll("img.potm-banner__img[data-player-wiki]");
+  imgs.forEach((img) => {
+    const name = img.getAttribute("data-player-wiki") || "";
+    img.removeAttribute("data-player-wiki");
+    if (!name) return;
+    fetchPlayerWikipediaPhoto(name).then((rawSrc) => {
+      if (!rawSrc || !img.isConnected) return;
+      const sized = _adjustWikipediaThumbnailSize(rawSrc, PLAYER_WIKI_PHOTO_TARGET_PX);
+      const onError = () => {
+        img.removeEventListener("error", onError);
+        img.src = POTM_PHOTO_PLACEHOLDER;
+        img.classList.add("potm-banner__img--placeholder");
+      };
+      img.addEventListener("error", onError, { once: true });
+      img.src = sized;
+      img.classList.remove("potm-banner__img--placeholder");
+    });
+  });
+}
+
 /**
  * Pink "player of the match" banner (completed fixtures).
  *
@@ -1966,7 +2110,8 @@ function renderPlayerOfMatchCardHtml(result) {
   const imgClass = photo.src === POTM_PHOTO_PLACEHOLDER
     ? "potm-banner__img potm-banner__img--placeholder"
     : "potm-banner__img";
-  const imgHtml = `<img class="${imgClass}" src="${escapeHtml(photo.src)}" width="56" height="56" alt="${escapeHtml(altText)}" decoding="async" loading="lazy" onerror="${onErrorJs}" />`;
+  const wikiAttr = name ? ` data-player-wiki="${escapeHtml(name)}"` : "";
+  const imgHtml = `<img class="${imgClass}" src="${escapeHtml(photo.src)}" width="56" height="56" alt="${escapeHtml(altText)}" decoding="async" loading="lazy" onerror="${onErrorJs}"${wikiAttr} />`;
   return `
     <div class="potm-banner" role="group" aria-label="Player of the match">
       <div class="potm-banner__text">
@@ -3252,6 +3397,20 @@ function showApiError(msg) {
   b.innerHTML = `<span class="phase-banner__err-text">${escapeHtml(msg)}</span>`;
 }
 
+/**
+ * Null-safe `el.style.display = value`. Some controls (notably `#emptyState`,
+ * which lives inside `#debateArea`) get wiped when we re-render the verdict /
+ * debate panel, so blindly chaining `.style` on subsequent runs throws. This
+ * helper silently no-ops when the target element is missing.
+ *
+ * @param {string} id
+ * @param {string} value
+ */
+function setElDisplay(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = value;
+}
+
 function dismissNoLiveDataWarning() {
   const el = document.getElementById("noLiveDataAlert");
   if (el) el.hidden = true;
@@ -3330,11 +3489,12 @@ function addBubble(side, who, text, meta = {}) {
 
 function showTyping(side) {
   const t = document.getElementById('typingBubble');
+  if (!t) return;
   t.className = `bubble typing-bubble ${side}`;
   t.style.display='block';
   scrollDebateEnd();
 }
-function hideTyping() { document.getElementById('typingBubble').style.display='none'; }
+function hideTyping() { setElDisplay('typingBubble', 'none'); }
 
 const INTEL_FALLBACK = "Insufficient data; neutral read.";
 
@@ -4095,10 +4255,10 @@ async function runWarRoom() {
       });
       clearIntelRefreshSession();
 
-      document.getElementById('runBtn').style.display = 'none';
-      document.getElementById('resetBtn').style.display = '';
-      document.getElementById('runningLabel').style.display = 'none';
-      document.getElementById('emptyState').style.display = 'none';
+      setElDisplay('runBtn', 'none');
+      setElDisplay('resetBtn', '');
+      setElDisplay('runningLabel', 'none');
+      setElDisplay('emptyState', 'none');
       document.getElementById('verdictArea').innerHTML = '';
       setPhase(null);
 
@@ -4152,12 +4312,13 @@ async function runWarRoom() {
     </div>`;
       scheduleVerdictWinProbabilityAnimation(verdictEl, winProbFinal.pctA, winProbFinal.pctB);
       bindPrematchPredictionButton(verdictEl, teams, completedRow.result.winner);
+      hydratePlayerOfMatchPhotos(verdictEl);
 
       scrollVerdictPanelIntoView({ behavior: "smooth" });
     } catch (e) {
       showApiError(e instanceof Error ? e.message : String(e));
-      document.getElementById('runBtn').style.display = '';
-      document.getElementById('resetBtn').style.display = 'none';
+      setElDisplay('runBtn', '');
+      setElDisplay('resetBtn', 'none');
     } finally {
       running = false;
     }
@@ -4178,10 +4339,10 @@ async function runWarRoom() {
         const ins = document.getElementById("insight-" + a.id);
         if (ins) { ins.textContent = ""; ins.classList.remove("show"); }
       });
-      document.getElementById('runBtn').style.display = 'none';
-      document.getElementById('resetBtn').style.display = '';
-      document.getElementById('runningLabel').style.display = 'none';
-      document.getElementById('emptyState').style.display = 'none';
+      setElDisplay('runBtn', 'none');
+      setElDisplay('resetBtn', '');
+      setElDisplay('runningLabel', 'none');
+      setElDisplay('emptyState', 'none');
       const debateEl = document.getElementById('debateArea');
       debateEl.classList.add('debate-area--final-only');
       debateEl.innerHTML = '';
@@ -4203,8 +4364,8 @@ async function runWarRoom() {
       scrollVerdictPanelIntoView({ behavior: "smooth" });
     } catch (e) {
       showApiError(e instanceof Error ? e.message : String(e));
-      document.getElementById('runBtn').style.display = '';
-      document.getElementById('resetBtn').style.display = 'none';
+      setElDisplay('runBtn', '');
+      setElDisplay('resetBtn', 'none');
     } finally {
       running = false;
     }
@@ -4216,10 +4377,10 @@ async function runWarRoom() {
 
   const teams = parseTeamsFromMatch(match);
 
-  document.getElementById('runBtn').style.display='none';
-  document.getElementById('resetBtn').style.display='';
-  document.getElementById('runningLabel').style.display='';
-  document.getElementById('emptyState').style.display='none';
+  setElDisplay('runBtn', 'none');
+  setElDisplay('resetBtn', '');
+  setElDisplay('runningLabel', '');
+  setElDisplay('emptyState', 'none');
   document.getElementById('verdictArea').innerHTML='';
   setMatchBar(match, teams);
 
@@ -4506,7 +4667,7 @@ async function runWarRoom() {
 
     scrollVerdictPanelIntoView({ behavior: "smooth" });
     setPhase(null);
-    document.getElementById('runningLabel').style.display = 'none';
+    setElDisplay('runningLabel', 'none');
 
     // Kick off the Live Monitor polling loop — polls every 45 s for score changes.
     // Only worth doing for today's fixtures: future matches have nothing to poll
@@ -4521,9 +4682,9 @@ async function runWarRoom() {
     hideTyping();
     setPhase(null);
     showApiError(e instanceof Error ? e.message : String(e));
-    document.getElementById('runningLabel').style.display = 'none';
-    document.getElementById('runBtn').style.display = '';
-    document.getElementById('resetBtn').style.display = 'none';
+    setElDisplay('runningLabel', 'none');
+    setElDisplay('runBtn', '');
+    setElDisplay('resetBtn', 'none');
   }
   running = false;
 }
@@ -4542,7 +4703,7 @@ function resetWarRoom() {
       <p class="empty-state__desc">Pick a fixture above, then <strong>Run war room</strong> for intel, debate, and verdict.</p>
     </div>`;
   document.getElementById('verdictArea').innerHTML='';
-  document.getElementById('typingBubble').style.display='none';
+  setElDisplay('typingBubble', 'none');
   hideMatchBar();
   AGENTS.forEach(a => {
     document.getElementById('icon-'+a.id).classList.remove('on');
@@ -4554,9 +4715,9 @@ function resetWarRoom() {
   });
   clearIntelRefreshSession();
   setPhase(null);
-  document.getElementById('runBtn').style.display='';
-  document.getElementById('resetBtn').style.display='none';
-  document.getElementById('runningLabel').style.display='none';
+  setElDisplay('runBtn', '');
+  setElDisplay('resetBtn', 'none');
+  setElDisplay('runningLabel', 'none');
   document.getElementById("main-content")?.classList.add("dashboard--pre-war-room");
 }
 
