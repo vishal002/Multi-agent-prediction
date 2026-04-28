@@ -1691,6 +1691,23 @@ Fixture label: ${match}`;
 }
 
 /**
+ * Human-readable evidence timestamp in India local time (server sends UTC ISO).
+ * @param {string} isoOrRaw
+ * @returns {string}
+ */
+function formatFetchedAtLocalDisplay(isoOrRaw) {
+  const t = String(isoOrRaw).trim();
+  if (!t) return "";
+  const d = new Date(t);
+  if (Number.isNaN(d.getTime())) return t;
+  return d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
+
+/**
  * @param {Record<string, unknown>|null|undefined} ctx
  * @returns {string} safe HTML
  */
@@ -1703,8 +1720,9 @@ function formatVerdictIngestionMetaHtml(ctx) {
   const rows = [];
 
   if (fetchedRaw) {
+    const fetchedDisplay = formatFetchedAtLocalDisplay(fetchedRaw);
     rows.push(
-      `<div class="verdict-ingestion-meta__row"><span class="verdict-ingestion-meta__k">Evidence fetched</span> <time class="verdict-ingestion-meta__v" datetime="${escapeHtml(fetchedRaw)}">${escapeHtml(fetchedRaw)}</time></div>`
+      `<div class="verdict-ingestion-meta__row"><span class="verdict-ingestion-meta__k">Evidence fetched</span> <time class="verdict-ingestion-meta__v" datetime="${escapeHtml(fetchedRaw)}">${escapeHtml(fetchedDisplay)}</time></div>`
     );
   }
 
@@ -2973,7 +2991,7 @@ function formatIngestedBlockForDebate(ctx) {
     return `(No ingested evidence — ${reason}. Do not invent match-specific numbers or insider facts.)`;
   }
   const parts = [];
-  if (ctx.fetched_at) parts.push(`Fetched: ${ctx.fetched_at}`);
+  if (ctx.fetched_at) parts.push(`Fetched: ${formatFetchedAtLocalDisplay(String(ctx.fetched_at))}`);
   const src = ctx.sources;
   if (Array.isArray(src) && src.length) {
     const names = src
