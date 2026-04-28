@@ -146,3 +146,37 @@ def accuracy(_auth: JudgeAuth) -> dict[str, Any]:
         "correct": stats.correct,
         "accuracy": stats.accuracy,
     }
+
+
+@app.get("/predictions/by-match")
+def predictions_by_match(
+    _auth: JudgeAuth,
+    match_id: str,
+    limit: int = 5,
+) -> dict[str, Any]:
+    """Return saved AI Judge predictions for a fixture (most recent first).
+
+    Powers the "View AI pre-match prediction" affordance on the completed
+    match card. 404 when nothing is on file so the client can render a
+    distinct empty state instead of treating an empty list as a load error.
+    """
+    mid = (match_id or "").strip()
+    if not mid:
+        raise HTTPException(status_code=400, detail="match_id is required")
+    rows = get_store().get_predictions_by_match(mid, limit=limit)
+    if not rows:
+        raise HTTPException(status_code=404, detail="no saved predictions for this match")
+    return {
+        "match_id": mid,
+        "predictions": [
+            {
+                "id": r.id,
+                "match_id": r.match_id,
+                "predicted_winner": r.predicted_winner,
+                "actual_winner": r.actual_winner,
+                "confidence": r.confidence,
+                "created_at": r.created_at,
+            }
+            for r in rows
+        ],
+    }

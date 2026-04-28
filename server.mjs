@@ -39,7 +39,7 @@
  *   GET /api/judge/accuracy → GET {JUDGE_SERVICE_URL}/accuracy (in-process cache + upstream 429/5xx retries; JUDGE_ACCURACY_CACHE_MS)
  *
  * Match autocomplete: GET /api/match-suggest?q=&limit=10 (reads match_suggestions.json).
- * Completed fixtures: optional { completed: true, result: { winner, summary, key_player?, actual_score?, potm_batting?, potm_team?, player_photo? } } — winner is a team code (e.g. CSK).
+ * Completed fixtures: optional { completed: true, result: { winner, summary, key_player?, actual_score?, potm_batting?, potm_bowling?, potm_team?, player_photo? } } — winner is a team code (e.g. CSK).
  * key_player (or man_of_the_match) feeds the Player of the match card when skipping agents for finished fixtures.
  * GET /api/match-by-label?label=… returns the full row for an exact label (404 if unknown).
  * Response: { suggestions: [{ label, date, venue, completed?, result? }] }.
@@ -67,7 +67,7 @@ const MATCH_SUGGESTIONS_PATH = path.join(__dirname, "match_suggestions.json");
 
 /**
  * @param {unknown} raw
- * @returns {{ winner: string, summary: string, key_player?: string, actual_score?: string, potm_batting?: string, potm_team?: string, player_photo?: string } | null}
+ * @returns {{ winner: string, summary: string, key_player?: string, actual_score?: string, potm_batting?: string, potm_bowling?: string, potm_team?: string, player_photo?: string } | null}
  */
 function normalizeMatchResult(raw) {
   if (!raw || typeof raw !== "object") return null;
@@ -78,13 +78,15 @@ function normalizeMatchResult(raw) {
   const keySrc = o.key_player ?? o.man_of_the_match;
   const key_player = keySrc != null ? String(keySrc).trim() : "";
   const pickStr = (k) => (o[k] != null ? String(o[k]).trim() : "");
-  /** @type {{ winner: string, summary: string, key_player?: string, actual_score?: string, potm_batting?: string, potm_team?: string, player_photo?: string }} */
+  /** @type {{ winner: string, summary: string, key_player?: string, actual_score?: string, potm_batting?: string, potm_bowling?: string, potm_team?: string, player_photo?: string }} */
   const out = { winner, summary };
   if (key_player) out.key_player = key_player;
   const actual_score = pickStr("actual_score");
   if (actual_score) out.actual_score = actual_score;
   const potm_batting = pickStr("potm_batting");
   if (potm_batting) out.potm_batting = potm_batting;
+  const potm_bowling = pickStr("potm_bowling");
+  if (potm_bowling) out.potm_bowling = potm_bowling;
   const potm_team = pickStr("potm_team");
   if (potm_team) out.potm_team = potm_team;
   const player_photo = pickStr("player_photo");
@@ -94,7 +96,7 @@ function normalizeMatchResult(raw) {
 
 /**
  * @param {unknown} parsed
- * @returns {{ label: string, date: string, venue: string, teams: string[], order: number, completed: boolean, result: { winner: string, summary: string, key_player?: string, actual_score?: string, potm_batting?: string, potm_team?: string, player_photo?: string } | null }[]}
+ * @returns {{ label: string, date: string, venue: string, teams: string[], order: number, completed: boolean, result: { winner: string, summary: string, key_player?: string, actual_score?: string, potm_batting?: string, potm_bowling?: string, potm_team?: string, player_photo?: string } | null }[]}
  */
 function normalizeMatchSuggestions(parsed) {
   if (!Array.isArray(parsed)) return [];
@@ -1799,6 +1801,7 @@ const server = http.createServer(async (req, res) => {
       pathname === "/api/live-score" ||
       pathname === "/api/judge/predict" ||
       pathname === "/api/judge/accuracy" ||
+      pathname === "/api/judge/predictions-by-match" ||
       pathname === "/api/version" ||
       pathname === "/api/share-prediction" ||
       pathname.startsWith("/api/share/") ||
@@ -2095,6 +2098,53 @@ const server = http.createServer(async (req, res) => {
           error: "judge_service_unreachable",
           message: e instanceof Error ? e.message : "Judge service unreachable",
           hint: "pip install -r requirements-judge.txt && python -m uvicorn judge_service.app:app --host 127.0.0.1 --port 8000",
+        })
+      );
+    }
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/judge/predictions-by-match") {
+    // Proxies GET {JUDGE_SERVICE_URL}/predictions/by-match for the
+    // "View AI pre-match prediction" affordance on completed match cards.
+    const matchId = (url.searchParams.get("match_id") || "").trim();
+    const limitRaw = url.searchParams.get("limit");
+    if (!matchId) {
+      res.writeHead(400, {
+        "Content-Type": "application/json; charset=utf-8",
+        ...corsHeaders(req),
+      });
+      res.end(JSON.stringify({ error: "missing_match_id" }));
+      return;
+    }
+    const qs = new URLSearchParams();
+    qs.set("match_id", matchId);
+    if (limitRaw) qs.set("limit", limitRaw);
+    const target = `${JUDGE_SERVICE_URL}/predictions/by-match?${qs.toString()}`;
+    const ctrl = AbortSignal.timeout(20_000);
+    try {
+      const r = await fetch(target, {
+        method: "GET",
+        signal: ctrl,
+        headers: { Accept: "application/json", ...judgeUpstreamAuthHeaders() },
+      });
+      const text = await r.text();
+      res.writeHead(r.status, {
+        "Content-Type": "application/json; charset=utf-8",
+        ...corsHeaders(req),
+        "Cache-Control": "no-store",
+      });
+      res.end(text);
+    } catch (e) {
+      res.writeHead(503, {
+        "Content-Type": "application/json; charset=utf-8",
+        ...corsHeaders(req),
+        "Cache-Control": "no-store",
+      });
+      res.end(
+        JSON.stringify({
+          error: "judge_service_unreachable",
+          message: e instanceof Error ? e.message : "Judge service unreachable",
         })
       );
     }

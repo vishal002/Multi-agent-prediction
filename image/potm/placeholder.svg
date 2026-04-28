@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 112 112" role="img" aria-label="Player placeholder">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f4f6fb" />
+      <stop offset="100%" stop-color="#d3d7de" />
+    </linearGradient>
+  </defs>
+  <circle cx="56" cy="56" r="56" fill="url(#bg)" />
+  <!-- Head -->
+  <circle cx="56" cy="44" r="18" fill="#8b94a6" />
+  <!-- Shoulders / torso -->
+  <path
+    d="M16 104c0-21 18-34 40-34s40 13 40 34v8H16Z"
+    fill="#8b94a6"
+  />
+  <!-- Subtle cricket-bat accent across shoulder so the silhouette reads as a cricketer -->
+  <g opacity="0.55">
+    <rect x="74" y="62" width="6" height="26" rx="1.4" transform="rotate(28 77 75)" fill="#5d6577" />
+    <rect x="76.5" y="56.5" width="1.6" height="9" rx="0.6" transform="rotate(28 77 61)" fill="#5d6577" />
+  </g>
+</svg>

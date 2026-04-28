@@ -19,7 +19,7 @@ const ARCH = [
  * Offline / file:// fallback — keep in sync with match_suggestions.json on the server.
  * When served via `node server.mjs`, suggestions load from GET /api/match-suggest.
  */
-/** @typedef {{ label: string, date: string, venue: string, teams: string[], completed?: boolean, result?: { winner: string, summary?: string, key_player?: string, actual_score?: string, potm_batting?: string, potm_team?: string, player_photo?: string } }} MatchSuggestionRow */
+/** @typedef {{ label: string, date: string, venue: string, teams: string[], completed?: boolean, result?: { winner: string, summary?: string, key_player?: string, actual_score?: string, potm_batting?: string, potm_bowling?: string, potm_team?: string, player_photo?: string } }} MatchSuggestionRow */
 
 /** Same rows as match_suggestions.json (order preserved for empty search). */
 const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
@@ -344,7 +344,17 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "teams": [
         "DC",
         "RCB"
-      ]
+      ],
+      "completed": true,
+      "result": {
+        "winner": "RCB",
+        "summary": "Royal Challengers Bengaluru won by 9 wickets (DC collapsed for 8/6, RCB chased easily)",
+        "key_player": "Josh Hazlewood",
+        "potm_team": "RCB",
+        "potm_bowling": "4/12 (3.3)",
+        "actual_score": "DC 8/6 · RCB 9/1 (3.3 ov)",
+        "player_photo": "/image/potm/josh-hazlewood-potm.png"
+      }
     },
     {
       "label": "KKR vs LSG — IPL 2026 Match 38, BRSABV Ekana Cricket Stadium, Lucknow",
@@ -367,7 +377,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "GT",
         "summary": "Gujarat Titans won by 8 wickets (CSK 158/7 in 20 ov, GT 162/2 in 16.4 ov)",
-        "key_player": "S Gill"
+        "key_player": "Shubman Gill",
+        "potm_team": "GT",
+        "player_photo": "/image/potm/shubman-gill-potm.png",
+        "potm_batting": "78* (52)",
+        "actual_score": "CSK 158/7 (20 ov) · GT 162/2 (16.4 ov)"
       }
     },
     {
@@ -382,7 +396,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "SRH",
         "summary": "Sunrisers Hyderabad won by 5 wickets (RR 228/6 in 20 ov, SRH 229/5 in 18.3 ov)",
-        "key_player": "T Head"
+        "key_player": "Travis Head",
+        "potm_team": "SRH",
+        "player_photo": "/image/potm/travis-head-potm.png",
+        "potm_batting": "104 (52)",
+        "actual_score": "RR 228/6 (20 ov) · SRH 229/5 (18.3 ov)"
       }
     },
     {
@@ -424,7 +442,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "RR",
         "summary": "Rajasthan Royals won by 40 runs (RR 159/6, LSG 119 in 18 ov)",
-        "key_player": "Y Jaiswal"
+        "key_player": "Yashasvi Jaiswal",
+        "potm_team": "RR",
+        "player_photo": "/image/potm/yashasvi-jaiswal-potm.png",
+        "potm_batting": "62 (44)",
+        "actual_score": "RR 159/6 (20 ov) · LSG 119 (18 ov)"
       }
     },
     {
@@ -439,7 +461,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "SRH",
         "summary": "Sunrisers Hyderabad won by 47 runs (SRH 242/2, DC 195/9 in 20 ov)",
-        "key_player": "T Head"
+        "key_player": "Travis Head",
+        "potm_team": "SRH",
+        "player_photo": "/image/potm/travis-head-potm.png",
+        "potm_batting": "120 (58)",
+        "actual_score": "SRH 242/2 (20 ov) · DC 195/9 (20 ov)"
       }
     },
     {
@@ -454,7 +480,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "MI",
         "summary": "Mumbai Indians won by 99 runs (MI 199/5, GT 100 in 15.5 ov)",
-        "key_player": "T Varma"
+        "key_player": "Tilak Varma",
+        "potm_team": "MI",
+        "player_photo": "/image/potm/tilak-varma-potm.png",
+        "potm_batting": "85 (49)",
+        "actual_score": "MI 199/5 (20 ov) · GT 100 (15.5 ov)"
       }
     },
     {
@@ -469,7 +499,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "PBKS",
         "summary": "Punjab Kings won by 54 runs (PBKS 254/7, LSG 200/5 in 20 ov)",
-        "key_player": "S Dhawan"
+        "key_player": "Shikhar Dhawan",
+        "potm_team": "PBKS",
+        "player_photo": "/image/potm/shikhar-dhawan-potm.png",
+        "potm_batting": "108 (62)",
+        "actual_score": "PBKS 254/7 (20 ov) · LSG 200/5 (20 ov)"
       }
     },
     {
@@ -484,7 +518,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "KKR",
         "summary": "Kolkata Knight Riders won by 4 wickets (RR 155/9, KKR 161/6 in 19.4 ov)",
-        "key_player": "A Russell"
+        "key_player": "Andre Russell",
+        "potm_team": "KKR",
+        "player_photo": "/image/potm/andre-russell-potm.png",
+        "potm_batting": "47* (24)",
+        "actual_score": "RR 155/9 (20 ov) · KKR 161/6 (19.4 ov)"
       }
     },
     {
@@ -499,7 +537,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "SRH",
         "summary": "Sunrisers Hyderabad won by 10 runs (SRH 194/9, CSK 184/8 in 20 ov)",
-        "key_player": "T Head"
+        "key_player": "Travis Head",
+        "potm_team": "SRH",
+        "player_photo": "/image/potm/travis-head-potm.png",
+        "potm_batting": "76 (45)",
+        "actual_score": "SRH 194/9 (20 ov) · CSK 184/8 (20 ov)"
       }
     },
     {
@@ -514,7 +556,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "DC",
         "summary": "Delhi Capitals won by 6 wickets (RCB 175/8, DC 179/4 in 19.5 ov)",
-        "key_player": "K Ahmed"
+        "key_player": "Khaleel Ahmed",
+        "potm_team": "DC",
+        "player_photo": "/image/potm/khaleel-ahmed-potm.png",
+        "potm_bowling": "3/24 (4)",
+        "actual_score": "RCB 175/8 (20 ov) · DC 179/4 (19.5 ov)"
       }
     },
     {
@@ -529,7 +575,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "GT",
         "summary": "Gujarat Titans won by 5 wickets (KKR 180, GT 181/5 in 19.4 ov)",
-        "key_player": "S Gill"
+        "key_player": "Shubman Gill",
+        "potm_team": "GT",
+        "player_photo": "/image/potm/shubman-gill-potm.png",
+        "potm_batting": "85* (54)",
+        "actual_score": "KKR 180 (20 ov) · GT 181/5 (19.4 ov)"
       }
     },
     {
@@ -544,7 +594,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "PBKS",
         "summary": "Punjab Kings won by 7 wickets (MI 195/6, PBKS 198/3 in 16.3 ov)",
-        "key_player": "S Dhawan"
+        "key_player": "Shikhar Dhawan",
+        "potm_team": "PBKS",
+        "player_photo": "/image/potm/shikhar-dhawan-potm.png",
+        "potm_batting": "92* (54)",
+        "actual_score": "MI 195/6 (20 ov) · PBKS 198/3 (16.3 ov)"
       }
     },
     {
@@ -559,7 +613,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "RCB",
         "summary": "Royal Challengers Bengaluru won by 5 wickets (LSG 146, RCB 149/5 in 15.1 ov)",
-        "key_player": "V Kohli"
+        "key_player": "Virat Kohli",
+        "potm_team": "RCB",
+        "player_photo": "/image/potm/virat-kohli-potm.png",
+        "potm_batting": "67 (41)",
+        "actual_score": "LSG 146 (20 ov) · RCB 149/5 (15.1 ov)"
       }
     },
     {
@@ -574,7 +632,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "CSK",
         "summary": "Chennai Super Kings won by 32 runs (CSK 192/5, KKR 160/7 in 20 ov)",
-        "key_player": "R Ravindra"
+        "key_player": "Rachin Ravindra",
+        "potm_team": "CSK",
+        "player_photo": "/image/potm/rachin-ravindra-potm.png",
+        "potm_batting": "73 (44)",
+        "actual_score": "CSK 192/5 (20 ov) · KKR 160/7 (20 ov)"
       }
     },
     {
@@ -589,7 +651,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "SRH",
         "summary": "Sunrisers Hyderabad won by 57 runs (SRH 216/6, RR 159 in 19 ov)",
-        "key_player": "T Head"
+        "key_player": "Travis Head",
+        "potm_team": "SRH",
+        "player_photo": "/image/potm/travis-head-potm.png",
+        "potm_batting": "94 (47)",
+        "actual_score": "SRH 216/6 (20 ov) · RR 159 (19 ov)"
       }
     },
     {
@@ -604,7 +670,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "RCB",
         "summary": "Royal Challengers Bengaluru won by 18 runs (RCB 240/4, MI 222/5 in 20 ov)",
-        "key_player": "V Kohli"
+        "key_player": "Virat Kohli",
+        "potm_team": "RCB",
+        "player_photo": "/image/potm/virat-kohli-potm.png",
+        "potm_batting": "97 (52)",
+        "actual_score": "RCB 240/4 (20 ov) · MI 222/5 (20 ov)"
       }
     },
     {
@@ -619,7 +689,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "GT",
         "summary": "Gujarat Titans won by 7 wickets (LSG 164/8, GT 165/3 in 18.4 ov)",
-        "key_player": "S Gill"
+        "key_player": "Shubman Gill",
+        "potm_team": "GT",
+        "player_photo": "/image/potm/shubman-gill-potm.png",
+        "potm_batting": "73* (49)",
+        "actual_score": "LSG 164/8 (20 ov) · GT 165/3 (18.4 ov)"
       }
     },
     {
@@ -634,7 +708,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "CSK",
         "summary": "Chennai Super Kings won by 23 runs (CSK 212/2, DC 189 in 20 ov)",
-        "key_player": "R Ravindra"
+        "key_player": "Rachin Ravindra",
+        "potm_team": "CSK",
+        "player_photo": "/image/potm/rachin-ravindra-potm.png",
+        "potm_batting": "84 (47)",
+        "actual_score": "CSK 212/2 (20 ov) · DC 189 (20 ov)"
       }
     },
     {
@@ -649,7 +727,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "PBKS",
         "summary": "Punjab Kings won by 6 wickets (SRH 219/6, PBKS 223/4 in 18.5 ov)",
-        "key_player": "S Dhawan"
+        "key_player": "Shikhar Dhawan",
+        "potm_team": "PBKS",
+        "player_photo": "/image/potm/shikhar-dhawan-potm.png",
+        "potm_batting": "76 (44)",
+        "actual_score": "SRH 219/6 (20 ov) · PBKS 223/4 (18.5 ov)"
       }
     },
     {
@@ -664,7 +746,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "RR",
         "summary": "Rajasthan Royals won by 6 wickets (RCB 201/8, RR 202/4 in 18 ov)",
-        "key_player": "Y Jaiswal"
+        "key_player": "Yashasvi Jaiswal",
+        "potm_team": "RR",
+        "player_photo": "/image/potm/yashasvi-jaiswal-potm.png",
+        "potm_batting": "79 (44)",
+        "actual_score": "RCB 201/8 (20 ov) · RR 202/4 (18 ov)"
       }
     },
     {
@@ -679,7 +765,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "LSG",
         "summary": "Lucknow Super Giants won by 3 wickets (KKR 181/4, LSG 182/7 in 20 ov)",
-        "key_player": "N Pooran"
+        "key_player": "Nicholas Pooran",
+        "potm_team": "LSG",
+        "player_photo": "/image/potm/nicholas-pooran-potm.png",
+        "potm_batting": "61* (35)",
+        "actual_score": "KKR 181/4 (20 ov) · LSG 182/7 (20 ov)"
       }
     },
     {
@@ -694,7 +784,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "GT",
         "summary": "Gujarat Titans won by 1 run (GT 210/4, DC 209/8 in 20 ov)",
-        "key_player": "S Gill"
+        "key_player": "Shubman Gill",
+        "potm_team": "GT",
+        "player_photo": "/image/potm/shubman-gill-potm.png",
+        "potm_batting": "92 (53)",
+        "actual_score": "GT 210/4 (20 ov) · DC 209/8 (20 ov)"
       }
     },
     {
@@ -709,7 +803,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "RR",
         "summary": "Rajasthan Royals won by 27 runs D/L (RR 150/3 in 11 ov, MI 123/9 in 11 ov)",
-        "key_player": "Y Jaiswal"
+        "key_player": "Yashasvi Jaiswal",
+        "potm_team": "RR",
+        "player_photo": "/image/potm/yashasvi-jaiswal-potm.png",
+        "potm_batting": "62 (28)",
+        "actual_score": "RR 150/3 (11 ov) · MI 123/9 (11 ov, D/L)"
       }
     },
     {
@@ -738,7 +836,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "RCB",
         "summary": "Royal Challengers Bengaluru won by 43 runs (RCB 250/3, CSK 207 in 19.4 ov)",
-        "key_player": "V Kohli"
+        "key_player": "Virat Kohli",
+        "potm_team": "RCB",
+        "player_photo": "/image/potm/virat-kohli-potm.png",
+        "potm_batting": "104* (61)",
+        "actual_score": "RCB 250/3 (20 ov) · CSK 207 (19.4 ov)"
       }
     },
     {
@@ -753,7 +855,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "LSG",
         "summary": "Lucknow Super Giants won by 5 wickets (SRH 156/9, LSG 160/5 in 19.5 ov)",
-        "key_player": "N Pooran"
+        "key_player": "Nicholas Pooran",
+        "potm_team": "LSG",
+        "player_photo": "/image/potm/nicholas-pooran-potm.png",
+        "potm_batting": "57 (33)",
+        "actual_score": "SRH 156/9 (20 ov) · LSG 160/5 (19.5 ov)"
       }
     },
     {
@@ -768,7 +874,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "RR",
         "summary": "Rajasthan Royals won by 6 runs (RR 210/6, GT 204/8 in 20 ov)",
-        "key_player": "Y Jaiswal"
+        "key_player": "Yashasvi Jaiswal",
+        "potm_team": "RR",
+        "player_photo": "/image/potm/yashasvi-jaiswal-potm.png",
+        "potm_batting": "73 (42)",
+        "actual_score": "RR 210/6 (20 ov) · GT 204/8 (20 ov)"
       }
     },
     {
@@ -783,7 +893,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "DC",
         "summary": "Delhi Capitals won by 6 wickets (MI 162/6, DC 164/4 in 18.1 ov)",
-        "key_player": "K Ahmed"
+        "key_player": "Khaleel Ahmed",
+        "potm_team": "DC",
+        "player_photo": "/image/potm/khaleel-ahmed-potm.png",
+        "potm_bowling": "3/22 (4)",
+        "actual_score": "MI 162/6 (20 ov) · DC 164/4 (18.1 ov)"
       }
     },
     {
@@ -798,7 +912,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "PBKS",
         "summary": "Punjab Kings won by 5 wickets (CSK 209/5, PBKS 210/5 in 18.4 ov)",
-        "key_player": "S Dhawan"
+        "key_player": "Shikhar Dhawan",
+        "potm_team": "PBKS",
+        "player_photo": "/image/potm/shikhar-dhawan-potm.png",
+        "potm_batting": "78 (42)",
+        "actual_score": "CSK 209/5 (20 ov) · PBKS 210/5 (18.4 ov)"
       }
     },
     {
@@ -813,7 +931,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "SRH",
         "summary": "Sunrisers Hyderabad won by 65 runs (SRH 226/8, KKR 161 in 16 ov)",
-        "key_player": "T Head"
+        "key_player": "Travis Head",
+        "potm_team": "SRH",
+        "player_photo": "/image/potm/travis-head-potm.png",
+        "potm_batting": "108 (57)",
+        "actual_score": "SRH 226/8 (20 ov) · KKR 161 (16 ov)"
       }
     },
     {
@@ -828,7 +950,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "DC",
         "summary": "Delhi Capitals won by 6 wickets (LSG 141, DC 145/4 in 17.1 ov)",
-        "key_player": "K Ahmed"
+        "key_player": "Khaleel Ahmed",
+        "potm_team": "DC",
+        "player_photo": "/image/potm/khaleel-ahmed-potm.png",
+        "potm_bowling": "3/19 (4)",
+        "actual_score": "LSG 141 (20 ov) · DC 145/4 (17.1 ov)"
       }
     },
     {
@@ -843,7 +969,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "PBKS",
         "summary": "Punjab Kings won by 3 wickets (GT 162/6, PBKS 165/7 in 19.1 ov)",
-        "key_player": "S Dhawan"
+        "key_player": "Shikhar Dhawan",
+        "potm_team": "PBKS",
+        "player_photo": "/image/potm/shikhar-dhawan-potm.png",
+        "potm_batting": "62 (44)",
+        "actual_score": "GT 162/6 (20 ov) · PBKS 165/7 (19.1 ov)"
       }
     },
     {
@@ -858,7 +988,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "RR",
         "summary": "Rajasthan Royals won by 8 wickets (CSK 127, RR 128/2 in 12.1 ov)",
-        "key_player": "Y Jaiswal"
+        "key_player": "Yashasvi Jaiswal",
+        "potm_team": "RR",
+        "player_photo": "/image/potm/yashasvi-jaiswal-potm.png",
+        "potm_batting": "67* (32)",
+        "actual_score": "CSK 127 (20 ov) · RR 128/2 (12.1 ov)"
       }
     },
     {
@@ -873,7 +1007,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "MI",
         "summary": "Mumbai Indians won by 6 wickets (KKR 220/4, MI 224/4 in 19.1 ov)",
-        "key_player": "T Varma"
+        "key_player": "Tilak Varma",
+        "potm_team": "MI",
+        "player_photo": "/image/potm/tilak-varma-potm.png",
+        "potm_batting": "85* (44)",
+        "actual_score": "KKR 220/4 (20 ov) · MI 224/4 (19.1 ov)"
       }
     },
     {
@@ -888,7 +1026,11 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "result": {
         "winner": "RCB",
         "summary": "Royal Challengers Bengaluru won by 6 wickets (SRH 201/9, RCB 203/4 in 15.4 ov)",
-        "key_player": "V Kohli"
+        "key_player": "Virat Kohli",
+        "potm_team": "RCB",
+        "player_photo": "/image/potm/virat-kohli-potm.png",
+        "potm_batting": "78* (45)",
+        "actual_score": "SRH 201/9 (20 ov) · RCB 203/4 (15.4 ov)"
       }
     },
     {
@@ -1043,8 +1185,170 @@ function compareMatchSuggestionsNewestFirst(a, b) {
   return a.venue.localeCompare(b.venue, undefined, { sensitivity: "base" });
 }
 
+// ─── Match-status helpers (LIVE / TODAY / UPCOMING / COMPLETED / TBD) ────────
+
+/** Today's date as YYYY-MM-DD in local time — single source of truth. */
+function todayLocalDateStr() {
+  const now = new Date();
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
 /**
- * @typedef {{ label: string, date: string, venue: string, completed?: boolean, result?: { winner: string, summary: string, key_player?: string, actual_score?: string, potm_batting?: string, potm_team?: string, player_photo?: string } }} MatchSuggestHit
+ * @param {{ date?: string } | string | null | undefined} m  match row OR raw YYYY-MM-DD string
+ * @returns {boolean} true when the fixture date is strictly before today (local time)
+ */
+function isMatchInPast(m) {
+  if (!m) return false;
+  const dateStr = typeof m === "string" ? m : String(m.date || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  return dateStr < todayLocalDateStr();
+}
+
+/**
+ * @param {{ date?: string } | string | null | undefined} m
+ * @returns {boolean} true when the fixture is scheduled for today
+ */
+function isMatchToday(m) {
+  if (!m) return false;
+  const dateStr = typeof m === "string" ? m : String(m.date || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  return dateStr === todayLocalDateStr();
+}
+
+/**
+ * Classify a fixture row into one of the UX modes used by the dropdown badges
+ * and the war-room flow.
+ *
+ *   COMPLETED — `completed: true` with a recorded `result.winner`
+ *   LIVE      — date = today AND a live score snippet is present in `result`/cache
+ *   TODAY     — date = today, no live score yet (pre-toss / awaiting first ball)
+ *   UPCOMING  — date > today
+ *   PAST      — date < today but not flagged completed (date-based fallback guard)
+ *   TBD       — no date or non-ISO date (e.g. playoff placeholders)
+ *
+ * @param {{ date?: string, completed?: boolean, result?: any } | null | undefined} row
+ * @returns {'COMPLETED'|'LIVE'|'TODAY'|'UPCOMING'|'PAST'|'TBD'}
+ */
+function getMatchStatus(row) {
+  if (!row) return "TBD";
+  const completed = row.completed === true && row.result && String(row.result.winner || "").trim();
+  if (completed) return "COMPLETED";
+  const dateStr = String(row.date || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return "TBD";
+  const today = todayLocalDateStr();
+  if (dateStr === today) return "TODAY";
+  if (dateStr > today) return "UPCOMING";
+  return "PAST";
+}
+
+// ─── localStorage cache for completed-match results ─────────────────────────
+// Avoids the round-trip + agent run on repeat lookups of past fixtures. Keyed
+// by (normalized) match label; entries TTL out after 7 days so corrections
+// pushed to match_suggestions.json eventually win.
+
+const MATCH_RESULTS_CACHE_KEY = "war_room.match_results_cache.v1";
+const MATCH_RESULTS_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const MATCH_RESULTS_CACHE_MAX_ENTRIES = 200;
+
+function _readMatchResultsCache() {
+  if (typeof window === "undefined" || !window.localStorage) return {};
+  try {
+    const raw = window.localStorage.getItem(MATCH_RESULTS_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function _writeMatchResultsCache(cache) {
+  if (typeof window === "undefined" || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(MATCH_RESULTS_CACHE_KEY, JSON.stringify(cache));
+  } catch { /* quota / privacy mode — silent */ }
+}
+
+function _matchCacheKey(label) {
+  return normalizeFixtureLabelKey(String(label || "").trim());
+}
+
+/**
+ * Persist the recorded result for a completed match so subsequent lookups are
+ * instant and don't hit the network.
+ *
+ * @param {string} label
+ * @param {{ winner: string, summary?: string, key_player?: string, actual_score?: string, potm_batting?: string, potm_bowling?: string, potm_team?: string, player_photo?: string } | null | undefined} result
+ * @param {{ date?: string, venue?: string, teams?: string[] } | null} [meta]
+ */
+function cacheMatchResult(label, result, meta) {
+  if (!result || !String(result.winner || "").trim()) return;
+  const key = _matchCacheKey(label);
+  if (!key) return;
+  const cache = _readMatchResultsCache();
+  cache[key] = {
+    label: String(label),
+    result,
+    meta: meta && typeof meta === "object" ? meta : null,
+    cachedAt: Date.now(),
+  };
+  // Keep cache bounded — drop oldest entries beyond the cap.
+  const entries = Object.entries(cache);
+  if (entries.length > MATCH_RESULTS_CACHE_MAX_ENTRIES) {
+    entries.sort((a, b) => (a[1]?.cachedAt || 0) - (b[1]?.cachedAt || 0));
+    const drop = entries.length - MATCH_RESULTS_CACHE_MAX_ENTRIES;
+    for (let i = 0; i < drop; i++) delete cache[entries[i][0]];
+  }
+  _writeMatchResultsCache(cache);
+}
+
+/**
+ * Best-effort lookup for the fixture date when we only have the user-typed
+ * match label. Used by the date-based past-match guard and the today-only
+ * live-monitor gate.
+ *
+ * Order: bundled fallback rows → cached completed result → null.
+ *
+ * @param {string} label
+ * @returns {string} YYYY-MM-DD or "" if unknown
+ */
+function extractDateFromMatchInput(label) {
+  const t = String(label || "").trim();
+  if (!t) return "";
+  const key = normalizeFixtureLabelKey(t);
+  const local =
+    MATCH_SUGGESTIONS_FALLBACK_ROWS.find((r) => r.label === t) ||
+    MATCH_SUGGESTIONS_FALLBACK_ROWS.find((r) => normalizeFixtureLabelKey(r.label) === key);
+  if (local && local.date) return String(local.date);
+  const cached = getCachedMatchResult(t);
+  if (cached && cached.meta && cached.meta.date) return String(cached.meta.date);
+  return "";
+}
+
+/**
+ * @param {string} label
+ * @returns {{ label: string, result: NonNullable<MatchSuggestionRow["result"]>, meta: any, cachedAt: number } | null}
+ */
+function getCachedMatchResult(label) {
+  const key = _matchCacheKey(label);
+  if (!key) return null;
+  const cache = _readMatchResultsCache();
+  const hit = cache[key];
+  if (!hit || !hit.result) return null;
+  if (typeof hit.cachedAt === "number" && Date.now() - hit.cachedAt > MATCH_RESULTS_CACHE_TTL_MS) {
+    delete cache[key];
+    _writeMatchResultsCache(cache);
+    return null;
+  }
+  return hit;
+}
+
+/**
+ * @typedef {{ label: string, date: string, venue: string, completed?: boolean, result?: { winner: string, summary: string, key_player?: string, actual_score?: string, potm_batting?: string, potm_bowling?: string, potm_team?: string, player_photo?: string } }} MatchSuggestHit
  */
 
 /**
@@ -1079,6 +1383,8 @@ function getMatchSuggestionHits(rows, q, limit) {
       if (as) hitRes.actual_score = as;
       const pb = String(r.potm_batting ?? "").trim();
       if (pb) hitRes.potm_batting = pb;
+      const pbw = String(r.potm_bowling ?? "").trim();
+      if (pbw) hitRes.potm_bowling = pbw;
       const pt = String(r.potm_team ?? "").trim();
       if (pt) hitRes.potm_team = pt;
       const ph = String(r.player_photo ?? "").trim();
@@ -1576,30 +1882,95 @@ function resolveCompletedActualScore(result) {
   return derived || "—";
 }
 
+// ─── Player-of-the-match photo lookup ────────────────────────────────────────
+
+const POTM_PHOTO_PLACEHOLDER = "/image/potm/placeholder.svg";
+
 /**
- * Pink “player of the match” banner (completed fixtures).
+ * Convert a player's display name into a filesystem-safe slug used to look up
+ * a local photo at `/image/potm/{slug}-potm.png`.
+ *
+ *   "Josh Hazlewood"     → "josh-hazlewood"
+ *   "K. L. Rahul"        → "k-l-rahul"
+ *   "T Head"             → "t-head"
+ *   "M. S. Dhoni (CSK)"  → "m-s-dhoni"     // strips trailing parentheticals
+ *
+ * @param {string} name
+ * @returns {string}
+ */
+function slugifyPlayerName(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Resolve the photo path for a POTM record. Order of precedence:
+ *   1. Explicit `result.player_photo` (validated: must be a local /image/… path)
+ *   2. Auto-derived slug at `/image/potm/{slug}-potm.png` — the <img> uses an
+ *      onerror handler to swap in the placeholder when the file 404s, so this
+ *      acts as a search/discovery layer for any new POTM entry.
+ *   3. Placeholder when no name is available.
+ *
+ * @param {string} name
+ * @param {string} explicitPhoto
+ * @returns {{ src: string, isExplicit: boolean }}
+ */
+function resolvePlayerPhotoSrc(name, explicitPhoto) {
+  const explicit = String(explicitPhoto || "").trim();
+  if (explicit.startsWith("/image/") && !explicit.includes("..")) {
+    return { src: explicit, isExplicit: true };
+  }
+  const slug = slugifyPlayerName(name);
+  if (slug) return { src: `/image/potm/${slug}-potm.png`, isExplicit: false };
+  return { src: POTM_PHOTO_PLACEHOLDER, isExplicit: false };
+}
+
+/**
+ * Pink "player of the match" banner (completed fixtures).
+ *
+ * Layout matches the reference design:
+ *   ┌──────────────────────────────────────────────────────────┐
+ *   │ Player of the Match                                  [👤] │
+ *   │ Josh Hazlewood (RCB) · 4/12 (3.3)                         │
+ *   └──────────────────────────────────────────────────────────┘
+ *
+ * Live performance line prefers `potm_bowling` (bowlers usually win the
+ * award via figures), then falls back to `potm_batting`.
+ *
  * @param {NonNullable<MatchSuggestionRow["result"]>} result
  */
 function renderPlayerOfMatchCardHtml(result) {
   const name = String(result.key_player || "").trim();
   const teamCode = String(result.potm_team || "").trim() || String(result.winner || "").trim();
+  const bowling = String(result.potm_bowling || "").trim();
   const batting = String(result.potm_batting || "").trim();
-  const photo = String(result.player_photo || "").trim();
-  const left = name && teamCode ? `${name} (${teamCode})` : name || teamCode;
-  const lineDetail = batting && left ? `${left} · ${batting}` : left || batting;
+  const figures = bowling || batting;
+  // Render team in parens after name; figures (bowling preferred) live after a separator.
+  const nameWithTeam = name && teamCode ? `${name} (${teamCode})` : name || teamCode;
+  const lineDetail = figures && nameWithTeam
+    ? `${nameWithTeam} · ${figures}`
+    : nameWithTeam || figures;
   if (!lineDetail) {
     return `<div class="potm-banner potm-banner--empty" aria-hidden="true">—</div>`;
   }
-  const safePhoto = photo.startsWith("/") && !photo.includes("..") ? photo : "";
-  const imgHtml = safePhoto
-    ? `<img class="potm-banner__img" src="${escapeHtml(safePhoto)}" width="56" height="56" alt="${escapeHtml(
-        name || "Player of the match"
-      )}" decoding="async" loading="lazy" />`
-    : "";
+  const photo = resolvePlayerPhotoSrc(name, String(result.player_photo || ""));
+  const altText = name ? `${name}${teamCode ? `, ${teamCode}` : ""}` : "Player of the match";
+  // onerror swaps to the placeholder if the slug-derived asset 404s; null the
+  // handler first so a missing placeholder can never trigger an infinite loop.
+  const onErrorJs = `this.onerror=null;this.src='${POTM_PHOTO_PLACEHOLDER}';this.classList.add('potm-banner__img--placeholder');`;
+  const imgClass = photo.src === POTM_PHOTO_PLACEHOLDER
+    ? "potm-banner__img potm-banner__img--placeholder"
+    : "potm-banner__img";
+  const imgHtml = `<img class="${imgClass}" src="${escapeHtml(photo.src)}" width="56" height="56" alt="${escapeHtml(altText)}" decoding="async" loading="lazy" onerror="${onErrorJs}" />`;
   return `
     <div class="potm-banner" role="group" aria-label="Player of the match">
       <div class="potm-banner__text">
-        <div class="potm-banner__kicker">Player of the match</div>
+        <div class="potm-banner__kicker">Player of the Match</div>
         <div class="potm-banner__detail">${escapeHtml(lineDetail)}</div>
       </div>
       ${imgHtml}
@@ -2379,6 +2750,119 @@ async function postJudgePredict(matchId, debateTranscript) {
 }
 
 /**
+ * @typedef {{ id: number, match_id: string, predicted_winner: string, confidence: number, created_at: string, actual_winner: string | null }} SavedPredictionRow
+ */
+
+/**
+ * Fetch the AI Judge's saved pre-match predictions for a fixture (most recent
+ * first). Used by the "View AI pre-match prediction" button on the completed
+ * match card to surface accuracy retrospectively. Returns null on transport
+ * failure; returns [] when the endpoint is reachable but no rows match.
+ *
+ * @param {string} matchLabel
+ * @returns {Promise<SavedPredictionRow[] | null>}
+ */
+async function fetchSavedPredictionsByMatch(matchLabel) {
+  const t = String(matchLabel || "").trim();
+  if (!t || apiBase() === null) return null;
+  try {
+    const r = await fetchJudgeProxyWithRetry(
+      `${apiBase()}/api/judge/predictions-by-match?match_id=${encodeURIComponent(t)}&limit=5`,
+      { headers: { Accept: "application/json" } }
+    );
+    if (!r.ok) {
+      if (r.status === 404) return [];
+      return null;
+    }
+    const data = await r.json();
+    const rows = Array.isArray(data?.predictions) ? data.predictions : [];
+    return rows.map((row) => ({
+      id: Number(row.id) || 0,
+      match_id: String(row.match_id || ""),
+      predicted_winner: String(row.predicted_winner || ""),
+      confidence: Number(row.confidence) || 0,
+      created_at: String(row.created_at || ""),
+      actual_winner: row.actual_winner != null ? String(row.actual_winner) : null,
+    }));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Wire up the "View AI pre-match prediction" button rendered in the completed
+ * verdict card. Fetches saved predictions for this fixture from the Judge
+ * service and renders a compact accuracy summary (predicted vs actual).
+ *
+ * @param {HTMLElement | null} rootEl
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @param {string | null} actualWinnerCodeOrName
+ */
+function bindPrematchPredictionButton(rootEl, teams, actualWinnerCodeOrName) {
+  if (!rootEl) return;
+  const btn = /** @type {HTMLButtonElement | null} */ (rootEl.querySelector("[data-prematch-load]"));
+  const out = /** @type {HTMLElement | null} */ (rootEl.querySelector("#prematchResult"));
+  if (!btn || !out) return;
+  btn.addEventListener("click", async () => {
+    if (btn.disabled) return;
+    const label = btn.getAttribute("data-prematch-load") || "";
+    btn.disabled = true;
+    const orig = btn.textContent;
+    btn.textContent = "Loading…";
+    out.hidden = true;
+    out.innerHTML = "";
+    try {
+      const rows = await fetchSavedPredictionsByMatch(label);
+      if (rows === null) {
+        out.innerHTML = `<div class="verdict-prematch-empty">Judge service unreachable — try again in a few seconds.</div>`;
+      } else if (!rows.length) {
+        out.innerHTML = `<div class="verdict-prematch-empty">No saved AI prediction found for this fixture.</div>`;
+      } else {
+        const latest = rows[0];
+        const predDisplay = resolveWinnerDisplay(teams, latest.predicted_winner);
+        const actualDisplay = actualWinnerCodeOrName
+          ? resolveWinnerDisplay(teams, actualWinnerCodeOrName)
+          : "";
+        const correct =
+          actualWinnerCodeOrName &&
+          String(latest.predicted_winner).trim().toUpperCase() ===
+            String(actualWinnerCodeOrName).trim().toUpperCase();
+        const verdictBadge = actualWinnerCodeOrName
+          ? `<span class="verdict-prematch-badge verdict-prematch-badge--${correct ? "correct" : "wrong"}">${correct ? "✓ Correct" : "✗ Wrong"}</span>`
+          : "";
+        const ts = latest.created_at
+          ? formatFetchedAtLocalDisplay(latest.created_at)
+          : "";
+        out.innerHTML = `
+          <div class="verdict-prematch-card">
+            <div class="verdict-prematch-card__head">
+              <span class="verdict-prematch-card__kicker">AI pre-match prediction</span>
+              ${verdictBadge}
+            </div>
+            <div class="verdict-prematch-card__row">
+              <span class="verdict-prematch-card__k">Predicted</span>
+              <span class="verdict-prematch-card__v">${escapeHtml(predDisplay.toUpperCase())} · ${latest.confidence}% confidence</span>
+            </div>
+            ${actualDisplay ? `
+            <div class="verdict-prematch-card__row">
+              <span class="verdict-prematch-card__k">Actual</span>
+              <span class="verdict-prematch-card__v">${escapeHtml(actualDisplay.toUpperCase())}</span>
+            </div>` : ""}
+            ${ts ? `<div class="verdict-prematch-card__meta">Saved ${escapeHtml(ts)}${rows.length > 1 ? ` · ${rows.length} predictions on file` : ""}</div>` : ""}
+          </div>`;
+      }
+      out.hidden = false;
+      btn.style.display = "none";
+    } catch {
+      out.innerHTML = `<div class="verdict-prematch-empty">Could not load saved prediction.</div>`;
+      out.hidden = false;
+      btn.disabled = false;
+      btn.textContent = orig;
+    }
+  });
+}
+
+/**
  * @returns {Promise<{ total_settled: number, correct: number, accuracy: number | null } | null>}
  */
 async function fetchJudgeAccuracyStats() {
@@ -2518,6 +3002,31 @@ function formatSuggestMetaLine(date, venue) {
   return datePart || v || "";
 }
 
+/**
+ * Small status pill rendered in the autocomplete dropdown so the user can tell
+ * at a glance whether a fixture is finished, today's, or scheduled. Returns an
+ * empty string for TBD rows (placeholders like "IPL 2026 Final — TBD") so the
+ * pill doesn't clutter the title.
+ *
+ * @param {ReturnType<typeof getMatchStatus>} status
+ * @returns {string} safe HTML
+ */
+function renderMatchStatusBadgeHtml(status) {
+  switch (status) {
+    case "COMPLETED":
+      return `<span class="g-search__badge g-search__badge--completed" title="Match completed">Completed</span>`;
+    case "TODAY":
+      return `<span class="g-search__badge g-search__badge--today" title="Scheduled for today">Today</span>`;
+    case "UPCOMING":
+      return `<span class="g-search__badge g-search__badge--upcoming" title="Upcoming fixture">Upcoming</span>`;
+    case "PAST":
+      return `<span class="g-search__badge g-search__badge--past" title="Already played — result not yet recorded">Past</span>`;
+    case "TBD":
+    default:
+      return "";
+  }
+}
+
 function normalizeSuggestApiEntry(x) {
   if (typeof x === "string") return { label: x, date: "", venue: "" };
   if (x && typeof x === "object" && x.label != null) {
@@ -2546,6 +3055,8 @@ function normalizeSuggestApiEntry(x) {
       if (as) resOut.actual_score = as;
       const pb = r.potm_batting != null ? String(r.potm_batting).trim() : "";
       if (pb) resOut.potm_batting = pb;
+      const pbw = r.potm_bowling != null ? String(r.potm_bowling).trim() : "";
+      if (pbw) resOut.potm_bowling = pbw;
       const pt = r.potm_team != null ? String(r.potm_team).trim() : "";
       if (pt) resOut.potm_team = pt;
       const ph = r.player_photo != null ? String(r.player_photo).trim() : "";
@@ -2584,6 +3095,20 @@ async function lookupCompletedMatchRow(label) {
     MATCH_SUGGESTIONS_FALLBACK_ROWS.find((r) => normalizeFixtureLabelKey(r.label) === key);
   if (isDone(local)) return local;
 
+  // Frontend cache fast-path: avoids the round-trip on repeat past-match lookups.
+  const cached = getCachedMatchResult(t);
+  if (cached && isDone({ completed: true, result: cached.result })) {
+    const meta = cached.meta || {};
+    return {
+      label: cached.label || t,
+      date: meta.date || (local && local.date) || "",
+      venue: meta.venue || (local && local.venue) || "",
+      teams: Array.isArray(meta.teams) ? meta.teams : (local && local.teams) || [],
+      completed: true,
+      result: cached.result,
+    };
+  }
+
   if (apiBase() === null) return null;
 
   try {
@@ -2609,6 +3134,8 @@ async function lookupCompletedMatchRow(label) {
     if (as) resOut.actual_score = as;
     const pb = mr.potm_batting != null ? String(mr.potm_batting).trim() : "";
     if (pb) resOut.potm_batting = pb;
+    const pbw = mr.potm_bowling != null ? String(mr.potm_bowling).trim() : "";
+    if (pbw) resOut.potm_bowling = pbw;
     const pt = mr.potm_team != null ? String(mr.potm_team).trim() : "";
     if (pt) resOut.potm_team = pt;
     const ph = mr.player_photo != null ? String(mr.player_photo).trim() : "";
@@ -3546,6 +4073,14 @@ async function runWarRoom() {
   const completedRow = await lookupCompletedMatchRow(match);
   if (completedRow && completedRow.result && String(completedRow.result.winner || "").trim()) {
     try {
+      // Persist the verdict locally so the next lookup of this fixture is instant
+      // (covers shareable URLs, history nav, repeat searches across sessions).
+      cacheMatchResult(match, completedRow.result, {
+        date: completedRow.date,
+        venue: completedRow.venue,
+        teams: completedRow.teams,
+      });
+
       const teams = parseTeamsFromMatch(match);
       const winCode = String(completedRow.result.winner).trim();
       const winDisplay = resolveWinnerDisplay(teams, winCode);
@@ -3592,7 +4127,7 @@ async function runWarRoom() {
       const potmBlock = renderPlayerOfMatchCardHtml(res);
       const verdictEl = document.getElementById('verdictArea');
       verdictEl.innerHTML = `
-    <div class="verdict-card verdict-card--final">
+    <div class="verdict-card verdict-card--final" data-completed-match="${escapeHtml(match)}">
       <div class="verdict-kicker">Final result</div>
       <div class="verdict-winner-row">${verdictLogoHtml}<div class="verdict-winner">${escapeHtml(winDisplay.toUpperCase())} WINS</div></div>
       <div class="verdict-summary">${escapeHtml(completedRow.result.summary || '')}</div>
@@ -3609,9 +4144,63 @@ async function runWarRoom() {
           <div class="stat-val">100% <span class="stat-sublabel">recorded result · not win probability</span></div>
         </div>
       </div>
+      <div class="verdict-prematch-row">
+        <button type="button" class="verdict-prematch-btn" data-prematch-load="${escapeHtml(match)}">
+          View AI pre-match prediction
+        </button>
+        <div class="verdict-prematch-result" id="prematchResult" hidden></div>
+      </div>
     </div>`;
       scheduleVerdictWinProbabilityAnimation(verdictEl, winProbFinal.pctA, winProbFinal.pctB);
+      bindPrematchPredictionButton(verdictEl, teams, completedRow.result.winner);
 
+      scrollVerdictPanelIntoView({ behavior: "smooth" });
+    } catch (e) {
+      showApiError(e instanceof Error ? e.message : String(e));
+      document.getElementById('runBtn').style.display = '';
+      document.getElementById('resetBtn').style.display = 'none';
+    } finally {
+      running = false;
+    }
+    return;
+  }
+
+  // Date-based PAST-match guard: fixture date is in the past but no recorded
+  // result is available (neither in match_suggestions.json nor in the cache).
+  // Skip the war-room flow — running agents on a finished game produces a
+  // misleading "Prediction" UI for what is actually history.
+  if (isMatchInPast(completedRow || { date: extractDateFromMatchInput(match) })) {
+    try {
+      const teams = parseTeamsFromMatch(match);
+      AGENTS.forEach((a) => {
+        removeAgentSkeleton(a.id);
+        document.getElementById("icon-" + a.id).classList.remove("on");
+        document.getElementById("dot-" + a.id).classList.remove("live");
+        const ins = document.getElementById("insight-" + a.id);
+        if (ins) { ins.textContent = ""; ins.classList.remove("show"); }
+      });
+      document.getElementById('runBtn').style.display = 'none';
+      document.getElementById('resetBtn').style.display = '';
+      document.getElementById('runningLabel').style.display = 'none';
+      document.getElementById('emptyState').style.display = 'none';
+      const debateEl = document.getElementById('debateArea');
+      debateEl.classList.add('debate-area--final-only');
+      debateEl.innerHTML = '';
+      setMatchBar(match, teams);
+      setPhase(null);
+      document.getElementById('verdictArea').innerHTML = `
+    <div class="verdict-card verdict-card--final verdict-card--past-no-result" data-past-match="${escapeHtml(match)}">
+      <div class="verdict-kicker">Match completed</div>
+      <div class="verdict-winner-row"><div class="verdict-winner">${escapeHtml(teams.teamA)} vs ${escapeHtml(teams.teamB)}</div></div>
+      <div class="verdict-summary">This fixture has already been played but the recorded result hasn't been ingested yet. Skipping the live agents to avoid showing a stale prediction.</div>
+      <div class="verdict-prematch-row">
+        <button type="button" class="verdict-prematch-btn" data-prematch-load="${escapeHtml(match)}">
+          View AI pre-match prediction
+        </button>
+        <div class="verdict-prematch-result" id="prematchResult" hidden></div>
+      </div>
+    </div>`;
+      bindPrematchPredictionButton(document.getElementById('verdictArea'), teams, null);
       scrollVerdictPanelIntoView({ behavior: "smooth" });
     } catch (e) {
       showApiError(e instanceof Error ? e.message : String(e));
@@ -3920,8 +4509,15 @@ async function runWarRoom() {
     setPhase(null);
     document.getElementById('runningLabel').style.display = 'none';
 
-    // Kick off the Live Monitor polling loop — polls every 45 s for score changes
-    startLiveMonitor(match, teams, liveState?.text || "");
+    // Kick off the Live Monitor polling loop — polls every 45 s for score changes.
+    // Only worth doing for today's fixtures: future matches have nothing to poll
+    // and past matches already short-circuit via the completed-row branch above.
+    const matchDate = (completedRow && completedRow.date) || extractDateFromMatchInput(match);
+    if (isMatchToday({ date: matchDate })) {
+      startLiveMonitor(match, teams, liveState?.text || "");
+    } else {
+      stopLiveMonitor();
+    }
   } catch (e) {
     hideTyping();
     setPhase(null);
@@ -4023,8 +4619,11 @@ function initMatchAutocomplete() {
       li.setAttribute("role", "option");
       li.setAttribute("aria-selected", i === activeIndex ? "true" : "false");
       const meta = formatSuggestMetaLine(hit.date, hit.venue);
+      const status = getMatchStatus(hit);
+      const badgeHtml = renderMatchStatusBadgeHtml(status);
       li.innerHTML =
         '<div class="g-search__result-title">' +
+        badgeHtml +
         highlightSuggestLabel(hit.label, q) +
         "</div>" +
         (meta
@@ -4035,7 +4634,10 @@ function initMatchAutocomplete() {
         input.value = hit.label;
         closeList();
         updateClearBtn();
-        if (hit.completed && hit.result) runWarRoom();
+        // Completed OR past matches go straight to the result/past-match view —
+        // skip the war-room agents entirely (date-based guard catches missing
+        // `completed` flags so we never run agents on a finished fixture).
+        if ((hit.completed && hit.result) || status === "PAST") runWarRoom();
       });
       list.appendChild(li);
       if (i === activeIndex) li.scrollIntoView({ block: "nearest" });

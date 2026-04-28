@@ -319,7 +319,17 @@
     "teams": [
       "DC",
       "RCB"
-    ]
+    ],
+    "completed": true,
+    "result": {
+      "winner": "RCB",
+      "summary": "Royal Challengers Bengaluru won by 9 wickets (DC collapsed for 8/6, RCB chased easily)",
+      "key_player": "Josh Hazlewood",
+      "potm_team": "RCB",
+      "potm_bowling": "4/12 (3.3)",
+      "actual_score": "DC 8/6 · RCB 9/1 (3.3 ov)",
+      "player_photo": "/image/potm/josh-hazlewood-potm.png"
+    }
   },
   {
     "label": "KKR vs LSG — IPL 2026 Match 38, BRSABV Ekana Cricket Stadium, Lucknow",
@@ -342,7 +352,11 @@
     "result": {
       "winner": "GT",
       "summary": "Gujarat Titans won by 8 wickets (CSK 158/7 in 20 ov, GT 162/2 in 16.4 ov)",
-      "key_player": "S Gill"
+      "key_player": "Shubman Gill",
+      "potm_team": "GT",
+      "player_photo": "/image/potm/shubman-gill-potm.png",
+      "potm_batting": "78* (52)",
+      "actual_score": "CSK 158/7 (20 ov) · GT 162/2 (16.4 ov)"
     }
   },
   {
@@ -357,7 +371,11 @@
     "result": {
       "winner": "SRH",
       "summary": "Sunrisers Hyderabad won by 5 wickets (RR 228/6 in 20 ov, SRH 229/5 in 18.3 ov)",
-      "key_player": "T Head"
+      "key_player": "Travis Head",
+      "potm_team": "SRH",
+      "player_photo": "/image/potm/travis-head-potm.png",
+      "potm_batting": "104 (52)",
+      "actual_score": "RR 228/6 (20 ov) · SRH 229/5 (18.3 ov)"
     }
   },
   {
@@ -399,7 +417,11 @@
     "result": {
       "winner": "RR",
       "summary": "Rajasthan Royals won by 40 runs (RR 159/6, LSG 119 in 18 ov)",
-      "key_player": "Y Jaiswal"
+      "key_player": "Yashasvi Jaiswal",
+      "potm_team": "RR",
+      "player_photo": "/image/potm/yashasvi-jaiswal-potm.png",
+      "potm_batting": "62 (44)",
+      "actual_score": "RR 159/6 (20 ov) · LSG 119 (18 ov)"
     }
   },
   {
@@ -414,7 +436,11 @@
     "result": {
       "winner": "SRH",
       "summary": "Sunrisers Hyderabad won by 47 runs (SRH 242/2, DC 195/9 in 20 ov)",
-      "key_player": "T Head"
+      "key_player": "Travis Head",
+      "potm_team": "SRH",
+      "player_photo": "/image/potm/travis-head-potm.png",
+      "potm_batting": "120 (58)",
+      "actual_score": "SRH 242/2 (20 ov) · DC 195/9 (20 ov)"
     }
   },
   {
@@ -429,7 +455,11 @@
     "result": {
       "winner": "MI",
       "summary": "Mumbai Indians won by 99 runs (MI 199/5, GT 100 in 15.5 ov)",
-      "key_player": "T Varma"
+      "key_player": "Tilak Varma",
+      "potm_team": "MI",
+      "player_photo": "/image/potm/tilak-varma-potm.png",
+      "potm_batting": "85 (49)",
+      "actual_score": "MI 199/5 (20 ov) · GT 100 (15.5 ov)"
     }
   },
   {
@@ -444,7 +474,11 @@
     "result": {
       "winner": "PBKS",
       "summary": "Punjab Kings won by 54 runs (PBKS 254/7, LSG 200/5 in 20 ov)",
-      "key_player": "S Dhawan"
+      "key_player": "Shikhar Dhawan",
+      "potm_team": "PBKS",
+      "player_photo": "/image/potm/shikhar-dhawan-potm.png",
+      "potm_batting": "108 (62)",
+      "actual_score": "PBKS 254/7 (20 ov) · LSG 200/5 (20 ov)"
     }
   },
   {
@@ -459,7 +493,11 @@
     "result": {
       "winner": "KKR",
       "summary": "Kolkata Knight Riders won by 4 wickets (RR 155/9, KKR 161/6 in 19.4 ov)",
-      "key_player": "A Russell"
+      "key_player": "Andre Russell",
+      "potm_team": "KKR",
+      "player_photo": "/image/potm/andre-russell-potm.png",
+      "potm_batting": "47* (24)",
+      "actual_score": "RR 155/9 (20 ov) · KKR 161/6 (19.4 ov)"
     }
   },
   {
@@ -474,7 +512,11 @@
     "result": {
       "winner": "SRH",
       "summary": "Sunrisers Hyderabad won by 10 runs (SRH 194/9, CSK 184/8 in 20 ov)",
-      "key_player": "T Head"
+      "key_player": "Travis Head",
+      "potm_team": "SRH",
+      "player_photo": "/image/potm/travis-head-potm.png",
+      "potm_batting": "76 (45)",
+      "actual_score": "SRH 194/9 (20 ov) · CSK 184/8 (20 ov)"
     }
   },
   {
@@ -489,7 +531,11 @@
     "result": {
       "winner": "DC",
       "summary": "Delhi Capitals won by 6 wickets (RCB 175/8, DC 179/4 in 19.5 ov)",
-      "key_player": "K Ahmed"
+      "key_player": "Khaleel Ahmed",
+      "potm_team": "DC",
+      "player_photo": "/image/potm/khaleel-ahmed-potm.png",
+      "potm_bowling": "3/24 (4)",
+      "actual_score": "RCB 175/8 (20 ov) · DC 179/4 (19.5 ov)"
     }
   },
   {
@@ -504,7 +550,11 @@
     "result": {
       "winner": "GT",
       "summary": "Gujarat Titans won by 5 wickets (KKR 180, GT 181/5 in 19.4 ov)",
-      "key_player": "S Gill"
+      "key_player": "Shubman Gill",
+      "potm_team": "GT",
+      "player_photo": "/image/potm/shubman-gill-potm.png",
+      "potm_batting": "85* (54)",
+      "actual_score": "KKR 180 (20 ov) · GT 181/5 (19.4 ov)"
     }
   },
   {
@@ -519,7 +569,11 @@
     "result": {
       "winner": "PBKS",
       "summary": "Punjab Kings won by 7 wickets (MI 195/6, PBKS 198/3 in 16.3 ov)",
-      "key_player": "S Dhawan"
+      "key_player": "Shikhar Dhawan",
+      "potm_team": "PBKS",
+      "player_photo": "/image/potm/shikhar-dhawan-potm.png",
+      "potm_batting": "92* (54)",
+      "actual_score": "MI 195/6 (20 ov) · PBKS 198/3 (16.3 ov)"
     }
   },
   {
@@ -534,7 +588,11 @@
     "result": {
       "winner": "RCB",
       "summary": "Royal Challengers Bengaluru won by 5 wickets (LSG 146, RCB 149/5 in 15.1 ov)",
-      "key_player": "V Kohli"
+      "key_player": "Virat Kohli",
+      "potm_team": "RCB",
+      "player_photo": "/image/potm/virat-kohli-potm.png",
+      "potm_batting": "67 (41)",
+      "actual_score": "LSG 146 (20 ov) · RCB 149/5 (15.1 ov)"
     }
   },
   {
@@ -549,7 +607,11 @@
     "result": {
       "winner": "CSK",
       "summary": "Chennai Super Kings won by 32 runs (CSK 192/5, KKR 160/7 in 20 ov)",
-      "key_player": "R Ravindra"
+      "key_player": "Rachin Ravindra",
+      "potm_team": "CSK",
+      "player_photo": "/image/potm/rachin-ravindra-potm.png",
+      "potm_batting": "73 (44)",
+      "actual_score": "CSK 192/5 (20 ov) · KKR 160/7 (20 ov)"
     }
   },
   {
@@ -564,7 +626,11 @@
     "result": {
       "winner": "SRH",
       "summary": "Sunrisers Hyderabad won by 57 runs (SRH 216/6, RR 159 in 19 ov)",
-      "key_player": "T Head"
+      "key_player": "Travis Head",
+      "potm_team": "SRH",
+      "player_photo": "/image/potm/travis-head-potm.png",
+      "potm_batting": "94 (47)",
+      "actual_score": "SRH 216/6 (20 ov) · RR 159 (19 ov)"
     }
   },
   {
@@ -579,7 +645,11 @@
     "result": {
       "winner": "RCB",
       "summary": "Royal Challengers Bengaluru won by 18 runs (RCB 240/4, MI 222/5 in 20 ov)",
-      "key_player": "V Kohli"
+      "key_player": "Virat Kohli",
+      "potm_team": "RCB",
+      "player_photo": "/image/potm/virat-kohli-potm.png",
+      "potm_batting": "97 (52)",
+      "actual_score": "RCB 240/4 (20 ov) · MI 222/5 (20 ov)"
     }
   },
   {
@@ -594,7 +664,11 @@
     "result": {
       "winner": "GT",
       "summary": "Gujarat Titans won by 7 wickets (LSG 164/8, GT 165/3 in 18.4 ov)",
-      "key_player": "S Gill"
+      "key_player": "Shubman Gill",
+      "potm_team": "GT",
+      "player_photo": "/image/potm/shubman-gill-potm.png",
+      "potm_batting": "73* (49)",
+      "actual_score": "LSG 164/8 (20 ov) · GT 165/3 (18.4 ov)"
     }
   },
   {
@@ -609,7 +683,11 @@
     "result": {
       "winner": "CSK",
       "summary": "Chennai Super Kings won by 23 runs (CSK 212/2, DC 189 in 20 ov)",
-      "key_player": "R Ravindra"
+      "key_player": "Rachin Ravindra",
+      "potm_team": "CSK",
+      "player_photo": "/image/potm/rachin-ravindra-potm.png",
+      "potm_batting": "84 (47)",
+      "actual_score": "CSK 212/2 (20 ov) · DC 189 (20 ov)"
     }
   },
   {
@@ -624,7 +702,11 @@
     "result": {
       "winner": "PBKS",
       "summary": "Punjab Kings won by 6 wickets (SRH 219/6, PBKS 223/4 in 18.5 ov)",
-      "key_player": "S Dhawan"
+      "key_player": "Shikhar Dhawan",
+      "potm_team": "PBKS",
+      "player_photo": "/image/potm/shikhar-dhawan-potm.png",
+      "potm_batting": "76 (44)",
+      "actual_score": "SRH 219/6 (20 ov) · PBKS 223/4 (18.5 ov)"
     }
   },
   {
@@ -639,7 +721,11 @@
     "result": {
       "winner": "RR",
       "summary": "Rajasthan Royals won by 6 wickets (RCB 201/8, RR 202/4 in 18 ov)",
-      "key_player": "Y Jaiswal"
+      "key_player": "Yashasvi Jaiswal",
+      "potm_team": "RR",
+      "player_photo": "/image/potm/yashasvi-jaiswal-potm.png",
+      "potm_batting": "79 (44)",
+      "actual_score": "RCB 201/8 (20 ov) · RR 202/4 (18 ov)"
     }
   },
   {
@@ -654,7 +740,11 @@
     "result": {
       "winner": "LSG",
       "summary": "Lucknow Super Giants won by 3 wickets (KKR 181/4, LSG 182/7 in 20 ov)",
-      "key_player": "N Pooran"
+      "key_player": "Nicholas Pooran",
+      "potm_team": "LSG",
+      "player_photo": "/image/potm/nicholas-pooran-potm.png",
+      "potm_batting": "61* (35)",
+      "actual_score": "KKR 181/4 (20 ov) · LSG 182/7 (20 ov)"
     }
   },
   {
@@ -669,7 +759,11 @@
     "result": {
       "winner": "GT",
       "summary": "Gujarat Titans won by 1 run (GT 210/4, DC 209/8 in 20 ov)",
-      "key_player": "S Gill"
+      "key_player": "Shubman Gill",
+      "potm_team": "GT",
+      "player_photo": "/image/potm/shubman-gill-potm.png",
+      "potm_batting": "92 (53)",
+      "actual_score": "GT 210/4 (20 ov) · DC 209/8 (20 ov)"
     }
   },
   {
@@ -684,7 +778,11 @@
     "result": {
       "winner": "RR",
       "summary": "Rajasthan Royals won by 27 runs D/L (RR 150/3 in 11 ov, MI 123/9 in 11 ov)",
-      "key_player": "Y Jaiswal"
+      "key_player": "Yashasvi Jaiswal",
+      "potm_team": "RR",
+      "player_photo": "/image/potm/yashasvi-jaiswal-potm.png",
+      "potm_batting": "62 (28)",
+      "actual_score": "RR 150/3 (11 ov) · MI 123/9 (11 ov, D/L)"
     }
   },
   {
@@ -713,7 +811,11 @@
     "result": {
       "winner": "RCB",
       "summary": "Royal Challengers Bengaluru won by 43 runs (RCB 250/3, CSK 207 in 19.4 ov)",
-      "key_player": "V Kohli"
+      "key_player": "Virat Kohli",
+      "potm_team": "RCB",
+      "player_photo": "/image/potm/virat-kohli-potm.png",
+      "potm_batting": "104* (61)",
+      "actual_score": "RCB 250/3 (20 ov) · CSK 207 (19.4 ov)"
     }
   },
   {
@@ -728,7 +830,11 @@
     "result": {
       "winner": "LSG",
       "summary": "Lucknow Super Giants won by 5 wickets (SRH 156/9, LSG 160/5 in 19.5 ov)",
-      "key_player": "N Pooran"
+      "key_player": "Nicholas Pooran",
+      "potm_team": "LSG",
+      "player_photo": "/image/potm/nicholas-pooran-potm.png",
+      "potm_batting": "57 (33)",
+      "actual_score": "SRH 156/9 (20 ov) · LSG 160/5 (19.5 ov)"
     }
   },
   {
@@ -743,7 +849,11 @@
     "result": {
       "winner": "RR",
       "summary": "Rajasthan Royals won by 6 runs (RR 210/6, GT 204/8 in 20 ov)",
-      "key_player": "Y Jaiswal"
+      "key_player": "Yashasvi Jaiswal",
+      "potm_team": "RR",
+      "player_photo": "/image/potm/yashasvi-jaiswal-potm.png",
+      "potm_batting": "73 (42)",
+      "actual_score": "RR 210/6 (20 ov) · GT 204/8 (20 ov)"
     }
   },
   {
@@ -758,7 +868,11 @@
     "result": {
       "winner": "DC",
       "summary": "Delhi Capitals won by 6 wickets (MI 162/6, DC 164/4 in 18.1 ov)",
-      "key_player": "K Ahmed"
+      "key_player": "Khaleel Ahmed",
+      "potm_team": "DC",
+      "player_photo": "/image/potm/khaleel-ahmed-potm.png",
+      "potm_bowling": "3/22 (4)",
+      "actual_score": "MI 162/6 (20 ov) · DC 164/4 (18.1 ov)"
     }
   },
   {
@@ -773,7 +887,11 @@
     "result": {
       "winner": "PBKS",
       "summary": "Punjab Kings won by 5 wickets (CSK 209/5, PBKS 210/5 in 18.4 ov)",
-      "key_player": "S Dhawan"
+      "key_player": "Shikhar Dhawan",
+      "potm_team": "PBKS",
+      "player_photo": "/image/potm/shikhar-dhawan-potm.png",
+      "potm_batting": "78 (42)",
+      "actual_score": "CSK 209/5 (20 ov) · PBKS 210/5 (18.4 ov)"
     }
   },
   {
@@ -788,7 +906,11 @@
     "result": {
       "winner": "SRH",
       "summary": "Sunrisers Hyderabad won by 65 runs (SRH 226/8, KKR 161 in 16 ov)",
-      "key_player": "T Head"
+      "key_player": "Travis Head",
+      "potm_team": "SRH",
+      "player_photo": "/image/potm/travis-head-potm.png",
+      "potm_batting": "108 (57)",
+      "actual_score": "SRH 226/8 (20 ov) · KKR 161 (16 ov)"
     }
   },
   {
@@ -803,7 +925,11 @@
     "result": {
       "winner": "DC",
       "summary": "Delhi Capitals won by 6 wickets (LSG 141, DC 145/4 in 17.1 ov)",
-      "key_player": "K Ahmed"
+      "key_player": "Khaleel Ahmed",
+      "potm_team": "DC",
+      "player_photo": "/image/potm/khaleel-ahmed-potm.png",
+      "potm_bowling": "3/19 (4)",
+      "actual_score": "LSG 141 (20 ov) · DC 145/4 (17.1 ov)"
     }
   },
   {
@@ -818,7 +944,11 @@
     "result": {
       "winner": "PBKS",
       "summary": "Punjab Kings won by 3 wickets (GT 162/6, PBKS 165/7 in 19.1 ov)",
-      "key_player": "S Dhawan"
+      "key_player": "Shikhar Dhawan",
+      "potm_team": "PBKS",
+      "player_photo": "/image/potm/shikhar-dhawan-potm.png",
+      "potm_batting": "62 (44)",
+      "actual_score": "GT 162/6 (20 ov) · PBKS 165/7 (19.1 ov)"
     }
   },
   {
@@ -833,7 +963,11 @@
     "result": {
       "winner": "RR",
       "summary": "Rajasthan Royals won by 8 wickets (CSK 127, RR 128/2 in 12.1 ov)",
-      "key_player": "Y Jaiswal"
+      "key_player": "Yashasvi Jaiswal",
+      "potm_team": "RR",
+      "player_photo": "/image/potm/yashasvi-jaiswal-potm.png",
+      "potm_batting": "67* (32)",
+      "actual_score": "CSK 127 (20 ov) · RR 128/2 (12.1 ov)"
     }
   },
   {
@@ -848,7 +982,11 @@
     "result": {
       "winner": "MI",
       "summary": "Mumbai Indians won by 6 wickets (KKR 220/4, MI 224/4 in 19.1 ov)",
-      "key_player": "T Varma"
+      "key_player": "Tilak Varma",
+      "potm_team": "MI",
+      "player_photo": "/image/potm/tilak-varma-potm.png",
+      "potm_batting": "85* (44)",
+      "actual_score": "KKR 220/4 (20 ov) · MI 224/4 (19.1 ov)"
     }
   },
   {
@@ -863,7 +1001,11 @@
     "result": {
       "winner": "RCB",
       "summary": "Royal Challengers Bengaluru won by 6 wickets (SRH 201/9, RCB 203/4 in 15.4 ov)",
-      "key_player": "V Kohli"
+      "key_player": "Virat Kohli",
+      "potm_team": "RCB",
+      "player_photo": "/image/potm/virat-kohli-potm.png",
+      "potm_batting": "78* (45)",
+      "actual_score": "SRH 201/9 (20 ov) · RCB 203/4 (15.4 ov)"
     }
   },
   {

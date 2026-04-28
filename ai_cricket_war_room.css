@@ -1304,6 +1304,37 @@ html.acwr-notice-dismissed .notice-strip {
   color: var(--color-text-primary);
 }
 
+/* Status pill rendered before the fixture title in the autocomplete dropdown. */
+.g-search__badge {
+  display: inline-block;
+  margin-right: 0.45rem;
+  padding: 0.05rem 0.42rem;
+  border-radius: 999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: 0.08em;
+  border: 1px solid currentColor;
+  line-height: 1.4;
+}
+.g-search__badge--completed {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.12);
+}
+.g-search__badge--today {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.14);
+}
+.g-search__badge--upcoming {
+  color: #93c5fd;
+  background: rgba(147, 197, 253, 0.12);
+}
+.g-search__badge--past {
+  color: #c4b5fd;
+  background: rgba(196, 181, 253, 0.12);
+}
+
 .g-search__result-title .g-search__hl {
   font-weight: 600;
   background: rgba(251, 188, 5, 0.28);
@@ -1803,6 +1834,114 @@ html.acwr-notice-dismissed .notice-strip {
   color: #7dd3fc;
 }
 
+/* Past fixture, no recorded result — neutral muted card, no win bar. */
+.verdict-card--past-no-result {
+  background: linear-gradient(145deg, rgba(40, 38, 60, 0.55) 0%, rgba(7, 11, 18, 0.92) 100%);
+  border-color: rgba(196, 181, 253, 0.32);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45), 0 1px 0 rgba(196, 181, 253, 0.08) inset;
+}
+.verdict-card--past-no-result .verdict-kicker {
+  color: #c4b5fd;
+}
+
+/* "View AI pre-match prediction" affordance on completed/past cards. */
+.verdict-prematch-row {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.verdict-prematch-btn {
+  align-self: flex-start;
+  font-family: var(--font-ui, var(--font-display));
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: 1px solid rgba(125, 211, 252, 0.4);
+  background: linear-gradient(180deg, rgba(125, 211, 252, 0.16) 0%, rgba(125, 211, 252, 0.06) 100%);
+  color: #e0f2fe;
+  transition: filter 0.15s ease, box-shadow 0.15s ease;
+}
+.verdict-prematch-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: 0 0 12px rgba(125, 211, 252, 0.25);
+}
+.verdict-prematch-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+.verdict-prematch-empty {
+  font-size: 0.78rem;
+  color: var(--color-text-tertiary, #9ca3af);
+  font-style: italic;
+}
+.verdict-prematch-card {
+  border: 1px solid rgba(125, 211, 252, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 0.7rem 0.85rem;
+  background: rgba(125, 211, 252, 0.06);
+}
+.verdict-prematch-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.verdict-prematch-card__kicker {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7dd3fc;
+}
+.verdict-prematch-card__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  font-size: 0.82rem;
+  padding: 0.18rem 0;
+}
+.verdict-prematch-card__k {
+  color: var(--color-text-tertiary, #9ca3af);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.verdict-prematch-card__v {
+  color: var(--color-text-primary, #f1f5f9);
+  font-weight: 600;
+  text-align: right;
+}
+.verdict-prematch-card__meta {
+  margin-top: 0.45rem;
+  font-size: 0.68rem;
+  color: var(--color-text-tertiary, #9ca3af);
+}
+.verdict-prematch-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+}
+.verdict-prematch-badge--correct {
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.12);
+}
+.verdict-prematch-badge--wrong {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+}
+
 .verdict-subkicker--warn {
   color: #fcd34d !important;
 }
@@ -2198,6 +2337,14 @@ html.acwr-notice-dismissed .notice-strip {
   object-fit: cover;
   border: 2px solid rgba(255, 255, 255, 0.95);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+/* Placeholder silhouette — muted neutral background lets the icon read clearly. */
+.potm-banner__img--placeholder {
+  background: linear-gradient(180deg, #f4f6fb 0%, #d3d7de 100%);
+  object-fit: contain;
+  padding: 2px;
 }
 
 .potm-banner--empty {

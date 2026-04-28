@@ -227,3 +227,41 @@ class PredictionsStore:
             confidence=int(r[4]),
             created_at=str(r[5]),
         )
+
+    def get_predictions_by_match(
+        self, match_id: str, *, limit: int = 5
+    ) -> list[PredictionRow]:
+        """Most-recent-first list of saved predictions for a fixture label.
+
+        Used by the front-end "View AI pre-match prediction" affordance on the
+        completed match card so users can compare what the war room said
+        beforehand against the recorded result.
+        """
+        mid = (match_id or "").strip()
+        if not mid:
+            return []
+        n = max(1, min(int(limit), 50))
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, match_id, predicted_winner, actual_winner, confidence, created_at
+                FROM predictions
+                WHERE match_id = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (mid, n),
+            ).fetchall()
+        out: list[PredictionRow] = []
+        for r in rows:
+            out.append(
+                PredictionRow(
+                    id=int(r[0]),
+                    match_id=str(r[1]),
+                    predicted_winner=str(r[2]),
+                    actual_winner=r[3],
+                    confidence=int(r[4]),
+                    created_at=str(r[5]),
+                )
+            )
+        return out
