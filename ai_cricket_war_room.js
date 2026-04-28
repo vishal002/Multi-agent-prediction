@@ -19,7 +19,7 @@ const ARCH = [
  * Offline / file:// fallback — keep in sync with match_suggestions.json on the server.
  * When served via `node server.mjs`, suggestions load from GET /api/match-suggest.
  */
-/** @typedef {{ label: string, date: string, venue: string, teams: string[], completed?: boolean, result?: { winner: string, summary?: string, key_player?: string } }} MatchSuggestionRow */
+/** @typedef {{ label: string, date: string, venue: string, teams: string[], completed?: boolean, result?: { winner: string, summary?: string, key_player?: string, actual_score?: string, potm_batting?: string, potm_team?: string, player_photo?: string } }} MatchSuggestionRow */
 
 /** Same rows as match_suggestions.json (order preserved for empty search). */
 const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
@@ -325,7 +325,17 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "teams": [
         "PBKS",
         "RR"
-      ]
+      ],
+      "completed": true,
+      "result": {
+        "winner": "RR",
+        "summary": "Rajasthan Royals won by 6 wickets (PBKS 222/4 in 20 ov, RR 228/4 in 19.2 ov)",
+        "key_player": "Donovan Ferreira",
+        "actual_score": "PBKS 222/4 (20 ov) · RR 228/4 (19.2 ov)",
+        "potm_batting": "52* (26)",
+        "potm_team": "RR",
+        "player_photo": "/image/potm/donovan-ferreira-potm.png"
+      }
     },
     {
       "label": "DC vs RCB — IPL 2026 Match 39, Arun Jaitley Stadium, Delhi",
@@ -1034,7 +1044,7 @@ function compareMatchSuggestionsNewestFirst(a, b) {
 }
 
 /**
- * @typedef {{ label: string, date: string, venue: string, completed?: boolean, result?: { winner: string, summary: string, key_player?: string } }} MatchSuggestHit
+ * @typedef {{ label: string, date: string, venue: string, completed?: boolean, result?: { winner: string, summary: string, key_player?: string, actual_score?: string, potm_batting?: string, potm_team?: string, player_photo?: string } }} MatchSuggestHit
  */
 
 /**
@@ -1058,11 +1068,22 @@ function getMatchSuggestionHits(rows, q, limit) {
     if (row.completed && row.result && String(row.result.winner || "").trim()) {
       hit.completed = true;
       const kp = String(row.result.key_player ?? "").trim();
-      hit.result = {
+      /** @type {NonNullable<MatchSuggestHit["result"]>} */
+      const hitRes = {
         winner: String(row.result.winner).trim(),
         summary: row.result.summary != null ? String(row.result.summary) : "",
         ...(kp ? { key_player: kp } : {}),
       };
+      const r = row.result;
+      const as = String(r.actual_score ?? "").trim();
+      if (as) hitRes.actual_score = as;
+      const pb = String(r.potm_batting ?? "").trim();
+      if (pb) hitRes.potm_batting = pb;
+      const pt = String(r.potm_team ?? "").trim();
+      if (pt) hitRes.potm_team = pt;
+      const ph = String(r.player_photo ?? "").trim();
+      if (ph) hitRes.player_photo = ph;
+      hit.result = hitRes;
     }
     return hit;
   });
@@ -1477,17 +1498,22 @@ function escapeHtml(s) {
  * Split bar: team A left / coral, team B right / blue. Percentages always sum to 100.
  * @param {{ teamA: string, teamB: string }} teams
  * @param {number} pctForTeamA
- * @param {{ variant?: 'judge' | 'final' }} [opts] — judge: model-confidence semantics; final: recorded result bar
+ * @param {{ variant?: 'judge' | 'final', groundTruthUi?: boolean }} [opts] — judge: model-confidence semantics; final: recorded result bar; groundTruthUi: same bar, Judge-style title for completed fixtures
  * @returns {{ html: string, pctA: number, pctB: number }}
  */
 function renderVerdictWinProbabilityBlock(teams, pctForTeamA, opts = {}) {
+  const groundTruthUi = opts.groundTruthUi === true;
   const variant = opts.variant === "final" ? "final" : "judge";
   const pctA = Math.min(100, Math.max(0, Math.round(Number(pctForTeamA) || 0)));
   const pctB = 100 - pctA;
   let title;
   let captionHtml;
   let ariaLabel;
-  if (variant === "final") {
+  if (groundTruthUi) {
+    title = "Model confidence split";
+    captionHtml = `<p class="verdict-win-prob__caption">Match completed — bar shows the recorded winner (100% for the winning side). Not a calibrated win probability or betting line.</p>`;
+    ariaLabel = `Model confidence split (recorded result): ${escapeHtml(teams.teamA)} ${pctA} percent, ${escapeHtml(teams.teamB)} ${pctB} percent`;
+  } else if (variant === "final") {
     title = "Match result";
     captionHtml = "";
     ariaLabel = `Match result: ${escapeHtml(teams.teamA)} ${pctA} percent, ${escapeHtml(teams.teamB)} ${pctB} percent`;
@@ -1528,6 +1554,56 @@ function scheduleVerdictWinProbabilityAnimation(verdictRoot, pctA, pctB) {
     if (segA) segA.style.width = `${pctA}%`;
     if (segB) segB.style.width = `${pctB}%`;
   }, 200);
+}
+
+/**
+ * Best-effort score line from a completed-match summary when `actual_score` is absent.
+ * @param {string|undefined} summary
+ */
+function deriveActualScoreFromSummary(summary) {
+  const s = String(summary || "");
+  const m = s.match(/\(([^)]*\d+\s*\/\s*\d+[^)]*)\)/);
+  return m ? m[1].replace(/\s+/g, " ").trim() : "";
+}
+
+/**
+ * @param {NonNullable<MatchSuggestionRow["result"]>} result
+ */
+function resolveCompletedActualScore(result) {
+  const direct = String(result.actual_score || "").trim();
+  if (direct) return direct;
+  const derived = deriveActualScoreFromSummary(result.summary);
+  return derived || "—";
+}
+
+/**
+ * Pink “player of the match” banner (completed fixtures).
+ * @param {NonNullable<MatchSuggestionRow["result"]>} result
+ */
+function renderPlayerOfMatchCardHtml(result) {
+  const name = String(result.key_player || "").trim();
+  const teamCode = String(result.potm_team || "").trim() || String(result.winner || "").trim();
+  const batting = String(result.potm_batting || "").trim();
+  const photo = String(result.player_photo || "").trim();
+  const left = name && teamCode ? `${name} (${teamCode})` : name || teamCode;
+  const lineDetail = batting && left ? `${left} · ${batting}` : left || batting;
+  if (!lineDetail) {
+    return `<div class="potm-banner potm-banner--empty" aria-hidden="true">—</div>`;
+  }
+  const safePhoto = photo.startsWith("/") && !photo.includes("..") ? photo : "";
+  const imgHtml = safePhoto
+    ? `<img class="potm-banner__img" src="${escapeHtml(safePhoto)}" width="56" height="56" alt="${escapeHtml(
+        name || "Player of the match"
+      )}" decoding="async" loading="lazy" />`
+    : "";
+  return `
+    <div class="potm-banner" role="group" aria-label="Player of the match">
+      <div class="potm-banner__text">
+        <div class="potm-banner__kicker">Player of the match</div>
+        <div class="potm-banner__detail">${escapeHtml(lineDetail)}</div>
+      </div>
+      ${imgHtml}
+    </div>`;
 }
 
 /**
@@ -2460,11 +2536,21 @@ function normalizeSuggestApiEntry(x) {
           : r.man_of_the_match != null
             ? String(r.man_of_the_match).trim()
             : "";
-      base.result = {
+      /** @type {NonNullable<MatchSuggestionRow["result"]>} */
+      const resOut = {
         winner: w,
         summary: r.summary != null ? String(r.summary) : "",
         ...(kp ? { key_player: kp } : {}),
       };
+      const as = r.actual_score != null ? String(r.actual_score).trim() : "";
+      if (as) resOut.actual_score = as;
+      const pb = r.potm_batting != null ? String(r.potm_batting).trim() : "";
+      if (pb) resOut.potm_batting = pb;
+      const pt = r.potm_team != null ? String(r.potm_team).trim() : "";
+      if (pt) resOut.potm_team = pt;
+      const ph = r.player_photo != null ? String(r.player_photo).trim() : "";
+      if (ph) resOut.player_photo = ph;
+      base.result = resOut;
     }
     return base;
   }
@@ -2513,17 +2599,27 @@ async function lookupCompletedMatchRow(label) {
         : mr.man_of_the_match != null
           ? String(mr.man_of_the_match).trim()
           : "";
+    /** @type {NonNullable<MatchSuggestionRow["result"]>} */
+    const resOut = {
+      winner: String(m.result.winner).trim(),
+      summary: m.result.summary != null ? String(m.result.summary) : "",
+      ...(kp ? { key_player: kp } : {}),
+    };
+    const as = mr.actual_score != null ? String(mr.actual_score).trim() : "";
+    if (as) resOut.actual_score = as;
+    const pb = mr.potm_batting != null ? String(mr.potm_batting).trim() : "";
+    if (pb) resOut.potm_batting = pb;
+    const pt = mr.potm_team != null ? String(mr.potm_team).trim() : "";
+    if (pt) resOut.potm_team = pt;
+    const ph = mr.player_photo != null ? String(mr.player_photo).trim() : "";
+    if (ph) resOut.player_photo = ph;
     return {
       label: String(m.label),
       date: m.date != null ? String(m.date) : "",
       venue: m.venue != null ? String(m.venue) : "",
       teams: Array.isArray(m.teams) ? m.teams.map((x) => String(x)) : [],
       completed: true,
-      result: {
-        winner: String(m.result.winner).trim(),
-        summary: m.result.summary != null ? String(m.result.summary) : "",
-        ...(kp ? { key_player: kp } : {}),
-      },
+      result: resOut,
     };
   } catch {
     return null;
@@ -3487,10 +3583,13 @@ async function runWarRoom() {
       const verdictLogoHtml = winnerLogoUrl
         ? `<img class="verdict-winner-logo" src="${escapeHtml(winnerLogoUrl)}" width="44" height="44" alt="" decoding="async" loading="lazy" />`
         : "";
+      const res = /** @type {NonNullable<MatchSuggestionRow["result"]>} */ (completedRow.result);
       const winProbFinal = renderVerdictWinProbabilityBlock(teams, pickedA ? 100 : 0, {
         variant: "final",
+        groundTruthUi: true,
       });
-      const mom = String(completedRow.result.key_player || "").trim() || "—";
+      const actualScoreLine = resolveCompletedActualScore(res);
+      const potmBlock = renderPlayerOfMatchCardHtml(res);
       const verdictEl = document.getElementById('verdictArea');
       verdictEl.innerHTML = `
     <div class="verdict-card verdict-card--final">
@@ -3498,8 +3597,17 @@ async function runWarRoom() {
       <div class="verdict-winner-row">${verdictLogoHtml}<div class="verdict-winner">${escapeHtml(winDisplay.toUpperCase())} WINS</div></div>
       <div class="verdict-summary">${escapeHtml(completedRow.result.summary || '')}</div>
       ${winProbFinal.html}
-      <div class="stat-grid">
-        <div class="stat-cell"><div class="stat-label">MAN OF THE MATCH</div><div class="stat-val">${escapeHtml(mom)}</div></div>
+      <div class="stat-grid stat-grid--completed-final">
+        <div class="stat-cell"><div class="stat-label">ACTUAL SCORE</div><div class="stat-val">${escapeHtml(actualScoreLine)}</div></div>
+        <div class="stat-cell"><div class="stat-label">SWING FACTOR</div><div class="stat-val">—</div></div>
+        <div class="stat-cell stat-cell--span-full stat-cell--potm">
+          <div class="stat-label">PLAYER OF THE MATCH</div>
+          ${potmBlock}
+        </div>
+        <div class="stat-cell stat-cell--span-full">
+          <div class="stat-label">MODEL CONFIDENCE</div>
+          <div class="stat-val">100% <span class="stat-sublabel">recorded result · not win probability</span></div>
+        </div>
       </div>
     </div>`;
       scheduleVerdictWinProbabilityAnimation(verdictEl, winProbFinal.pctA, winProbFinal.pctB);

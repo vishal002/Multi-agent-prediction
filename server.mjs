@@ -39,8 +39,8 @@
  *   GET /api/judge/accuracy → GET {JUDGE_SERVICE_URL}/accuracy (in-process cache + upstream 429/5xx retries; JUDGE_ACCURACY_CACHE_MS)
  *
  * Match autocomplete: GET /api/match-suggest?q=&limit=10 (reads match_suggestions.json).
- * Completed fixtures: optional { completed: true, result: { winner, summary, key_player? } } — winner is a team code (e.g. CSK).
- * key_player (or man_of_the_match) is shown as Man of the match when skipping agents for finished fixtures.
+ * Completed fixtures: optional { completed: true, result: { winner, summary, key_player?, actual_score?, potm_batting?, potm_team?, player_photo? } } — winner is a team code (e.g. CSK).
+ * key_player (or man_of_the_match) feeds the Player of the match card when skipping agents for finished fixtures.
  * GET /api/match-by-label?label=… returns the full row for an exact label (404 if unknown).
  * Response: { suggestions: [{ label, date, venue, completed?, result? }] }.
  * With a non-empty q, results are filtered and sorted by fixture date (newest first), then venue.
@@ -67,7 +67,7 @@ const MATCH_SUGGESTIONS_PATH = path.join(__dirname, "match_suggestions.json");
 
 /**
  * @param {unknown} raw
- * @returns {{ winner: string, summary: string, key_player?: string } | null}
+ * @returns {{ winner: string, summary: string, key_player?: string, actual_score?: string, potm_batting?: string, potm_team?: string, player_photo?: string } | null}
  */
 function normalizeMatchResult(raw) {
   if (!raw || typeof raw !== "object") return null;
@@ -77,15 +77,24 @@ function normalizeMatchResult(raw) {
   const summary = o.summary != null ? String(o.summary).trim() : "";
   const keySrc = o.key_player ?? o.man_of_the_match;
   const key_player = keySrc != null ? String(keySrc).trim() : "";
-  /** @type {{ winner: string, summary: string, key_player?: string }} */
+  const pickStr = (k) => (o[k] != null ? String(o[k]).trim() : "");
+  /** @type {{ winner: string, summary: string, key_player?: string, actual_score?: string, potm_batting?: string, potm_team?: string, player_photo?: string }} */
   const out = { winner, summary };
   if (key_player) out.key_player = key_player;
+  const actual_score = pickStr("actual_score");
+  if (actual_score) out.actual_score = actual_score;
+  const potm_batting = pickStr("potm_batting");
+  if (potm_batting) out.potm_batting = potm_batting;
+  const potm_team = pickStr("potm_team");
+  if (potm_team) out.potm_team = potm_team;
+  const player_photo = pickStr("player_photo");
+  if (player_photo) out.player_photo = player_photo;
   return out;
 }
 
 /**
  * @param {unknown} parsed
- * @returns {{ label: string, date: string, venue: string, teams: string[], order: number, completed: boolean, result: { winner: string, summary: string, key_player?: string } | null }[]}
+ * @returns {{ label: string, date: string, venue: string, teams: string[], order: number, completed: boolean, result: { winner: string, summary: string, key_player?: string, actual_score?: string, potm_batting?: string, potm_team?: string, player_photo?: string } | null }[]}
  */
 function normalizeMatchSuggestions(parsed) {
   if (!Array.isArray(parsed)) return [];

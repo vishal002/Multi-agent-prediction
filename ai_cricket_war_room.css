@@ -2145,6 +2145,72 @@ html.acwr-notice-dismissed .notice-strip {
   color: #fff;
 }
 
+.stat-grid--completed-final .stat-cell--span-full {
+  grid-column: 1 / -1;
+}
+
+.stat-cell--potm .stat-label {
+  margin-bottom: 0.35rem;
+}
+
+.potm-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, #ff4d88 0%, #e8488e 55%, #d9468c 100%);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
+  min-height: 3.25rem;
+}
+
+.verdict-card .potm-banner {
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.potm-banner__text {
+  flex: 1;
+  min-width: 0;
+}
+
+.potm-banner__kicker {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.92);
+  margin-bottom: 0.15rem;
+}
+
+.potm-banner__detail {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.25;
+  word-break: break-word;
+}
+
+.potm-banner__img {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28);
+}
+
+.potm-banner--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-sm);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.75rem;
+}
+
 /* ─── Empty state ─────────────────────────────────────────────────── */
 .empty-state {
   display: flex;
@@ -4179,6 +4245,16 @@ html[data-ui="ipl"] .ui-toggle[aria-pressed="true"] {
 [data-theme="light"] .verdict-win-prob__title  { color: rgba(15, 23, 42, 0.85); }
 [data-theme="light"] .verdict-win-prob__name   { color: #1e3a8a; }
 [data-theme="light"] .verdict-win-prob__caption { color: rgba(15, 23, 42, 0.60); }
+
+[data-theme="light"] .potm-banner {
+  background: linear-gradient(135deg, #ff4d88 0%, #e8488e 55%, #c7367a 100%);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+[data-theme="light"] .potm-banner--empty {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(15, 23, 42, 0.45);
+}
 
 [data-theme="light"] .verdict-win-prob__bar {
   background: rgba(0, 0, 0, 0.06);

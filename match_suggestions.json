@@ -300,7 +300,17 @@
     "teams": [
       "PBKS",
       "RR"
-    ]
+    ],
+    "completed": true,
+    "result": {
+      "winner": "RR",
+      "summary": "Rajasthan Royals won by 6 wickets (PBKS 222/4 in 20 ov, RR 228/4 in 19.2 ov)",
+      "key_player": "Donovan Ferreira",
+      "actual_score": "PBKS 222/4 (20 ov) · RR 228/4 (19.2 ov)",
+      "potm_batting": "52* (26)",
+      "potm_team": "RR",
+      "player_photo": "/image/potm/donovan-ferreira-potm.png"
+    }
   },
   {
     "label": "DC vs RCB — IPL 2026 Match 39, Arun Jaitley Stadium, Delhi",
