@@ -1,6 +1,7 @@
+python-dotenv>=1.0
 pydantic>=2.6
 anthropic>=0.40
 fastapi>=0.110
 uvicorn[standard]>=0.27
-# Optional: remote SQLite (Turso) so Judge predictions survive restarts on free hosts
-libsql>=0.1.11
+# Optional Turso remote DB: pip install -r requirements-judge-turso.txt
+# (libsql is not listed here — it builds from Rust and often fails on Windows / Python 3.14.)

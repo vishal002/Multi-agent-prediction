@@ -73,7 +73,7 @@ When the Judge API is enabled, the UI can show **running accuracy** (predictions
 - **Turso (libSQL)** — set on the **Judge** process:
   - `TURSO_DATABASE_URL` — e.g. `libsql://your-db.turso.io`
   - `TURSO_AUTH_TOKEN` — from the Turso dashboard  
-  When both are set, the service uses **remote libSQL** via the `libsql` package (see `requirements-judge.txt`) and **ignores local file path** for storage. That turns accuracy into a metric that survives deploys and cold starts.
+  When both are set, the service uses **remote libSQL** via the `libsql` package (`pip install -r requirements-judge-turso.txt` in addition to judge deps) and **ignores local file path** for storage. That turns accuracy into a metric that survives deploys and cold starts.
 
 Create a DB in [Turso](https://turso.tech), install deps, run the judge as usual; no schema migration is required beyond the app’s `CREATE TABLE IF NOT EXISTS`.
 
@@ -190,10 +190,12 @@ Open [http://localhost:3333/](http://localhost:3333/). Judge data persists in th
 ## Quick start (local, no Docker)
 
 ```bash
-export GROQ_API_KEY="gsk_..."   # or ANTHROPIC_API_KEY
-npm run start:dev               # dev: serves source from repo root
-# Production bundle: npm run build && npm start   (Unix: SERVE_DIST=1; Windows CMD: set SERVE_DIST=1)
+cp .env.example .env   # add GROQ_API_KEY (and optional keys); see .env.example
+npm run start:dev      # war room on :3333 (loads .env automatically)
+# Production bundle: npm run build && npm start
 ```
+
+**Ingestion** (RSS / match-context, :3334) and **judge** (predictions, :8000) are separate Python processes. After `pip install -r requirements-ingestion.txt` and `pip install -r requirements-judge.txt`, run `npm run ingestion:dev` and `npm run judge:dev` in two extra terminals, or start all three with **`npm run dev:stack`**.
 
 Opening `ai_cricket_war_room.html` over `file://` uses bundled fallback fixtures only; use the Node server for autocomplete and `/api/messages`.
 

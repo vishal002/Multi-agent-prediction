@@ -50,6 +50,7 @@
  * Open Graph PNGs (1200×630, Sharp): GET /og-homepage.png (site preview); GET /api/og/share/{id}.png (per share).
  */
 
+import dotenv from "dotenv";
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
@@ -59,6 +60,7 @@ import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, ".env") });
 const PORT = Number(process.env.PORT) || 3333;
 
 const MATCH_SUGGESTIONS_PATH = path.join(__dirname, "match_suggestions.json");
@@ -1862,15 +1864,17 @@ const server = http.createServer(async (req, res) => {
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
 
-      // Score / RRR patterns
-      const SCORE_RX  = /\b\d{1,3}\/\d{1,2}\s*\([\d.]+/i;
-      const RRR_RX    = /\b(RRR|req(?:uired)?\s*(?:run\s*)?rate)\s*[:\-]?\s*[\d.]+/i;
-      const NEED_RX   = /\bneed\s+\d+\s+(runs?|more|in\s+\d+)/i;
-      const CHASE_RX  = /\b(chasing|target\s*[:\-]?)\s*\d+/i;
+      // Score / RRR patterns (RSS often has "185/6" without "(overs)" — see ingestion build.py)
+      const SCORE_RX     = /\b\d{1,3}\/\d{1,2}\s*\([\d.]+/i;
+      const SCORE_LOOSE  = /\b\d{1,3}\/(?:10|[0-9])\b/i;
+      const RRR_RX       = /\b(RRR|req(?:uired)?\s*(?:run\s*)?rate)\s*[:\-]?\s*[\d.]+/i;
+      const NEED_RX      = /\bneed\s+\d+\s+(runs?|more|in\s+\d+)/i;
+      const CHASE_RX     = /\b(chasing|target\s*[:\-]?)\s*\d+/i;
 
       function scoreRichness(text) {
         let s = 0;
         if (SCORE_RX.test(text)) s += 4;
+        else if (SCORE_LOOSE.test(text)) s += 3;
         if (RRR_RX.test(text))   s += 3;
         if (NEED_RX.test(text))  s += 3;
         if (CHASE_RX.test(text)) s += 2;
@@ -1893,7 +1897,11 @@ const server = http.createServer(async (req, res) => {
       }
 
       const snippet =
-        bestScore >= 5 || (bestScore >= 4 && best && SCORE_RX.test(best)) ? best.slice(0, 400) : "";
+        bestScore >= 5 ||
+        (bestScore >= 4 && best) ||
+        (bestScore >= 3 && best && SCORE_LOOSE.test(best))
+          ? best.slice(0, 400)
+          : "";
       res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
         ...corsHeaders(req),
@@ -2459,18 +2467,24 @@ server.listen(PORT, () => {
   void (async () => {
     try {
       const r = await fetch(`${INGESTION_SERVICE_URL}/healthz`, { signal: AbortSignal.timeout(2500) });
-      if (!r.ok) console.warn(`Ingestion service at ${INGESTION_SERVICE_URL} returned HTTP ${r.status} — live scores & match context need: pip install -r requirements-ingestion.txt && python -m uvicorn ingestion_service.app:app --host 127.0.0.1 --port 3334`);
+      if (!r.ok)
+        console.warn(
+          `Ingestion at ${INGESTION_SERVICE_URL} returned HTTP ${r.status}. Check that terminal: npm run ingestion:dev`
+        );
     } catch {
       console.warn(
-        `Ingestion service unreachable (${INGESTION_SERVICE_URL}) — live RSS scores and /api/match-context will fail until you run: pip install -r requirements-ingestion.txt && python -m uvicorn ingestion_service.app:app --host 127.0.0.1 --port 3334`
+        `Ingestion not running at ${INGESTION_SERVICE_URL} (optional for core LLM chat). RSS/match-context: run npm run ingestion:dev in another terminal (or npm run dev:stack for all services).`
       );
     }
     try {
       const r = await fetch(`${JUDGE_SERVICE_URL}/accuracy`, { signal: AbortSignal.timeout(2500) });
-      if (!r.ok) console.warn(`Judge service at ${JUDGE_SERVICE_URL} returned HTTP ${r.status} — /api/judge/predict will not work until the Judge API is healthy.`);
+      if (!r.ok)
+        console.warn(
+          `Judge at ${JUDGE_SERVICE_URL} returned HTTP ${r.status}. Check that terminal: npm run judge:dev`
+        );
     } catch {
       console.warn(
-        `Judge service unreachable (${JUDGE_SERVICE_URL}) — POST /api/judge/predict returns 503 until you run: pip install -r requirements-judge.txt && python -m uvicorn judge_service.app:app --host 127.0.0.1 --port 8000`
+        `Judge not running at ${JUDGE_SERVICE_URL} (optional for core LLM chat). Predictions: run npm run judge:dev in another terminal (or npm run dev:stack for all services).`
       );
     }
   })();

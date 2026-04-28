@@ -23,8 +23,9 @@ CRICAPI_BASE = "https://api.cricapi.com/v1"
 
 DEFAULT_FETCH_TIMEOUT = 8.0
 
-# Score pattern: "109/2 (11.1" or "254/7 (20)"
+# Score pattern: "109/2 (11.1" or "254/7 (20)" — many RSS titles omit overs in parens.
 _SCORE_RX = re.compile(r"\b\d{1,3}/\d{1,2}\s*\([\d.]+", re.I)
+_SCORE_LOOSE_RX = re.compile(r"\b\d{1,3}/(?:10|[0-9])\b", re.I)
 # RRR / required rate
 _RRR_RX = re.compile(r"\b(RRR|req(?:uired)?\s*(?:run\s*)?rate)\s*[:\-]?\s*[\d.]+", re.I)
 # "need X runs" / "need X in Y balls"
@@ -96,6 +97,13 @@ def _relevant_items(
     top = [it for it in ranked if score(it) > 0][:limit]
     if top:
         return top
+    # Fixture tokens often mismatch RSS abbreviations; still surface score-like headlines.
+    def live_signal(it: dict[str, Any]) -> int:
+        return _score_richness(_item_text(it))
+
+    by_live = sorted(items, key=live_signal, reverse=True)
+    if by_live and live_signal(by_live[0]) >= 3:
+        return by_live[:limit]
     return ranked[:fallback]
 
 
@@ -112,6 +120,8 @@ def _score_richness(text: str) -> int:
     s = 0
     if _SCORE_RX.search(text):
         s += 4
+    elif _SCORE_LOOSE_RX.search(text):
+        s += 3
     if _RRR_RX.search(text):
         s += 3
     if _NEED_RX.search(text):
@@ -136,8 +146,12 @@ def _extract_live_score_snippet(bullets: list[str]) -> str:
         if s > best_score:
             best_score = s
             best = plain
-    # Prefer rich chase context (5+). Accept a bare scoreline (e.g. "120/3 (15.2)") at 4+.
-    if best_score >= 5 or (best_score >= 4 and best and _SCORE_RX.search(best)):
+    # 5+ = strong multi-signal; 4+ = scoreline / RRR+keyword / etc.; 3+ with runs/wkts only (RSS titles).
+    if (
+        best_score >= 5
+        or (best_score >= 4 and best)
+        or (best_score >= 3 and best and _SCORE_LOOSE_RX.search(best))
+    ):
         return best[:400]
     return ""
 

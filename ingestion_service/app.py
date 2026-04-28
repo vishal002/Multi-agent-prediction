@@ -9,6 +9,11 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse

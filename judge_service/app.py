@@ -3,7 +3,12 @@ FastAPI service: POST /predict runs the Judge and stores a row; result hooks upd
 """
 
 import os
+from pathlib import Path
 from typing import Annotated, Any, Optional
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field

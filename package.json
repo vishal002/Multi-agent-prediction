@@ -5,14 +5,20 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "start": "SERVE_DIST=1 node server.mjs",
+    "start": "cross-env SERVE_DIST=1 node server.mjs",
     "start:dev": "node server.mjs",
+    "ingestion:dev": "node scripts/run-uvicorn.mjs ingestion_service.app:app 3334",
+    "judge:dev": "node scripts/run-uvicorn.mjs judge_service.app:app 8000",
+    "dev:stack": "concurrently -n war,ing,jdg -c blue,green,magenta \"node server.mjs\" \"node scripts/run-uvicorn.mjs ingestion_service.app:app 3334\" \"node scripts/run-uvicorn.mjs judge_service.app:app 8000\"",
     "icons": "node scripts/generate-pwa-icons.mjs"
   },
   "dependencies": {
+    "dotenv": "^16.4.7",
     "sharp": "^0.33.5"
   },
   "devDependencies": {
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
     "esbuild": "^0.28.0",
     "html-minifier-terser": "^7.2.0"
   }
