@@ -4136,7 +4136,6 @@ async function runWarRoom() {
         <div class="stat-cell"><div class="stat-label">ACTUAL SCORE</div><div class="stat-val">${escapeHtml(actualScoreLine)}</div></div>
         <div class="stat-cell"><div class="stat-label">SWING FACTOR</div><div class="stat-val">—</div></div>
         <div class="stat-cell stat-cell--span-full stat-cell--potm">
-          <div class="stat-label">PLAYER OF THE MATCH</div>
           ${potmBlock}
         </div>
         <div class="stat-cell stat-cell--span-full">
