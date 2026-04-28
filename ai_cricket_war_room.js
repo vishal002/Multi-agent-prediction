@@ -2046,17 +2046,24 @@ function fetchPlayerWikipediaPhoto(name) {
 }
 
 /**
- * Upgrade `.potm-banner__img[data-player-wiki]` images inside `rootEl` from
- * the local slug-derived asset to a Wikipedia photo (resized to fit the
- * banner avatar). Failures leave the local photo / placeholder in place.
+ * Upgrade `img[data-player-wiki]` images inside `rootEl` from the local
+ * slug-derived asset to a Wikipedia photo (resized to fit the avatar).
+ * Failures leave the local photo / placeholder in place.
+ *
+ * Each image may carry a `data-placeholder-class` attribute to control which
+ * modifier class is added when the Wikipedia image fails to load — that lets
+ * the helper service both the large POTM banner avatar and the small
+ * key-player avatar embedded in the verdict card.
  *
  * @param {ParentNode|null|undefined} rootEl
  */
 function hydratePlayerOfMatchPhotos(rootEl) {
   if (!rootEl || typeof rootEl.querySelectorAll !== "function") return;
-  const imgs = rootEl.querySelectorAll("img.potm-banner__img[data-player-wiki]");
+  const imgs = rootEl.querySelectorAll("img[data-player-wiki]");
   imgs.forEach((img) => {
     const name = img.getAttribute("data-player-wiki") || "";
+    const placeholderClass =
+      img.getAttribute("data-placeholder-class") || "potm-banner__img--placeholder";
     img.removeAttribute("data-player-wiki");
     if (!name) return;
     fetchPlayerWikipediaPhoto(name).then((rawSrc) => {
@@ -2065,13 +2072,51 @@ function hydratePlayerOfMatchPhotos(rootEl) {
       const onError = () => {
         img.removeEventListener("error", onError);
         img.src = POTM_PHOTO_PLACEHOLDER;
-        img.classList.add("potm-banner__img--placeholder");
+        img.classList.add(placeholderClass);
       };
       img.addEventListener("error", onError, { once: true });
       img.src = sized;
-      img.classList.remove("potm-banner__img--placeholder");
+      img.classList.remove(placeholderClass);
     });
   });
+}
+
+/**
+ * Render the `KEY PLAYER` stat-cell used by the Judge verdict and the
+ * shared-prediction preview cards. Pairs the player's name with a small
+ * circular photo. Resolution mirrors {@link renderPlayerOfMatchCardHtml}:
+ *
+ *   1. Local `/image/potm/{slug}-potm.png` (auto-derived from the name).
+ *   2. Wikipedia thumbnail via {@link hydratePlayerOfMatchPhotos} after mount.
+ *   3. {@link POTM_PHOTO_PLACEHOLDER} when nothing else loads.
+ *
+ * The inline `onerror` swap keeps the placeholder reachable even if the
+ * slug-derived asset 404s before the Wikipedia upgrade lands.
+ *
+ * @param {string} keyPlayerName
+ * @returns {string}
+ */
+function renderVerdictKeyPlayerStatCellHtml(keyPlayerName) {
+  const name = String(keyPlayerName || "").trim();
+  const display = name || "—";
+  const photo = resolvePlayerPhotoSrc(name, "");
+  const altText = name ? `${name}, key player` : "Key player";
+  const onErrorJs = `this.onerror=null;this.src='${POTM_PHOTO_PLACEHOLDER}';this.classList.add('key-player-photo--placeholder');`;
+  const baseClass = photo.src === POTM_PHOTO_PLACEHOLDER
+    ? "key-player-photo key-player-photo--placeholder"
+    : "key-player-photo";
+  const wikiAttr = name
+    ? ` data-player-wiki="${escapeHtml(name)}" data-placeholder-class="key-player-photo--placeholder"`
+    : "";
+  const imgHtml = `<img class="${baseClass}" src="${escapeHtml(photo.src)}" width="36" height="36" alt="${escapeHtml(altText)}" decoding="async" loading="lazy" onerror="${onErrorJs}"${wikiAttr} />`;
+  return `
+    <div class="stat-cell stat-cell--key-player">
+      ${imgHtml}
+      <div class="stat-cell__body">
+        <div class="stat-label">KEY PLAYER</div>
+        <div class="stat-val">${escapeHtml(display)}</div>
+      </div>
+    </div>`;
 }
 
 /**
@@ -2412,7 +2457,7 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
       ${winProb.html}
       <div class="stat-grid">
         <div class="stat-cell"><div class="stat-label">PROJECTED SCORE</div><div class="stat-val">${escapeHtml(String(v.score_range || "—"))}</div></div>
-        <div class="stat-cell"><div class="stat-label">KEY PLAYER</div><div class="stat-val">${escapeHtml(String(v.key_player || "—"))}</div></div>
+        ${renderVerdictKeyPlayerStatCellHtml(v.key_player)}
         <div class="stat-cell"><div class="stat-label">SWING FACTOR</div><div class="stat-val">${escapeHtml(String(v.swing_factor || "—"))}</div></div>
         <div class="stat-cell"><div class="stat-label">MODEL CONFIDENCE</div><div class="stat-val">${escapeHtml(String(v.confidence ?? "—"))}% <span class="stat-sublabel">not win probability</span></div></div>
       </div>
@@ -2421,6 +2466,7 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
       </div>
     </div>`;
   scheduleVerdictWinProbabilityAnimation(verdictRootEl, winProb.pctA, winProb.pctB);
+  hydratePlayerOfMatchPhotos(verdictRootEl);
   const shareBtn = verdictRootEl.querySelector(".js-share-prediction");
   if (shareBtn) {
     shareBtn.addEventListener("click", () => {
@@ -2691,7 +2737,7 @@ function mountSharedPredictionPreviewCard(verdictRootEl, v, teams, opts) {
       ${winProb.html}
       <div class="stat-grid">
         <div class="stat-cell"><div class="stat-label">PROJECTED SCORE</div><div class="stat-val">${escapeHtml(String(v.score_range || "—"))}</div></div>
-        <div class="stat-cell"><div class="stat-label">KEY PLAYER</div><div class="stat-val">${escapeHtml(String(v.key_player || "—"))}</div></div>
+        ${renderVerdictKeyPlayerStatCellHtml(v.key_player)}
         <div class="stat-cell"><div class="stat-label">SWING FACTOR</div><div class="stat-val">${escapeHtml(String(v.swing_factor || "—"))}</div></div>
         <div class="stat-cell"><div class="stat-label">MODEL CONFIDENCE</div><div class="stat-val">${escapeHtml(String(v.confidence ?? "—"))}% <span class="stat-sublabel">not win probability</span></div></div>
       </div>
@@ -2700,6 +2746,7 @@ function mountSharedPredictionPreviewCard(verdictRootEl, v, teams, opts) {
       </div>
     </div>`;
   scheduleVerdictWinProbabilityAnimation(verdictRootEl, winProb.pctA, winProb.pctB);
+  hydratePlayerOfMatchPhotos(verdictRootEl);
 
   const cta = verdictRootEl.querySelector(".js-shared-run-war-room");
   if (cta) {

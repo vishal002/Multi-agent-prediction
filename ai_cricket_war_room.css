@@ -2478,6 +2478,42 @@ html.acwr-notice-dismissed .notice-strip {
   font-size: 0.75rem;
 }
 
+/* Key-player stat-cell on the verdict card: small circular avatar next to the
+   name. Photo resolution mirrors the POTM banner (local slug → Wikipedia →
+   placeholder), kept compact so the cell still fits the stat-grid. */
+.stat-cell--key-player {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stat-cell--key-player .stat-cell__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.key-player-photo {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.key-player-photo--placeholder {
+  background: linear-gradient(180deg, #f4f6fb 0%, #d3d7de 100%);
+  object-fit: contain;
+  padding: 2px;
+}
+
+[data-theme="light"] .verdict-card .key-player-photo {
+  border-color: rgba(15, 23, 42, 0.25);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
 /* ─── Empty state ─────────────────────────────────────────────────── */
 .empty-state {
   display: flex;
