@@ -4222,6 +4222,239 @@ function appendLiveUpdate(liveSnippet, prediction, teams) {
   else container.appendChild(card);
 }
 
+/**
+ * Pull the scoreline for a specific team out of an `actual_score` string of
+ * the form "SRH 242/2 (20 ov) · DC 195/9 (20 ov)". Returns "" when the team
+ * code can't be located (which is fine — callers fall back to the summary).
+ *
+ * @param {string} actualScore
+ * @param {string} teamCode
+ * @returns {string}
+ */
+function extractTeamScoreFromActual(actualScore, teamCode) {
+  const code = String(teamCode || "").trim().toUpperCase();
+  if (!actualScore || !code) return "";
+  const parts = String(actualScore).split("·").map((s) => s.trim()).filter(Boolean);
+  const hit = parts.find((p) => p.toUpperCase().startsWith(code + " ") || p.toUpperCase() === code);
+  if (!hit) return "";
+  return hit.replace(new RegExp(`^${code}\\s*`, "i"), "").trim();
+}
+
+/**
+ * Strip the trailing "(... 200/4 ...)" parenthetical from a result summary
+ * so the headline reads cleanly as a sentence. Used for the winner bubble
+ * body — the score itself is rendered separately as a sub-line.
+ *
+ * @param {string} summary
+ */
+function stripScoreParenFromSummary(summary) {
+  return String(summary || "").replace(/\s*\([^()]*\d+\s*\/\s*\d+[^()]*\)\s*$/, "").trim();
+}
+
+/**
+ * Append a static post-match bubble (winner or loser recap). Reuses the
+ * same `.bubble.bull` / `.bubble.bear` styling as the live debate so the
+ * column reads as a finished conversation rather than an empty well.
+ *
+ * @param {HTMLElement} area
+ * @param {'bull'|'bear'} side
+ * @param {{ code: string, name: string }} team
+ * @param {string} kicker
+ * @param {string} body
+ * @param {string} [scoreLine]
+ */
+function appendPostMatchBubble(area, side, team, kicker, body, scoreLine) {
+  const div = document.createElement("div");
+  div.className = `bubble ${side} bubble--postmatch`;
+  div.setAttribute("data-team", team.code);
+  const logoUrl = resolveTeamLogoUrl(team.code, team.name);
+  const mark = logoUrl
+    ? `<img class="bubble-logo" src="${escapeHtml(logoUrl)}" width="26" height="26" alt="" decoding="async" loading="lazy" />`
+    : team.code
+      ? `<span class="team-chip">${escapeHtml(team.code)}</span>`
+      : "";
+  const avatarEmoji = side === "bull" ? "🏆" : "🥈";
+  const avatar = `<div class="bubble-avatar bubble-avatar--${side}" aria-hidden="true">${avatarEmoji}</div>`;
+  const score = scoreLine ? `<div class="bubble-score">Final: ${escapeHtml(scoreLine)}</div>` : "";
+  div.innerHTML = `
+    <div class="bubble-kicker">${escapeHtml(kicker)}</div>
+    <div class="bubble-head">${avatar}${mark}<div class="bubble-who">${escapeHtml(team.name)}</div></div>
+    <div class="bubble-text">${escapeHtml(body)}</div>
+    ${score}`;
+  area.appendChild(div);
+}
+
+/**
+ * Append a centered "Judge" bubble that surfaces the Player-of-the-Match
+ * call from the recorded result. Visually distinct from the bull/bear sides.
+ *
+ * @param {HTMLElement} area
+ * @param {NonNullable<MatchSuggestionRow["result"]>} result
+ */
+function appendJudgePostMatchBubble(area, result) {
+  const name = String(result.key_player || "").trim();
+  const teamCode = String(result.potm_team || "").trim() || String(result.winner || "").trim();
+  const figures = String(result.potm_bowling || result.potm_batting || "").trim();
+  const nameWithTeam = name && teamCode ? `${name} (${teamCode})` : name || teamCode;
+  const detail = figures && nameWithTeam
+    ? `${nameWithTeam} · ${figures}`
+    : nameWithTeam || figures;
+  if (!detail) return;
+  const div = document.createElement("div");
+  div.className = "bubble judge bubble--postmatch";
+  div.innerHTML = `
+    <div class="bubble-kicker">Player of the Match</div>
+    <div class="bubble-head">
+      <div class="bubble-avatar bubble-avatar--judge" aria-hidden="true">⚖️</div>
+      <div class="bubble-who">Judge</div>
+    </div>
+    <div class="bubble-text">${escapeHtml(detail)}</div>`;
+  area.appendChild(div);
+}
+
+/**
+ * Auto-load and render the "AI prediction vs reality" strip into the debate
+ * column for completed fixtures. Silently no-ops when the judge service is
+ * unreachable or has no saved prediction for this match — the column simply
+ * stays at the bubbles above rather than showing a confusing error state.
+ *
+ * @param {HTMLElement} area
+ * @param {string} match
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @param {string | null} actualWinnerCodeOrName
+ */
+async function appendPredictionVsRealityStrip(area, match, teams, actualWinnerCodeOrName) {
+  const placeholder = document.createElement("div");
+  placeholder.className = "post-match-strip post-match-strip--loading";
+  placeholder.innerHTML = `
+    <div class="post-match-strip__head">
+      <span class="post-match-strip__kicker">AI prediction vs reality</span>
+    </div>
+    <div class="post-match-strip__loading">Checking saved AI prediction…</div>`;
+  area.appendChild(placeholder);
+
+  let rows;
+  try {
+    rows = await fetchSavedPredictionsByMatch(match);
+  } catch {
+    rows = null;
+  }
+  if (!rows || !rows.length) {
+    placeholder.remove();
+    return;
+  }
+
+  const latest = rows[0];
+  const predDisplay = resolveWinnerDisplay(teams, latest.predicted_winner);
+  const actualDisplay = actualWinnerCodeOrName
+    ? resolveWinnerDisplay(teams, actualWinnerCodeOrName)
+    : "";
+  const correct =
+    actualWinnerCodeOrName &&
+    String(latest.predicted_winner).trim().toUpperCase() ===
+      String(actualWinnerCodeOrName).trim().toUpperCase();
+  const verdictBadge = actualWinnerCodeOrName
+    ? `<span class="verdict-prematch-badge verdict-prematch-badge--${correct ? "correct" : "wrong"}">${correct ? "✓ Correct" : "✗ Wrong"}</span>`
+    : "";
+  const ts = latest.created_at ? formatFetchedAtLocalDisplay(latest.created_at) : "";
+
+  placeholder.classList.remove("post-match-strip--loading");
+  placeholder.innerHTML = `
+    <div class="post-match-strip__head">
+      <span class="post-match-strip__kicker">AI prediction vs reality</span>
+      ${verdictBadge}
+    </div>
+    <div class="post-match-strip__row">
+      <span class="post-match-strip__k">Predicted</span>
+      <span class="post-match-strip__v">${escapeHtml(predDisplay.toUpperCase())} · ${latest.confidence}% confidence</span>
+    </div>
+    ${actualDisplay ? `
+    <div class="post-match-strip__row">
+      <span class="post-match-strip__k">Actual</span>
+      <span class="post-match-strip__v">${escapeHtml(actualDisplay.toUpperCase())}</span>
+    </div>` : ""}
+    ${ts ? `<div class="post-match-strip__meta">Saved ${escapeHtml(ts)}${rows.length > 1 ? ` · ${rows.length} predictions on file` : ""}</div>` : ""}`;
+}
+
+/**
+ * Render the post-match recap into the Debate column for completed fixtures
+ * where we have a recorded winner. Three static bubbles (winner recap, loser
+ * recap, judge POTM call) plus an auto-loaded "AI prediction vs reality"
+ * strip. No LLM calls — uses fields already on `MatchSuggestionRow.result`.
+ *
+ * @param {string} match
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @param {MatchSuggestionRow} completedRow
+ */
+function renderPostMatchDebateColumn(match, teams, completedRow) {
+  const area = document.getElementById("debateArea");
+  if (!area) return;
+  area.classList.remove("debate-area--final-only");
+  area.classList.add("debate-area--postmatch");
+  area.innerHTML = "";
+
+  const result = /** @type {NonNullable<MatchSuggestionRow["result"]>} */ (
+    completedRow?.result || {}
+  );
+  const winnerCode = String(result.winner || "").trim();
+  const winnerIsA =
+    !!winnerCode &&
+    (winnerCode.toUpperCase() === String(teams.codeA).toUpperCase() ||
+      winnerCode.toUpperCase() === String(teams.teamA).toUpperCase());
+  const winSide = {
+    code: winnerIsA ? teams.codeA : teams.codeB,
+    name: winnerIsA ? teams.teamA : teams.teamB,
+  };
+  const loseSide = {
+    code: winnerIsA ? teams.codeB : teams.codeA,
+    name: winnerIsA ? teams.teamB : teams.teamA,
+  };
+
+  const summary = String(result.summary || "").trim();
+  const actualScore = resolveCompletedActualScore(result);
+  const winnerScore = extractTeamScoreFromActual(actualScore, winSide.code);
+  const loserScore = extractTeamScoreFromActual(actualScore, loseSide.code);
+
+  const winnerHeadline = stripScoreParenFromSummary(summary) || `${winSide.name} won the contest.`;
+  const loserHeadline = loserScore
+    ? `${loseSide.name} couldn't match the total — finished ${loserScore}.`
+    : `${loseSide.name} couldn't get over the line.`;
+
+  appendPostMatchBubble(area, "bull", winSide, "Post-match · Winner", winnerHeadline, winnerScore);
+  appendPostMatchBubble(area, "bear", loseSide, "Post-match · Loser", loserHeadline, loserScore);
+  appendJudgePostMatchBubble(area, result);
+  void appendPredictionVsRealityStrip(area, match, teams, winnerCode);
+}
+
+/**
+ * Render a lightweight post-match column for past fixtures where no scorecard
+ * has been ingested yet. We still surface the AI prediction strip so users
+ * can see what the model called, even though we can't grade it here.
+ *
+ * @param {string} match
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ */
+function renderPastNoResultDebateColumn(match, teams) {
+  const area = document.getElementById("debateArea");
+  if (!area) return;
+  area.classList.remove("debate-area--final-only");
+  area.classList.add("debate-area--postmatch");
+  area.innerHTML = "";
+
+  const note = document.createElement("div");
+  note.className = "bubble judge bubble--postmatch bubble--info";
+  note.innerHTML = `
+    <div class="bubble-kicker">Match complete</div>
+    <div class="bubble-head">
+      <div class="bubble-avatar bubble-avatar--judge" aria-hidden="true">🏁</div>
+      <div class="bubble-who">War room</div>
+    </div>
+    <div class="bubble-text">Scorecard hasn't been ingested for this fixture yet — agents stand down to avoid a stale prediction. The AI's pre-match call (if any) is shown below.</div>`;
+  area.appendChild(note);
+
+  void appendPredictionVsRealityStrip(area, match, teams, null);
+}
+
 async function runWarRoom() {
   if (running) return;
   running = true;
@@ -4262,9 +4495,7 @@ async function runWarRoom() {
       document.getElementById('verdictArea').innerHTML = '';
       setPhase(null);
 
-      const debateEl = document.getElementById('debateArea');
-      debateEl.classList.add('debate-area--final-only');
-      debateEl.innerHTML = '';
+      renderPostMatchDebateColumn(match, teams, completedRow);
 
       setMatchBar(match, teams);
 
@@ -4343,9 +4574,7 @@ async function runWarRoom() {
       setElDisplay('resetBtn', '');
       setElDisplay('runningLabel', 'none');
       setElDisplay('emptyState', 'none');
-      const debateEl = document.getElementById('debateArea');
-      debateEl.classList.add('debate-area--final-only');
-      debateEl.innerHTML = '';
+      renderPastNoResultDebateColumn(match, teams);
       setMatchBar(match, teams);
       setPhase(null);
       document.getElementById('verdictArea').innerHTML = `
@@ -4374,6 +4603,7 @@ async function runWarRoom() {
 
   const debateAreaPre = document.getElementById('debateArea');
   debateAreaPre.classList.remove('debate-area--final-only');
+  debateAreaPre.classList.remove('debate-area--postmatch');
 
   const teams = parseTeamsFromMatch(match);
 
@@ -4696,6 +4926,7 @@ function resetWarRoom() {
   const liveUpdates = document.getElementById("liveUpdatesArea");
   if (liveUpdates) { liveUpdates.innerHTML = ""; liveUpdates.hidden = true; }
   document.getElementById('debateArea')?.classList.remove('debate-area--final-only');
+  document.getElementById('debateArea')?.classList.remove('debate-area--postmatch');
   document.getElementById('debateArea').innerHTML = `
     <div class="empty-state" id="emptyState">
       <div class="empty-state__icon" aria-hidden="true"></div>

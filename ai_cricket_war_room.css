@@ -1658,6 +1658,117 @@ html.acwr-notice-dismissed .notice-strip {
   gap: 0;
 }
 
+/* Post-match recap variant — the column is no longer empty for completed
+   fixtures; it shows static winner/loser/judge bubbles plus a prediction
+   accuracy strip. Slightly tighter rhythm than the live debate. */
+.debate-area--postmatch {
+  gap: 0.6rem;
+}
+
+.bubble--postmatch {
+  animation-duration: 0.3s;
+}
+
+.bubble--postmatch .bubble-score {
+  margin-top: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary, #cbd5e1);
+  padding-top: 0.35rem;
+  border-top: 1px dashed var(--color-border);
+}
+
+/* Centered "Judge" bubble — neutral palette so it reads as adjudication
+   rather than as another partisan side. */
+.bubble.judge {
+  align-self: center;
+  text-align: center;
+  background: linear-gradient(165deg, rgba(125, 211, 252, 0.12) 0%, rgba(125, 211, 252, 0.04) 100%);
+  border: 1px solid rgba(125, 211, 252, 0.3);
+  border-radius: var(--radius-lg);
+  max-width: 94%;
+}
+
+.bubble.judge .bubble-head {
+  justify-content: center;
+}
+
+.bubble.judge .bubble-who {
+  color: #7dd3fc;
+}
+
+.bubble-avatar--judge {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.bubble--info .bubble-text {
+  color: var(--color-text-secondary, #cbd5e1);
+  font-style: italic;
+}
+
+/* Auto-loaded "AI prediction vs reality" strip, pinned below the bubbles. */
+.post-match-strip {
+  margin-top: 0.25rem;
+  border: 1px solid rgba(125, 211, 252, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 0.7rem 0.85rem;
+  background: rgba(125, 211, 252, 0.06);
+  animation: fadeUp 0.45s var(--ease-out);
+}
+
+.post-match-strip__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.post-match-strip__kicker {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7dd3fc;
+}
+
+.post-match-strip__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  font-size: 0.82rem;
+  padding: 0.18rem 0;
+}
+
+.post-match-strip__k {
+  color: var(--color-text-tertiary, #9ca3af);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.post-match-strip__v {
+  color: var(--color-text-primary, #f1f5f9);
+  font-weight: 600;
+  text-align: right;
+}
+
+.post-match-strip__meta {
+  margin-top: 0.45rem;
+  font-size: 0.68rem;
+  color: var(--color-text-tertiary, #9ca3af);
+}
+
+.post-match-strip__loading {
+  font-size: 0.78rem;
+  color: var(--color-text-tertiary, #9ca3af);
+  font-style: italic;
+}
+
 .bubble {
   padding: 0.55rem 0.7rem;
   border-radius: var(--radius-md);
