@@ -7,7 +7,7 @@
   "functions": {
     "api/index.mjs": {
       "maxDuration": 300,
-      "includeFiles": "{dist/**,package.json,match_suggestions.json}"
+      "includeFiles": "{dist/**,lib/**,middleware/**,package.json,match_suggestions.json,litellm.config.yaml}"
     }
   }
 }

@@ -1,0 +1,46 @@
+# LiteLLM proxy config — run locally or on a small VM:
+#   pip install 'litellm[proxy]' && litellm --config litellm.config.yaml --port 4000
+# Point LITELLM_BASE_URL (e.g. http://127.0.0.1:4000) at this service; set LITELLM_API_KEY to match general_settings.master_key.
+
+model_list:
+  - model_name: intel-agent
+    litellm_params:
+      model: groq/llama-3.1-8b-instant
+      api_key: os.environ/GROQ_API_KEY
+
+  - model_name: intel-agent
+    litellm_params:
+      model: gemini/gemini-2.5-flash-lite
+      api_key: os.environ/GEMINI_API_KEY
+
+  - model_name: debate-agent
+    litellm_params:
+      model: groq/llama-3.3-70b-versatile
+      api_key: os.environ/GROQ_API_KEY
+
+  - model_name: debate-agent
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+
+  - model_name: judge-agent
+    litellm_params:
+      model: groq/llama-3.3-70b-versatile
+      api_key: os.environ/GROQ_API_KEY
+
+  - model_name: judge-agent
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+
+router_settings:
+  routing_strategy: least-busy
+  num_retries: 3
+  retry_after: 2
+  fallbacks:
+    - intel-agent: [gemini/gemini-2.5-flash-lite]
+    - debate-agent: [gemini/gemini-2.5-flash]
+    - judge-agent: [gemini/gemini-2.5-flash]
+
+general_settings:
+  master_key: sk-cricket-war-room-dev

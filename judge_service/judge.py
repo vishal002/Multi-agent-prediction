@@ -18,6 +18,7 @@ import httpx
 from pydantic import ValidationError
 
 from judge_service.models import Verdict
+from judge_service.verdict_validate import validate_verdict_for_match
 
 JUDGE_SYSTEM_PROMPT = """You are the Judge for an AI cricket war room. Multiple specialist agents have debated which team is more likely to win a specific match.
 
@@ -145,7 +146,7 @@ def _call_groq(debate_transcript: str, api_key: str) -> str:
         return str(data["choices"][0]["message"]["content"])
 
 
-def run_judge(debate_transcript: str) -> Verdict:
+def run_judge(debate_transcript: str, match_id: str = "") -> Verdict:
     """
     Call the best available LLM (Anthropic → Groq fallback) with the full debate.
     Returns a validated Verdict.
@@ -169,7 +170,8 @@ def run_judge(debate_transcript: str) -> Verdict:
     json_str = _extract_json_object(raw)
 
     try:
-        return Verdict.model_validate_json(json_str)
+        verdict = Verdict.model_validate_json(json_str)
+        return validate_verdict_for_match(verdict, match_id or "")
     except json.JSONDecodeError as e:
         raise ValueError(f"Judge returned non-JSON: {e!s}\n---\n{raw[:2000]}") from e
     except ValidationError as e:

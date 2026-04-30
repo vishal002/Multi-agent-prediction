@@ -45,6 +45,7 @@ const COPY_FILES = [
   "sitemap.xml",
   "robots.txt",
   "disclaimer.html",
+  "public/demo-verdict.json",
 ];
 const COPY_DIRS = ["icons", "image"];
 

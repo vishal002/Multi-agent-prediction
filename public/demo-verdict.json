@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "match": "CSK vs MI — IPL 2026 (example demo, Chepauk)",
+  "teams": {
+    "teamA": "Chennai Super Kings",
+    "teamB": "Mumbai Indians",
+    "codeA": "CSK",
+    "codeB": "MI"
+  },
+  "insights": {
+    "scout": "Ruturaj Gaikwad anchors a settled top order; CSK prefers spin-friendly middle overs at Chepauk.",
+    "stats": "CSK–MI head-to-head at this venue slightly favours the home side on average first-innings totals.",
+    "weather": "Warm humid evening; negligible rain risk; dew possible in the second innings.",
+    "pitch": "Traditional Chepauk slow-down — cutters and spinners get purchase after the powerplay.",
+    "news": "Both camps report full-strength squads; toss and first six overs remain the main tactical hinge.",
+    "live": "Demo snapshot — paste a live line from the command bar when you run a real war room."
+  },
+  "debateRounds": [
+    {
+      "side": "bull",
+      "who": "Bull (CSK)",
+      "roundLabel": "Round 1",
+      "teamCode": "CSK",
+      "teamName": "Chennai Super Kings",
+      "text": "Home control, spin depth, and a bank of finishers give CSK the structural edge."
+    },
+    {
+      "side": "bear",
+      "who": "Bear (MI)",
+      "roundLabel": "Round 1",
+      "teamCode": "MI",
+      "teamName": "Mumbai Indians",
+      "text": "MI can race away in the powerplay; if they neutralise the middle-overs squeeze, CSK's plan thins."
+    },
+    {
+      "side": "bull",
+      "who": "Bull (CSK)",
+      "roundLabel": "Round 2",
+      "teamCode": "CSK",
+      "teamName": "Chennai Super Kings",
+      "text": "Pathirana and Theekshana in tandem tighten death overs; chasing under lights is harder than MI think."
+    },
+    {
+      "side": "bear",
+      "who": "Bear (MI)",
+      "roundLabel": "Round 2",
+      "teamCode": "MI",
+      "teamName": "Mumbai Indians",
+      "text": "Bumrah and a power-hitting middle order can break the Chepauk handbrake if the ball swings early."
+    },
+    {
+      "side": "bull",
+      "who": "Bull (CSK)",
+      "roundLabel": "Round 3",
+      "teamCode": "CSK",
+      "teamName": "Chennai Super Kings",
+      "text": "Crowd lift and micro-matchups in the middle tilt marginal moments to the yellow camp."
+    },
+    {
+      "side": "bear",
+      "who": "Bear (MI)",
+      "roundLabel": "Round 3",
+      "teamCode": "MI",
+      "teamName": "Mumbai Indians",
+      "text": "One explosive over from a finisher flips pressure; MI only need thin margins to steal a tight game."
+    }
+  ],
+  "verdict": {
+    "winner": "CSK",
+    "confidence": 62,
+    "score_range": "10–18 runs or 2–3 wickets",
+    "key_player": "Matheesha Pathirana",
+    "swing_factor": "Toss + dew in the chase",
+    "summary": "Both sides land credible cases; Judge leans CSK on venue control and late spin squeeze versus MI's powerplay upside."
+  }
+}

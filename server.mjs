@@ -58,6 +58,14 @@ import crypto from "node:crypto";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import * as Sentry from "@sentry/node";
+import { withCache, TTL } from "./lib/cache.js";
+import { forwardLiteLLM, liteLLMEnabled } from "./lib/litellmForward.mjs";
+import { redis } from "./lib/redis.js";
+import { sanitizeAnthropicMessagesBody } from "./lib/sanitize.js";
+import { getSupabaseAdmin, sharePackGet, sharePackInsert, sharePacksLoadRecent } from "./lib/supabaseShare.mjs";
+import { rateLimitCheck } from "./middleware/rateLimit.js";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /**
  * Same as `__dirname` for this module: local repo root, and on Vercel the function bundle folder
@@ -67,6 +75,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const APP_ROOT = __dirname;
 dotenv.config({ path: path.join(APP_ROOT, ".env") });
 const PORT = Number(process.env.PORT) || 3333;
+
+const SENTRY_DSN = (process.env.SENTRY_DSN || "").trim();
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    tracesSampleRate: Math.min(1, Number(process.env.SENTRY_TRACES_SAMPLE_RATE) || 0.1),
+  });
+}
 
 /** Lazy so the handler loads on Vercel even if the native `sharp` binary fails until OG routes run. */
 /** @type {typeof import("sharp").default | null} */
@@ -386,6 +402,22 @@ function rateLimitAllow(ip, kind) {
   entries.push({ t: Date.now() });
   map.set(ip, entries);
   return { ok: true };
+}
+
+async function rateLimitAllowOrRedis(ip, kind) {
+  return rateLimitCheck(ip, kind, () => rateLimitAllow(ip, kind));
+}
+
+const ENFORCE_PRODUCTION_CORS =
+  process.env.ENFORCE_PRODUCTION_CORS === "1" || process.env.ENFORCE_PRODUCTION_CORS === "true";
+
+function productionCorsConfigBlocked(pathname) {
+  return (
+    ENFORCE_PRODUCTION_CORS &&
+    process.env.NODE_ENV === "production" &&
+    pathname.startsWith("/api") &&
+    !ALLOWED_ORIGINS.length
+  );
 }
 
 /**
@@ -1068,6 +1100,7 @@ const DEV_STATIC_FILES = new Set([
   "sitemap.xml",
   "robots.txt",
   "favicon.png",
+  "public/demo-verdict.json",
   "icon-192.png",
   "icon-512.png",
   "icon-maskable-512.png",
@@ -1300,6 +1333,7 @@ function loadSharePredictionsFromDisk() {
 }
 
 function persistSharePredictions() {
+  if (getSupabaseAdmin()) return;
   try {
     const dir = path.dirname(SHARE_PREDICTION_STORE_PATH);
     fs.mkdirSync(dir, { recursive: true });
@@ -1367,7 +1401,27 @@ function newSharePredictionId() {
   return crypto.randomBytes(4).toString("hex");
 }
 
-loadSharePredictionsFromDisk();
+/** Filled from disk or Supabase on first HTTP request. */
+let _shareMapsHydrated = false;
+
+async function ensureShareMapsHydrated() {
+  if (_shareMapsHydrated) return;
+  const sb = getSupabaseAdmin();
+  if (sb) {
+    try {
+      const rows = await sharePacksLoadRecent(sb, MAX_SHARE_PREDICTIONS);
+      for (const r of rows) {
+        sharePredictionById.set(r.share_id, { created: r.created, pack: r.pack });
+      }
+    } catch (e) {
+      console.warn("[share-predictions] supabase hydrate:", e instanceof Error ? e.message : e);
+    }
+    _shareMapsHydrated = true;
+    return;
+  }
+  loadSharePredictionsFromDisk();
+  _shareMapsHydrated = true;
+}
 
 /** Chat / social crawlers: return OG HTML for short links instead of a 302 to the SPA. */
 function isSharePreviewBot(ua) {
@@ -1825,6 +1879,21 @@ export async function warRoomHttpHandler(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
   const pathname = normalizeRequestPathname(url.pathname);
 
+  await ensureShareMapsHydrated();
+
+  if (productionCorsConfigBlocked(pathname)) {
+    res.writeHead(503, {
+      "Content-Type": "application/json; charset=utf-8",
+    });
+    res.end(
+      JSON.stringify({
+        error: "cors_not_configured",
+        message: "Set ALLOWED_ORIGINS in production when ENFORCE_PRODUCTION_CORS=1.",
+      })
+    );
+    return;
+  }
+
   if (
     req.method === "OPTIONS" &&
     (pathname === "/api/messages" ||
@@ -1834,6 +1903,7 @@ export async function warRoomHttpHandler(req, res) {
       pathname === "/api/live-score" ||
       pathname === "/api/judge/predict" ||
       pathname === "/api/judge/accuracy" ||
+      pathname === "/api/accuracy" ||
       pathname === "/api/judge/predictions-by-match" ||
       pathname === "/api/version" ||
       pathname === "/api/share-prediction" ||
@@ -1976,20 +2046,24 @@ export async function warRoomHttpHandler(req, res) {
 
   if (req.method === "GET" && pathname === "/api/match-context") {
     const target = `${INGESTION_SERVICE_URL}/api/match-context${url.search}`;
-    const ctrl = AbortSignal.timeout(25_000);
+    const cacheKey = `mc:${url.search || "default"}`;
     try {
-      const r = await fetch(target, {
-        method: "GET",
-        signal: ctrl,
-        headers: { Accept: "application/json" },
+      const payload = await withCache(cacheKey, TTL.MATCH_CONTEXT, async () => {
+        const ctrl = AbortSignal.timeout(25_000);
+        const r = await fetch(target, {
+          method: "GET",
+          signal: ctrl,
+          headers: { Accept: "application/json" },
+        });
+        const text = await r.text();
+        return { status: r.status, text };
       });
-      const text = await r.text();
-      res.writeHead(r.status, {
+      res.writeHead(payload.status, {
         "Content-Type": "application/json; charset=utf-8",
         ...corsHeaders(req),
         "Cache-Control": "no-store",
       });
-      res.end(text);
+      res.end(payload.text);
     } catch (e) {
       res.writeHead(503, {
         "Content-Type": "application/json; charset=utf-8",
@@ -2008,7 +2082,7 @@ export async function warRoomHttpHandler(req, res) {
   }
 
   if (req.method === "POST" && pathname === "/api/judge/predict") {
-    if (!rateLimitAllow(clientIp(req), "judge").ok) {
+    if (!(await rateLimitAllowOrRedis(clientIp(req), "judge")).ok) {
       res.writeHead(429, {
         "Content-Type": "application/json; charset=utf-8",
         ...corsHeaders(req),
@@ -2066,8 +2140,26 @@ export async function warRoomHttpHandler(req, res) {
     return;
   }
 
-  if (req.method === "GET" && pathname === "/api/judge/accuracy") {
+  if (req.method === "GET" && (pathname === "/api/judge/accuracy" || pathname === "/api/accuracy")) {
     const now = Date.now();
+    const accRedisKey = "warroom:judge:accuracy:v1";
+    if (redis) {
+      try {
+        const cachedR = await redis.get(accRedisKey);
+        if (typeof cachedR === "string" && cachedR.length) {
+          res.writeHead(200, {
+            "Content-Type": "application/json; charset=utf-8",
+            ...corsHeaders(req),
+            "Cache-Control": "no-store",
+            "X-Judge-Accuracy-Cache": "redis",
+          });
+          res.end(cachedR);
+          return;
+        }
+      } catch {
+        /* fall through */
+      }
+    }
     if (
       JUDGE_ACCURACY_CACHE_MS > 0 &&
       judgeAccuracyCache &&
@@ -2086,6 +2178,13 @@ export async function warRoomHttpHandler(req, res) {
       const upstream = await fetchJudgeAccuracyFromUpstream();
       if (upstream.ok) {
         judgeAccuracyCache = { text: upstream.text, at: Date.now() };
+        if (redis) {
+          try {
+            await redis.set(accRedisKey, upstream.text, { ex: TTL.JUDGE_ACCURACY });
+          } catch {
+            /* */
+          }
+        }
         res.writeHead(200, {
           "Content-Type": "application/json; charset=utf-8",
           ...corsHeaders(req),
@@ -2222,7 +2321,7 @@ export async function warRoomHttpHandler(req, res) {
   }
 
   if (req.method === "POST" && pathname === "/api/messages") {
-    if (!rateLimitAllow(clientIp(req), "messages").ok) {
+    if (!(await rateLimitAllowOrRedis(clientIp(req), "messages")).ok) {
       res.writeHead(429, {
         "Content-Type": "application/json; charset=utf-8",
         ...corsHeaders(req),
@@ -2233,6 +2332,54 @@ export async function warRoomHttpHandler(req, res) {
     }
     if (!denyUnlessWarRoomSecret(req, res)) return;
 
+    const rbMsg = await readBody(req, { maxBytes: MAX_BODY_MESSAGES_BYTES });
+    if (!rbMsg.ok) {
+      res.writeHead(413, {
+        "Content-Type": "application/json; charset=utf-8",
+        ...corsHeaders(req),
+      });
+      res.end(JSON.stringify({ error: { message: `Body exceeds ${MAX_BODY_MESSAGES_BYTES} bytes` } }));
+      return;
+    }
+    let body = rbMsg.body;
+    try {
+      body = sanitizeAnthropicMessagesBody(body);
+    } catch (e) {
+      const code = e instanceof Error ? /** @type {Error & { code?: string }} */ (e).code : undefined;
+      if (code === "invalid_input" || (e instanceof Error && e.message === "invalid_input")) {
+        res.writeHead(400, {
+          "Content-Type": "application/json; charset=utf-8",
+          ...corsHeaders(req),
+        });
+        res.end(JSON.stringify({ error: { message: "invalid_input" } }));
+        return;
+      }
+      throw e;
+    }
+
+    if (liteLLMEnabled()) {
+      try {
+        const result = await forwardLiteLLM(body);
+        res.writeHead(result.status, {
+          "Content-Type": "application/json; charset=utf-8",
+          ...corsHeaders(req),
+        });
+        res.end(result.body);
+      } catch (e) {
+        Sentry.captureException(e);
+        res.writeHead(502, {
+          "Content-Type": "application/json; charset=utf-8",
+          ...corsHeaders(req),
+        });
+        res.end(
+          JSON.stringify({
+            error: { message: e instanceof Error ? e.message : "LiteLLM proxy failed" },
+          })
+        );
+      }
+      return;
+    }
+
     activeProvider = resolveProvider();
 
     if (!activeProvider) {
@@ -2242,7 +2389,7 @@ export async function warRoomHttpHandler(req, res) {
           error: {
             type: "config",
             message:
-              "No LLM key set. Free: GROQ_API_KEY (console.groq.com) and/or GEMINI_API_KEY (aistudio.google.com) — Groq is tried first with optional Gemini fallback. Paid: ANTHROPIC_API_KEY. Optional: LLM_PROVIDER=groq|anthropic|gemini",
+              "No LLM key set. Free: GROQ_API_KEY (console.groq.com) and/or GEMINI_API_KEY (aistudio.google.com) — Groq is tried first with optional Gemini fallback. Paid: ANTHROPIC_API_KEY. Optional: LLM_PROVIDER=groq|anthropic|gemini. Or set LITELLM_BASE_URL for a LiteLLM proxy.",
           },
         })
       );
@@ -2271,17 +2418,6 @@ export async function warRoomHttpHandler(req, res) {
       return;
     }
 
-    const rbMsg = await readBody(req, { maxBytes: MAX_BODY_MESSAGES_BYTES });
-    if (!rbMsg.ok) {
-      res.writeHead(413, {
-        "Content-Type": "application/json; charset=utf-8",
-        ...corsHeaders(req),
-      });
-      res.end(JSON.stringify({ error: { message: `Body exceeds ${MAX_BODY_MESSAGES_BYTES} bytes` } }));
-      return;
-    }
-    const body = rbMsg.body;
-
     try {
       let result;
       if (activeProvider === "anthropic") {
@@ -2301,6 +2437,7 @@ export async function warRoomHttpHandler(req, res) {
       });
       res.end(result.body);
     } catch (e) {
+      Sentry.captureException(e);
       res.writeHead(502, {
         "Content-Type": "application/json; charset=utf-8",
         ...corsHeaders(req),
@@ -2348,6 +2485,14 @@ export async function warRoomHttpHandler(req, res) {
     const id = newSharePredictionId();
     sharePredictionById.set(id, { created: Date.now(), pack });
     pruneSharePredictionsIfNeeded();
+    const sbShare = getSupabaseAdmin();
+    if (sbShare) {
+      try {
+        await sharePackInsert(sbShare, id, pack);
+      } catch (e) {
+        console.warn("[share-predictions] supabase write:", e instanceof Error ? e.message : e);
+      }
+    }
     persistSharePredictions();
     res.writeHead(201, {
       "Content-Type": "application/json; charset=utf-8",
@@ -2368,7 +2513,21 @@ export async function warRoomHttpHandler(req, res) {
       res.end(JSON.stringify({ error: { message: "Invalid id" } }));
       return;
     }
-    const row = sharePredictionById.get(id);
+    let row = sharePredictionById.get(id);
+    if (!row) {
+      const sbGet = getSupabaseAdmin();
+      if (sbGet) {
+        try {
+          const pack = await sharePackGet(sbGet, id);
+          if (pack) {
+            row = { created: Date.now(), pack };
+            sharePredictionById.set(id, row);
+          }
+        } catch {
+          /* */
+        }
+      }
+    }
     if (!row) {
       res.writeHead(404, {
         "Content-Type": "application/json; charset=utf-8",

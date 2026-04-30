@@ -13,6 +13,9 @@
     "icons": "node scripts/generate-pwa-icons.mjs"
   },
   "dependencies": {
+    "@sentry/node": "^9.5.0",
+    "@supabase/supabase-js": "2.49.4",
+    "@upstash/redis": "^1.34.3",
     "dotenv": "^16.4.7",
     "esbuild": "^0.28.0",
     "html-minifier": "^4.0.0",

@@ -1780,6 +1780,8 @@ function initInfoSheet() {
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 let running = false;
+/** True after homepage demo hydrate; cleared on first real {@link runWarRoom}. */
+let _demoWarRoomActive = false;
 
 /** Same origin when you open the app via `node server.mjs` (http://localhost:3333). Override if needed. */
 function apiBase() {
@@ -2464,6 +2466,10 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
       <div class="verdict-share-row">
         <button type="button" class="verdict-share-btn js-share-prediction" aria-label="Copy link to this prediction">Share this prediction</button>
       </div>
+      <div class="verdict-affiliate-row" role="group" aria-label="Fantasy cricket apps">
+        <a href="https://www.dream11.com/cricket" class="verdict-affiliate-btn verdict-affiliate-btn--dream11 js-dream11-aff" target="_blank" rel="noopener noreferrer">Play on Dream11</a>
+        <a href="https://www.my11circle.com/" class="verdict-affiliate-btn verdict-affiliate-btn--my11 js-my11-aff" target="_blank" rel="noopener noreferrer">My11Circle</a>
+      </div>
     </div>`;
   scheduleVerdictWinProbabilityAnimation(verdictRootEl, winProb.pctA, winProb.pctB);
   hydratePlayerOfMatchPhotos(verdictRootEl);
@@ -2477,6 +2483,21 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
         return;
       }
       void copyPredictionShareLink(label, v);
+    });
+  }
+  const d11 = verdictRootEl.querySelector(".js-dream11-aff");
+  if (d11) {
+    d11.addEventListener("click", () => {
+      const mi = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+      const label = (mi?.value || "").trim();
+      trackWarRoomEvent("dream11_click", { match: label || "unknown", winner: String(v.winner || "") });
+    });
+  }
+  const m11 = verdictRootEl.querySelector(".js-my11-aff");
+  if (m11) {
+    m11.addEventListener("click", () => {
+      const mi = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+      trackWarRoomEvent("dream11_click", { match: (mi?.value || "").trim() || "unknown", partner: "my11circle" });
     });
   }
 }
@@ -2689,6 +2710,7 @@ async function copyPredictionShareLink(matchLabel, v) {
   const url = await resolvePredictionShareUrl(matchLabel, v);
   try {
     await navigator.clipboard.writeText(url);
+    trackWarRoomEvent("verdict_shared", { match: matchLabel });
     showAutoDetectToast("Prediction link copied");
   } catch {
     try {
@@ -4504,7 +4526,18 @@ function renderPastNoResultDebateColumn(match, teams) {
 
 async function runWarRoom() {
   if (running) return;
+  const warRoomStartedAt = Date.now();
   running = true;
+  if (_demoWarRoomActive) {
+    trackWarRoomEvent("demo_to_run", {
+      match: (/** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"))?.value || "").trim(),
+    });
+    _demoWarRoomActive = false;
+    document.getElementById("demoWarRoomBanner")?.remove();
+  }
+  trackWarRoomEvent("warroom_run_started", {
+    match: (/** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"))?.value || "").trim(),
+  });
   clearIntelRefreshSession();
   document.getElementById("main-content")?.classList.remove("dashboard--pre-war-room");
   const match =
@@ -4592,6 +4625,7 @@ async function runWarRoom() {
       bindPrematchPredictionButton(verdictEl, teams, completedRow.result.winner);
       hydratePlayerOfMatchPhotos(verdictEl);
 
+      trackWarRoomEvent("warroom_run_complete", { match, ms: Date.now() - warRoomStartedAt });
       scrollVerdictPanelIntoView({ behavior: "smooth" });
     } catch (e) {
       showApiError(e instanceof Error ? e.message : String(e));
@@ -4637,6 +4671,7 @@ async function runWarRoom() {
       </div>
     </div>`;
       bindPrematchPredictionButton(document.getElementById('verdictArea'), teams, null);
+      trackWarRoomEvent("warroom_run_complete", { match, ms: Date.now() - warRoomStartedAt });
       scrollVerdictPanelIntoView({ behavior: "smooth" });
     } catch (e) {
       showApiError(e instanceof Error ? e.message : String(e));
@@ -4942,6 +4977,7 @@ async function runWarRoom() {
       });
     }
 
+    trackWarRoomEvent("warroom_run_complete", { match, ms: Date.now() - warRoomStartedAt });
     scrollVerdictPanelIntoView({ behavior: "smooth" });
     setPhase(null);
     setElDisplay('runningLabel', 'none');
@@ -5801,6 +5837,7 @@ void refreshJudgeAccuracyFooter();
 void (async () => {
   await applyShareQueryParam();
   await applySharedPredictionPreviewFromUrl();
+  await tryLoadDemoWarRoom();
   await autoPopulateTodayMatch();
 })();
 
@@ -6164,6 +6201,107 @@ async function autoPopulateTodayMatch() {
       } catch { /* best-effort */ }
     }
   }
+}
+
+/**
+ * @param {string} name
+ * @param {Record<string, string | number | null | undefined>} [data]
+ */
+function trackWarRoomEvent(name, data) {
+  if (typeof window.umami !== "undefined" && typeof window.umami.track === "function") {
+    window.umami.track(name, data || {});
+  }
+}
+
+/**
+ * Homepage demo: static completed war room from `/public/demo-verdict.json` (copied to `dist/` on build).
+ */
+async function tryLoadDemoWarRoom() {
+  const verdictEl = document.getElementById("verdictArea");
+  const input = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+  if (!verdictEl || !input) return;
+  if (verdictEl.innerHTML.trim() !== "") return;
+  const base = apiBase();
+  if (base === null) return;
+  let sp;
+  try {
+    sp = new URLSearchParams(window.location.search);
+  } catch {
+    return;
+  }
+  if (sp.get("sid") || sp.get("p") || sp.get("verdict") || sp.get("share")) return;
+
+  let res;
+  try {
+    res = await fetch(`${base}/public/demo-verdict.json`, { headers: { Accept: "application/json" } });
+  } catch {
+    return;
+  }
+  if (!res.ok) return;
+  let data;
+  try {
+    data = await res.json();
+  } catch {
+    return;
+  }
+  if (!data || Number(data.version) !== 1 || typeof data.match !== "string") return;
+  applyDemoWarRoomPayload(data);
+}
+
+/**
+ * @param {{ version: number, match: string, insights: Record<string, string>, debateRounds: Array<{ side: string, who: string, text: string, roundLabel?: string, teamCode?: string, teamName?: string }>, verdict: Record<string, unknown> }} data
+ */
+function applyDemoWarRoomPayload(data) {
+  const input = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+  const debateArea = document.getElementById("debateArea");
+  const verdictEl = document.getElementById("verdictArea");
+  if (!input || !debateArea || !verdictEl) return;
+
+  input.value = data.match;
+  const clearBtn = document.getElementById("matchSearchClear");
+  if (clearBtn) /** @type {HTMLElement} */ (clearBtn).hidden = false;
+
+  const teams = parseTeamsFromMatch(data.match);
+  setMatchBar(data.match, teams);
+  document.getElementById("main-content")?.classList.remove("dashboard--pre-war-room");
+
+  debateArea.classList.remove("debate-area--final-only", "debate-area--postmatch");
+  debateArea.innerHTML = "";
+  for (const a of AGENTS) {
+    removeAgentSkeleton(a.id);
+    document.getElementById("icon-" + a.id)?.classList.add("on");
+    document.getElementById("dot-" + a.id)?.classList.add("live");
+    const ins = document.getElementById("insight-" + a.id);
+    const txt = data.insights && typeof data.insights === "object" ? String(data.insights[a.id] ?? "").trim() : "";
+    if (ins) {
+      ins.textContent = txt || INTEL_FALLBACK;
+      ins.classList.add("show");
+    }
+  }
+
+  const rounds = Array.isArray(data.debateRounds) ? data.debateRounds : [];
+  for (const r of rounds) {
+    const side = r.side === "bear" ? "bear" : "bull";
+    addBubble(side, String(r.who || (side === "bull" ? "Bull" : "Bear")), String(r.text || ""), {
+      roundLabel: r.roundLabel ? String(r.roundLabel) : undefined,
+      teamCode: r.teamCode ? String(r.teamCode) : undefined,
+      teamName: r.teamName ? String(r.teamName) : undefined,
+    });
+  }
+
+  verdictEl.innerHTML = `<div class="demo-war-room-banner" id="demoWarRoomBanner" role="status">
+    <span class="demo-war-room-banner__badge">Demo</span>
+    <span class="demo-war-room-banner__text">Showing a live-style example — <strong>Run war room</strong> for any fixture.</span>
+  </div>`;
+  const wrap = document.createElement("div");
+  verdictEl.appendChild(wrap);
+  const v = normalizeVerdictPartial(data.verdict, teams);
+  mountJudgeVerdictCard(wrap, v, teams, {
+    source: "browser",
+    judgeApiNote: "Static demo — not a live LLM run.",
+  });
+  _demoWarRoomActive = true;
+  scrollVerdictPanelIntoView({ behavior: "auto" });
 }
 
 /**

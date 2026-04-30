@@ -16,10 +16,11 @@ from pydantic import BaseModel, Field
 from judge_service.judge import run_judge
 from judge_service.models import Verdict
 from judge_service.predictions_db import PredictionsStore
+from judge_service.predictions_supabase import SupabasePredictionsStore, supabase_configured
 
 app = FastAPI(title="Cricket War Room — Judge", version="0.1.0")
 
-_store: Optional[PredictionsStore] = None
+_store: Optional[object] = None
 
 
 def _judge_secret_expected() -> str | None:
@@ -50,8 +51,14 @@ JudgeAuth = Annotated[None, Depends(verify_judge_service_auth)]
 def get_store() -> PredictionsStore:
     global _store
     if _store is None:
-        path = os.environ.get("WAR_ROOM_DB_PATH", "").strip() or None
-        _store = PredictionsStore(path)
+        if supabase_configured():
+            _store = SupabasePredictionsStore(
+                os.environ["SUPABASE_URL"].strip(),
+                os.environ["SUPABASE_SERVICE_ROLE_KEY"].strip(),
+            )
+        else:
+            path = os.environ.get("WAR_ROOM_DB_PATH", "").strip() or None
+            _store = PredictionsStore(path)
     return _store
 
 
@@ -78,7 +85,10 @@ class SetResultByMatchRequest(BaseModel):
 
 @app.post("/predict", response_model=PredictResponse)
 def predict(_auth: JudgeAuth, body: PredictRequest) -> PredictResponse:
-    verdict = run_judge(body.debate_transcript)
+    try:
+        verdict = run_judge(body.debate_transcript, body.match_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     store = get_store()
     pid = store.record_prediction(
         body.match_id,
