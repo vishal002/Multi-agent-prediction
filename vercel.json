@@ -7,7 +7,7 @@
   "functions": {
     "api/index.mjs": {
       "maxDuration": 300,
-      "includeFiles": "{dist/**,package.json}"
+      "includeFiles": "{dist/**,package.json,match_suggestions.json}"
     }
   }
 }

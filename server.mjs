@@ -55,15 +55,29 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import sharp from "sharp";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-/** Repo root on Vercel serverless (`process.cwd()`); package dir when running `node server.mjs` locally. */
-const APP_ROOT = process.env.VERCEL === "1" ? process.cwd() : __dirname;
+/**
+ * Same as `__dirname` for this module: local repo root, and on Vercel the function bundle folder
+ * where `includeFiles` places `dist/` + `package.json` next to `server.mjs` (avoid `process.cwd()`,
+ * which is not guaranteed to be the project root in serverless).
+ */
+const APP_ROOT = __dirname;
 dotenv.config({ path: path.join(APP_ROOT, ".env") });
 const PORT = Number(process.env.PORT) || 3333;
+
+/** Lazy so the handler loads on Vercel even if the native `sharp` binary fails until OG routes run. */
+/** @type {typeof import("sharp").default | null} */
+let sharpModule = null;
+async function loadSharp() {
+  if (!sharpModule) {
+    const mod = await import("sharp");
+    sharpModule = mod.default;
+  }
+  return sharpModule;
+}
 
 const MATCH_SUGGESTIONS_PATH = path.join(APP_ROOT, "match_suggestions.json");
 
@@ -1009,6 +1023,7 @@ async function getOgLogoDataUri() {
     }
     try {
       const raw = fs.readFileSync(logoPath);
+      const sharp = await loadSharp();
       let buf;
       try {
         buf = await sharp(raw)
@@ -1542,6 +1557,7 @@ async function buildHomepageOgSvg() {
  */
 async function renderHomepageOgPng() {
   const svg = await buildHomepageOgSvg();
+  const sharp = await loadSharp();
   return sharp(Buffer.from(svg, "utf8")).png({ compressionLevel: 9 }).toBuffer();
 }
 
@@ -1717,6 +1733,7 @@ async function buildShareOgSvg(pack) {
  */
 async function renderShareOgPng(pack) {
   const svg = await buildShareOgSvg(pack);
+  const sharp = await loadSharp();
   return sharp(Buffer.from(svg, "utf8")).png({ compressionLevel: 9 }).toBuffer();
 }
 
