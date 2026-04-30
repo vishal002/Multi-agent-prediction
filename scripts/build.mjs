@@ -279,6 +279,8 @@ async function main() {
     .toLowerCase();
 
   const htmlOut = await buildHtml(hashed);
+  // Vercel's static layer serves `/` from `index.html` in outputDirectory; keep in sync with SPA entry.
+  fs.copyFileSync(path.join(DIST, HTML_ENTRY), path.join(DIST, "index.html"));
   const swOut = buildSw(hashed, buildVersion);
 
   for (const f of COPY_FILES) copyFileToDist(f);
