@@ -9,6 +9,16 @@ old FastAPI behaviour).
 
 from __future__ import annotations
 
+# Vercel Python sys.path bootstrap — see predict.py for rationale.
+import os as _os
+import sys as _sys
+
+_HERE = _os.path.dirname(_os.path.abspath(__file__))
+_ROOT = _os.path.abspath(_os.path.join(_HERE, "..", ".."))
+for _p in (_HERE, _ROOT):
+    if _p not in _sys.path:
+        _sys.path.insert(0, _p)
+
 from urllib.parse import parse_qs, urlparse
 
 from _shared import JsonHandler, capture_exception, get_store

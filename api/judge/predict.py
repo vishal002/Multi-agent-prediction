@@ -18,6 +18,22 @@ Hardening (Phase 4 in migration plan):
 
 from __future__ import annotations
 
+# ── sys.path bootstrap ────────────────────────────────────────────────────
+# Vercel's Python runtime puts /var/task (the Lambda root) on sys.path but
+# NOT the function file's own directory, so plain sibling imports like
+# `from _shared import ...` raise ModuleNotFoundError at load time and the
+# handler never registers → 500. We add both the function dir (for siblings)
+# and the project root (for `judge_service.*`). Idempotent under warm reuse.
+import os as _os
+import sys as _sys
+
+_HERE = _os.path.dirname(_os.path.abspath(__file__))
+_ROOT = _os.path.abspath(_os.path.join(_HERE, "..", ".."))
+for _p in (_HERE, _ROOT):
+    if _p not in _sys.path:
+        _sys.path.insert(0, _p)
+# ──────────────────────────────────────────────────────────────────────────
+
 import json
 
 from _cache import cache_setex
