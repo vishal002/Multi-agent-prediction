@@ -2699,6 +2699,9 @@ export async function warRoomHttpHandler(req, res) {
   });
 }
 
+/** Vercel may treat this file as the serverless bundle root; runtime requires `default`. */
+export { warRoomHttpHandler as default };
+
 const server = http.createServer(warRoomHttpHandler);
 
 if (isMainServerModule()) {
