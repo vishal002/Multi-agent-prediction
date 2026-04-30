@@ -3,11 +3,26 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/(.*)", "destination": "/api" }],
+  "rewrites": [
+    { "source": "/api/accuracy", "destination": "/api/judge/accuracy" },
+    { "source": "/(.*)", "destination": "/api" }
+  ],
   "functions": {
     "api/index.mjs": {
       "maxDuration": 300,
       "includeFiles": "{dist/**,lib/**,middleware/**,package.json,match_suggestions.json,litellm.config.yaml}"
+    },
+    "api/judge/predict.py": {
+      "maxDuration": 60,
+      "includeFiles": "judge_service/**"
+    },
+    "api/judge/accuracy.py": {
+      "maxDuration": 30,
+      "includeFiles": "judge_service/**"
+    },
+    "api/judge/predictions-by-match.py": {
+      "maxDuration": 30,
+      "includeFiles": "judge_service/**"
     }
   }
 }
