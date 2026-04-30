@@ -60,10 +60,12 @@ import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(__dirname, ".env") });
+/** Repo root on Vercel serverless (`process.cwd()`); package dir when running `node server.mjs` locally. */
+const APP_ROOT = process.env.VERCEL === "1" ? process.cwd() : __dirname;
+dotenv.config({ path: path.join(APP_ROOT, ".env") });
 const PORT = Number(process.env.PORT) || 3333;
 
-const MATCH_SUGGESTIONS_PATH = path.join(__dirname, "match_suggestions.json");
+const MATCH_SUGGESTIONS_PATH = path.join(APP_ROOT, "match_suggestions.json");
 
 /**
  * @param {unknown} raw
@@ -962,8 +964,8 @@ async function forwardAnthropic(body) {
  * Dev layout (default): serve raw source files from the project root, just like
  * before the build pipeline existed.
  */
-const SERVE_DIST = process.env.SERVE_DIST === "1";
-const STATIC_ROOT = SERVE_DIST ? path.join(__dirname, "dist") : __dirname;
+const SERVE_DIST = process.env.SERVE_DIST === "1" || process.env.VERCEL === "1";
+const STATIC_ROOT = SERVE_DIST ? path.join(APP_ROOT, "dist") : __dirname;
 
 /** OG card background (#060a12) — flatten logo alpha onto this so librsvg does not render transparency as white/checkerboard. */
 const OG_LOGO_FLATTEN_BG = { r: 6, g: 10, b: 18 };
@@ -971,8 +973,8 @@ const OG_LOGO_FLATTEN_BG = { r: 6, g: 10, b: 18 };
 function findOgLogoPath() {
   const candidates = [
     path.join(STATIC_ROOT, "image", "ai-cricket-war-room-logo.png"),
-    path.join(__dirname, "image", "ai-cricket-war-room-logo.png"),
-    path.join(__dirname, "ai-cricket-war-room-logo.png"),
+    path.join(APP_ROOT, "image", "ai-cricket-war-room-logo.png"),
+    path.join(APP_ROOT, "ai-cricket-war-room-logo.png"),
   ];
   for (const p of candidates) {
     try {
@@ -1105,7 +1107,7 @@ if (SERVE_DIST) {
  * is immutable for the life of the process.
  */
 function resolveVersionInfo() {
-  const pkgPath = path.join(__dirname, "package.json");
+  const pkgPath = path.join(APP_ROOT, "package.json");
   let pkg = {};
   try {
     pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
@@ -1126,7 +1128,7 @@ function resolveVersionInfo() {
   };
 
   if (SERVE_DIST) {
-    const manifestPath = path.join(__dirname, "dist", "build-manifest.json");
+    const manifestPath = path.join(APP_ROOT, "dist", "build-manifest.json");
     try {
       const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
       full = {
@@ -1149,12 +1151,12 @@ function resolveVersionInfo() {
     let commit = /** @type {string | null} */ (full.commit);
     if (!commit) {
       try {
-        commit = execSync("git rev-parse HEAD", { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
+        commit = execSync("git rev-parse HEAD", { cwd: APP_ROOT, stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
         full.commit = commit;
         full.commitShort = commit.slice(0, 7);
         try {
           full.branch = execSync("git rev-parse --abbrev-ref HEAD", {
-            cwd: __dirname,
+            cwd: APP_ROOT,
             stdio: ["ignore", "pipe", "ignore"],
           })
             .toString()
@@ -1164,7 +1166,7 @@ function resolveVersionInfo() {
         }
         try {
           full.dirty =
-            execSync("git status --porcelain", { cwd: __dirname, stdio: ["ignore", "pipe", "ignore"] }).toString().length > 0;
+            execSync("git status --porcelain", { cwd: APP_ROOT, stdio: ["ignore", "pipe", "ignore"] }).toString().length > 0;
         } catch {
           /* not a git repo */
         }
@@ -1253,7 +1255,10 @@ function safeJoin(root, reqPath) {
 
 // ── Short share links: POST pack → id; GET /s/:id → app with ?sid= ─────────
 const SHARE_PREDICTION_STORE_PATH =
-  process.env.SHARE_PREDICTION_STORE_PATH || path.join(__dirname, "data", "share_predictions.json");
+  process.env.SHARE_PREDICTION_STORE_PATH ||
+  (process.env.VERCEL === "1"
+    ? path.join("/tmp", "share_predictions.json")
+    : path.join(__dirname, "data", "share_predictions.json"));
 const MAX_SHARE_PREDICTIONS = 5000;
 const SHARE_ID_HEX_RX = /^[a-f0-9]{8}$/;
 
@@ -1788,7 +1793,18 @@ function normalizeRequestPathname(p) {
   return t === "" ? "/" : t;
 }
 
-const server = http.createServer(async (req, res) => {
+/** True when this file is the process entrypoint (`node server.mjs`), not when imported by Vercel `api/`. */
+function isMainServerModule() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return path.resolve(entry) === path.resolve(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+export async function warRoomHttpHandler(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
   const pathname = normalizeRequestPathname(url.pathname);
 
@@ -2505,46 +2521,50 @@ const server = http.createServer(async (req, res) => {
     }
     fs.createReadStream(filePath).pipe(res);
   });
-});
+}
 
-server.listen(PORT, () => {
-  console.log(`War room: http://localhost:${PORT}/`);
-  activeProvider = resolveProvider();
-  if (activeProvider === "groq") {
-    const fb = GEMINI_KEY ? ` — Gemini fallback enabled (${GEMINI_MODEL})` : "";
-    console.log(
-      `LLM: Groq${fb} — heavy ${GROQ_MODEL} / light ${GROQ_MODEL_LIGHT} — console.groq.com`
-    );
-  } else if (activeProvider === "anthropic") {
-    console.log("LLM: Anthropic Claude");
-  } else if (activeProvider === "gemini") {
-    console.log(`LLM: Gemini — ${GEMINI_MODEL} — aistudio.google.com`);
-  } else {
-    console.log("Warning: set GROQ_API_KEY, GEMINI_API_KEY (or GOOGLE_API_KEY), or ANTHROPIC_API_KEY.");
-  }
+const server = http.createServer(warRoomHttpHandler);
 
-  void (async () => {
-    try {
-      const r = await fetch(`${INGESTION_SERVICE_URL}/healthz`, { signal: AbortSignal.timeout(2500) });
-      if (!r.ok)
-        console.warn(
-          `Ingestion at ${INGESTION_SERVICE_URL} returned HTTP ${r.status}. Check that terminal: npm run ingestion:dev`
-        );
-    } catch {
-      console.warn(
-        `Ingestion not running at ${INGESTION_SERVICE_URL} (optional for core LLM chat). RSS/match-context: run npm run ingestion:dev in another terminal (or npm run dev:stack for all services).`
+if (isMainServerModule()) {
+  server.listen(PORT, () => {
+    console.log(`War room: http://localhost:${PORT}/`);
+    activeProvider = resolveProvider();
+    if (activeProvider === "groq") {
+      const fb = GEMINI_KEY ? ` — Gemini fallback enabled (${GEMINI_MODEL})` : "";
+      console.log(
+        `LLM: Groq${fb} — heavy ${GROQ_MODEL} / light ${GROQ_MODEL_LIGHT} — console.groq.com`
       );
+    } else if (activeProvider === "anthropic") {
+      console.log("LLM: Anthropic Claude");
+    } else if (activeProvider === "gemini") {
+      console.log(`LLM: Gemini — ${GEMINI_MODEL} — aistudio.google.com`);
+    } else {
+      console.log("Warning: set GROQ_API_KEY, GEMINI_API_KEY (or GOOGLE_API_KEY), or ANTHROPIC_API_KEY.");
     }
-    try {
-      const r = await fetch(`${JUDGE_SERVICE_URL}/accuracy`, { signal: AbortSignal.timeout(2500) });
-      if (!r.ok)
+
+    void (async () => {
+      try {
+        const r = await fetch(`${INGESTION_SERVICE_URL}/healthz`, { signal: AbortSignal.timeout(2500) });
+        if (!r.ok)
+          console.warn(
+            `Ingestion at ${INGESTION_SERVICE_URL} returned HTTP ${r.status}. Check that terminal: npm run ingestion:dev`
+          );
+      } catch {
         console.warn(
-          `Judge at ${JUDGE_SERVICE_URL} returned HTTP ${r.status}. Check that terminal: npm run judge:dev`
+          `Ingestion not running at ${INGESTION_SERVICE_URL} (optional for core LLM chat). RSS/match-context: run npm run ingestion:dev in another terminal (or npm run dev:stack for all services).`
         );
-    } catch {
-      console.warn(
-        `Judge not running at ${JUDGE_SERVICE_URL} (optional for core LLM chat). Predictions: run npm run judge:dev in another terminal (or npm run dev:stack for all services).`
-      );
-    }
-  })();
-});
+      }
+      try {
+        const r = await fetch(`${JUDGE_SERVICE_URL}/accuracy`, { signal: AbortSignal.timeout(2500) });
+        if (!r.ok)
+          console.warn(
+            `Judge at ${JUDGE_SERVICE_URL} returned HTTP ${r.status}. Check that terminal: npm run judge:dev`
+          );
+      } catch {
+        console.warn(
+          `Judge not running at ${JUDGE_SERVICE_URL} (optional for core LLM chat). Predictions: run npm run judge:dev in another terminal (or npm run dev:stack for all services).`
+        );
+      }
+    })();
+  });
+}
