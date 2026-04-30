@@ -23,6 +23,10 @@
     "api/judge/predictions-by-match.py": {
       "maxDuration": 30,
       "includeFiles": "judge_service/**"
+    },
+    "api/match-context.py": {
+      "maxDuration": 30,
+      "includeFiles": "{ingestion_service/**,api/judge/_shared.py,api/judge/_cache.py}"
     }
   }
 }

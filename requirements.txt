@@ -5,3 +5,5 @@ httpx>=0.27,<1.0
 pydantic>=2.6,<3.0
 supabase>=2.10.0,<3.0
 sentry-sdk>=2.0,<3.0
+# RSS parsing for /api/match-context (ingestion_service.rss).
+defusedxml>=0.7
