@@ -2220,17 +2220,20 @@ export async function warRoomHttpHandler(req, res) {
         res.end(judgeAccuracyCache.text);
         return;
       }
-      res.writeHead(503, {
+      // Same shape as Judge GET /accuracy — avoids 503 in browser when no upstream is
+      // deployed (e.g. Vercel without JUDGE_SERVICE_URL). Set JUDGE_SERVICE_URL to your
+      // hosted Judge (Render/Fly/etc.) for live stats.
+      const emptyStats = JSON.stringify({ total_settled: 0, correct: 0, accuracy: null });
+      res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
         ...corsHeaders(req),
         "Cache-Control": "no-store",
+        "X-Judge-Accuracy-Degraded": "unreachable",
       });
-      res.end(
-        JSON.stringify({
-          error: "judge_service_unreachable",
-          message: e instanceof Error ? e.message : "Judge service unreachable",
-          hint: "pip install -r requirements-judge.txt && python -m uvicorn judge_service.app:app --host 127.0.0.1 --port 8000",
-        })
+      res.end(emptyStats);
+      console.warn(
+        "[judge/accuracy] upstream unreachable — returning empty stats. Set JUDGE_SERVICE_URL. (%s)",
+        e instanceof Error ? e.message : e
       );
     }
     return;
