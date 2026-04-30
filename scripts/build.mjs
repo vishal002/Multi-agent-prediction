@@ -4,7 +4,7 @@
  * Outputs go to dist/:
  *   - ai_cricket_war_room.[hash].js      (esbuild minified + sourcemap)
  *   - ai_cricket_war_room.[hash].css     (esbuild minified)
- *   - ai_cricket_war_room.html           (html-minifier-terser, refs rewritten to hashed names)
+ *   - ai_cricket_war_room.html           (html-minifier + uglify-js, refs rewritten to hashed names)
  *   - sw.js                              (PRECACHE_URLS rewritten + STATIC_ASSET_VERSION = build hash)
  *   - match_suggestions.json, manifest.webmanifest, icons/*, image/*  (copied verbatim, stable URLs)
  *   - build-manifest.json                (original → hashed map)
@@ -19,9 +19,13 @@ import zlib from "node:zlib";
 import crypto from "node:crypto";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { promisify } from "node:util";
 import * as esbuild from "esbuild";
-import { minify as minifyHtml } from "html-minifier-terser";
+
+/** CJS `html-minifier` (uglify-js) — avoids `terser` → `@jridgewell/source-map` resolution failures on Vercel. */
+const require = createRequire(import.meta.url);
+const { minify: minifyHtml } = require("html-minifier");
 
 const gzip = promisify(zlib.gzip);
 const brotli = promisify(zlib.brotliCompress);
@@ -148,7 +152,7 @@ async function buildHtml(hashed) {
     (_m, pre, q) => `${pre}${q}/${jsHashed}${q}`
   );
 
-  const minified = await minifyHtml(html, {
+  const minified = minifyHtml(html, {
     collapseWhitespace: true,
     removeComments: true,
     conservativeCollapse: true,

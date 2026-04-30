@@ -13,10 +13,9 @@
     "icons": "node scripts/generate-pwa-icons.mjs"
   },
   "dependencies": {
-    "@jridgewell/source-map": "^0.3.11",
     "dotenv": "^16.4.7",
     "esbuild": "^0.28.0",
-    "html-minifier-terser": "^7.2.0",
+    "html-minifier": "^4.0.0",
     "sharp": "^0.33.5"
   },
   "devDependencies": {
