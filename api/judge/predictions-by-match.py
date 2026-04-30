@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from urllib.parse import parse_qs, urlparse
 
-from _shared import JsonHandler, get_store
+from _shared import JsonHandler, capture_exception, get_store
 
 
 class handler(JsonHandler):  # noqa: N801
@@ -32,9 +32,11 @@ class handler(JsonHandler):  # noqa: N801
         try:
             rows = get_store().get_predictions_by_match(match_id, limit=limit)
         except RuntimeError as e:
+            capture_exception(e, stage="predictions_by_match", match_id=match_id)
             self._send_json(500, {"error": "store_misconfigured", "message": str(e)})
             return
         except Exception as e:
+            capture_exception(e, stage="predictions_by_match", match_id=match_id)
             self._send_json(500, {"error": "store_read_failed", "message": str(e)})
             return
 

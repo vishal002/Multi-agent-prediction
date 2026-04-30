@@ -31,6 +31,59 @@ if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
 
+# ── Sentry (no-op when SENTRY_DSN is unset) ──────────────────────────────
+# Done at import time, but guarded so warm Lambda reuse doesn't double-init.
+_SENTRY_INITIALISED = False
+
+
+def _maybe_init_sentry() -> None:
+    global _SENTRY_INITIALISED
+    if _SENTRY_INITIALISED:
+        return
+    dsn = (os.environ.get("SENTRY_DSN") or "").strip()
+    if not dsn:
+        _SENTRY_INITIALISED = True  # don't keep retrying every invocation
+        return
+    try:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=dsn,
+            traces_sample_rate=min(
+                1.0, float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE") or "0.1")
+            ),
+            # Tag every event so it's filterable from the Node-side errors.
+            release=os.environ.get("VERCEL_GIT_COMMIT_SHA"),
+            environment=os.environ.get("VERCEL_ENV") or "development",
+        )
+        sentry_sdk.set_tag("runtime", "vercel-python")
+        sentry_sdk.set_tag("service", "judge")
+    except Exception:
+        # Sentry must never block real traffic. Swallow init failures.
+        pass
+    _SENTRY_INITIALISED = True
+
+
+_maybe_init_sentry()
+
+
+def capture_exception(exc: BaseException, **tags: str) -> None:
+    """Forward an exception to Sentry with optional tags. Safe when DSN unset."""
+    try:
+        import sentry_sdk
+    except ImportError:
+        return
+    if not (os.environ.get("SENTRY_DSN") or "").strip():
+        return
+    try:
+        with sentry_sdk.push_scope() as scope:
+            for k, v in tags.items():
+                scope.set_tag(k, v)
+            sentry_sdk.capture_exception(exc)
+    except Exception:
+        return
+
+
 def _allowed_origins() -> list[str]:
     raw = os.environ.get("ALLOWED_ORIGINS", "") or ""
     return [o.strip() for o in raw.split(",") if o.strip()]
