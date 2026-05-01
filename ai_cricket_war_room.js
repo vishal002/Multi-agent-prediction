@@ -4529,9 +4529,9 @@ async function runWarRoom() {
   const warRoomStartedAt = Date.now();
   running = true;
   if (_demoWarRoomActive) {
-    trackWarRoomEvent("demo_to_run", {
-      match: (/** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"))?.value || "").trim(),
-    });
+    const demoMatch = (/** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"))?.value || "").trim();
+    trackWarRoomEvent("demo_to_run", { match: demoMatch });
+    trackWarRoomEvent("demo_verdict_dismissed", { via: "run" });
     _demoWarRoomActive = false;
     document.getElementById("demoWarRoomBanner")?.remove();
   }
@@ -6325,6 +6325,53 @@ function renderDemoCtaInEmptyState() {
 }
 
 /**
+ * Tear down the homepage demo (verdict card + agent insights + debate transcript)
+ * when the user shows intent to use a real fixture. Restores the pre-war-room
+ * empty state so the page looks identical to a fresh visit.
+ *
+ * Idempotent: safe to call when no demo is active. Fires `demo_verdict_dismissed`
+ * exactly once per active demo.
+ *
+ * @param {"search" | "run" | "manual"} via How the dismissal was triggered.
+ */
+function dismissHomepageDemo(via) {
+  if (!_demoWarRoomActive) return;
+  _demoWarRoomActive = false;
+
+  document.getElementById("demoWarRoomBanner")?.remove();
+  const verdictEl = document.getElementById("verdictArea");
+  if (verdictEl) verdictEl.innerHTML = "";
+
+  const debateArea = document.getElementById("debateArea");
+  if (debateArea) {
+    debateArea.classList.remove("debate-area--final-only", "debate-area--postmatch");
+    debateArea.innerHTML = `
+      <div class="empty-state" id="emptyState">
+        <div class="empty-state__icon" aria-hidden="true"></div>
+        <p class="empty-state__title">Ready</p>
+        <p class="empty-state__desc">Pick a fixture above, then <strong>Run war room</strong> for live intel, Bull vs Bear, and a judge verdict.</p>
+      </div>`;
+  }
+
+  for (const a of AGENTS) {
+    document.getElementById("icon-" + a.id)?.classList.remove("on");
+    document.getElementById("dot-" + a.id)?.classList.remove("live");
+    const row = document.getElementById("row-" + a.id);
+    if (row) row.classList.add("agent-row--skeleton");
+    const ins = document.getElementById("insight-" + a.id);
+    if (ins) {
+      ins.textContent = "";
+      ins.classList.remove("show");
+    }
+  }
+
+  hideMatchBar();
+  document.getElementById("main-content")?.classList.add("dashboard--pre-war-room");
+
+  trackWarRoomEvent("demo_verdict_dismissed", { via });
+}
+
+/**
  * @param {{ version: number, match: string, insights: Record<string, string>, debateRounds: Array<{ side: string, who: string, text: string, roundLabel?: string, teamCode?: string, teamName?: string }>, verdict: Record<string, unknown> }} data
  */
 function applyDemoWarRoomPayload(data) {
@@ -6377,6 +6424,22 @@ function applyDemoWarRoomPayload(data) {
     judgeApiNote: "Static demo — not a live LLM run.",
   });
   _demoWarRoomActive = true;
+
+  // Conversion telemetry: pairs with `demo_verdict_dismissed { via }` and the
+  // existing `demo_to_run` event so we can measure landing → engagement.
+  trackWarRoomEvent("demo_verdict_shown", { match: data.match });
+
+  // Dismiss-on-search: first user keystroke in the fixture input clears the demo
+  // so the page looks like a fresh visit when they're picking a real fixture.
+  // `applyShareQueryParam` and `autoPopulateTodayMatch` only fire `input` events
+  // before this handler is attached (share runs first; auto-populate bails when
+  // `input.value` is non-empty), so we won't be triggered by programmatic fills.
+  const onFirstSearchInput = () => {
+    input.removeEventListener("input", onFirstSearchInput);
+    dismissHomepageDemo("search");
+  };
+  input.addEventListener("input", onFirstSearchInput);
+
   scrollVerdictPanelIntoView({ behavior: "auto" });
 }
 
