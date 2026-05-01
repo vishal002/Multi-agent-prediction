@@ -44,7 +44,11 @@ class SupabasePredictionsStore:
             "confidence": int(confidence),
             "created_at": ts,
         }
-        res = self._client.table("judge_predictions").insert(row).select("id").execute()
+        # supabase-py 2.x returns the inserted row(s) in `.data` by default
+        # (Prefer: return=representation). Chaining `.select("id")` after
+        # `.insert()` was a 1.x pattern and now raises:
+        #   'SyncQueryRequestBuilder' object has no attribute 'select'
+        res = self._client.table("judge_predictions").insert(row).execute()
         rows = res.data or []
         if not rows or "id" not in rows[0]:
             raise RuntimeError("Supabase insert returned no id")
