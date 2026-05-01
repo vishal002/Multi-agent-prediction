@@ -6117,6 +6117,51 @@ async function applyShareQueryParam() {
 }
 
 /**
+ * @typedef {{
+ *   rows: MatchSuggestionRow[],
+ *   todayStr: string,
+ *   todayLive: MatchSuggestionRow[],
+ *   todayCompleted: MatchSuggestionRow[],
+ *   hasTodayMatch: boolean,
+ * }} TodayMatchContext
+ */
+
+/**
+ * Single shared probe of today's fixture state. Reused by the homepage demo gate and
+ * the auto-populate flow so we only hit `/api/match-suggest` once per page load.
+ * @type {Promise<TodayMatchContext> | null}
+ */
+let _todayMatchContextPromise = null;
+
+/** @returns {Promise<TodayMatchContext>} */
+function getTodayMatchContext() {
+  if (_todayMatchContextPromise) return _todayMatchContextPromise;
+  _todayMatchContextPromise = (async () => {
+    const rows = await loadAllMatchSuggestionRows();
+    const now = new Date();
+    const todayStr = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0"),
+    ].join("-");
+    const todayLive = rows
+      .filter((r) => r.date === todayStr && !r.completed)
+      .sort((a, b) => iplMatchNumberFromLabel(a.label) - iplMatchNumberFromLabel(b.label));
+    const todayCompleted = rows
+      .filter((r) => r.date === todayStr && r.completed === true)
+      .sort((a, b) => iplMatchNumberFromLabel(a.label) - iplMatchNumberFromLabel(b.label));
+    return {
+      rows,
+      todayStr,
+      todayLive,
+      todayCompleted,
+      hasTodayMatch: todayLive.length > 0 || todayCompleted.length > 0,
+    };
+  })();
+  return _todayMatchContextPromise;
+}
+
+/**
  * On page load, detect today's fixture (or the nearest upcoming one) and auto-fill the match
  * input, the live panel team/venue fields, and the live score bar.
  */
@@ -6124,36 +6169,14 @@ async function autoPopulateTodayMatch() {
   const input = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
   if (!input || input.value.trim()) return; // user has already typed something
 
-  // Today's date in YYYY-MM-DD (local time)
-  const now = new Date();
-  const todayStr = [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, "0"),
-    String(now.getDate()).padStart(2, "0"),
-  ].join("-");
-
-  // Fetch fresh suggestion list from server; fall back to bundled rows
-  /** @type {{ label: string, date: string, venue: string, completed?: boolean, result?: { winner: string, summary: string } }[]} */
-  let rows = MATCH_SUGGESTIONS_FALLBACK_ROWS;
+  /** @type {TodayMatchContext} */
+  let ctx;
   try {
-    const base = apiBase();
-    if (base !== null) {
-      const r = await fetch(`${base}/api/match-suggest?q=&limit=80`, {
-        headers: { Accept: "application/json" },
-      });
-      if (r.ok) {
-        const data = await r.json();
-        if (Array.isArray(data.suggestions) && data.suggestions.length) {
-          rows = data.suggestions.map(normalizeSuggestApiEntry);
-        }
-      }
-    }
-  } catch { /* best-effort — use bundled fallback */ }
-
-  // 1st priority: today's incomplete (live / upcoming) matches — same-day double-headers: lower Match N first
-  const todayLive = rows
-    .filter((r) => r.date === todayStr && !r.completed)
-    .sort((a, b) => iplMatchNumberFromLabel(a.label) - iplMatchNumberFromLabel(b.label));
+    ctx = await getTodayMatchContext();
+  } catch {
+    return;
+  }
+  const { rows, todayStr, todayLive } = ctx;
 
   // 2nd priority: nearest future incomplete match
   const upcoming = rows
@@ -6215,8 +6238,18 @@ function trackWarRoomEvent(name, data) {
 
 /**
  * Homepage demo: static completed war room from `/public/demo-verdict.json` (copied to `dist/` on build).
+ *
+ * Gating:
+ * - Suppressed when today has any scheduled match (live, upcoming, or already completed),
+ *   so the landing page doesn't show CSK vs MI while a real fixture is in progress.
+ * - Always suppressed when share/verdict/sid/p URL params are present (those drive their own UI).
+ * - `?demo=1` forces the demo regardless (useful for marketing screenshots / linking).
+ * - `force: true` from the in-app "View sample verdict" CTA bypasses the gate.
+ *
+ * @param {{ force?: boolean }} [opts]
  */
-async function tryLoadDemoWarRoom() {
+async function tryLoadDemoWarRoom(opts = {}) {
+  const force = opts.force === true;
   const verdictEl = document.getElementById("verdictArea");
   const input = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
   if (!verdictEl || !input) return;
@@ -6230,6 +6263,23 @@ async function tryLoadDemoWarRoom() {
     return;
   }
   if (sp.get("sid") || sp.get("p") || sp.get("verdict") || sp.get("share")) return;
+
+  const forceDemoParam = sp.get("demo") === "1";
+  if (!force && !forceDemoParam) {
+    try {
+      const ctx = await getTodayMatchContext();
+      if (ctx.hasTodayMatch) {
+        trackWarRoomEvent("demo_suppressed", {
+          today_live: ctx.todayLive.length,
+          today_completed: ctx.todayCompleted.length,
+        });
+        renderDemoCtaInEmptyState();
+        return;
+      }
+    } catch {
+      /* probe failed — fall through and show the demo as an empty-state fallback */
+    }
+  }
 
   let res;
   try {
@@ -6246,6 +6296,32 @@ async function tryLoadDemoWarRoom() {
   }
   if (!data || Number(data.version) !== 1 || typeof data.match !== "string") return;
   applyDemoWarRoomPayload(data);
+}
+
+/**
+ * When the homepage demo is suppressed because today already has a scheduled match,
+ * inject a small "View sample verdict" link into the debate empty-state so first-time
+ * visitors can still see what a finished war room looks like on demand.
+ */
+function renderDemoCtaInEmptyState() {
+  const desc = document.querySelector("#emptyState .empty-state__desc");
+  if (!desc) return;
+  if (desc.querySelector(".empty-state__demo-link")) return;
+  const sep = document.createElement("span");
+  sep.className = "empty-state__demo-sep";
+  sep.setAttribute("aria-hidden", "true");
+  sep.textContent = " · ";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.id = "emptyStateDemoLink";
+  btn.className = "empty-state__demo-link";
+  btn.textContent = "View sample verdict";
+  btn.addEventListener("click", () => {
+    trackWarRoomEvent("demo_view_sample_clicked", {});
+    void tryLoadDemoWarRoom({ force: true });
+  });
+  desc.appendChild(sep);
+  desc.appendChild(btn);
 }
 
 /**

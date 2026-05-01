@@ -5456,6 +5456,29 @@ html[data-ui="ipl"][data-theme="light"] body {
 .demo-war-room-banner__text strong {
   color: var(--color-text-primary, #e2e8f0);
 }
+.empty-state__demo-sep {
+  color: var(--color-text-tertiary);
+  margin: 0 0.15rem;
+}
+.empty-state__demo-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: #5eead4;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(94, 234, 212, 0.45);
+  transition: color 0.15s, text-decoration-color 0.15s;
+}
+.empty-state__demo-link:hover,
+.empty-state__demo-link:focus-visible {
+  color: #99f6e4;
+  text-decoration-color: #99f6e4;
+  outline: none;
+}
 .verdict-affiliate-row {
   display: flex;
   flex-wrap: wrap;
