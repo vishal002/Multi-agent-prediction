@@ -3098,6 +3098,35 @@ async function fetchJudgeAccuracyStats() {
 }
 
 /**
+ * Header promo (5.3): large “X% correct this season” from the same stats as the footer.
+ * @param {{ total_settled: number, correct: number, accuracy: number | null } | null} stats
+ * @param {{ proxyUnreachable?: boolean, fileProtocol?: boolean }} [opts]
+ */
+function syncSeasonAccuracyPromo(stats, opts = {}) {
+  const wrap = document.getElementById("seasonAccuracyPromo");
+  const pctEl = document.getElementById("seasonAccuracyPromoPct");
+  const subEl = document.getElementById("seasonAccuracyPromoSub");
+  if (!wrap || !pctEl || !subEl) return;
+
+  if (opts.fileProtocol || !stats || opts.proxyUnreachable) {
+    wrap.hidden = true;
+    return;
+  }
+  if (stats.total_settled <= 0) {
+    wrap.hidden = true;
+    return;
+  }
+
+  const pct =
+    stats.accuracy != null && Number.isFinite(stats.accuracy)
+      ? `${Math.round(stats.accuracy * 1000) / 10}%`
+      : "—";
+  pctEl.textContent = pct;
+  subEl.textContent = `${stats.correct} of ${stats.total_settled} settled predictions`;
+  wrap.hidden = false;
+}
+
+/**
  * @param {{ total_settled: number, correct: number, accuracy: number | null } | null} stats
  * @param {{ proxyUnreachable?: boolean, fileProtocol?: boolean }} [opts]
  */
@@ -3109,16 +3138,19 @@ function updateJudgeAccuracyFooterFromStats(stats, opts = {}) {
     el.classList.add("app-footer__line--muted");
     el.textContent =
       "Prediction stats need the app server — use http://localhost:3333 instead of opening the file directly.";
+    syncSeasonAccuracyPromo(null, { fileProtocol: true });
     return;
   }
 
   if (!stats) {
     el.classList.add("app-footer__line--muted");
+    syncSeasonAccuracyPromo(null, opts);
     return;
   }
   if (stats.total_settled <= 0) {
     el.textContent =
       "No settled predictions yet — record match outcomes to see accuracy here.";
+    syncSeasonAccuracyPromo(stats, opts);
     return;
   }
   const pct =
@@ -3126,6 +3158,7 @@ function updateJudgeAccuracyFooterFromStats(stats, opts = {}) {
       ? `${Math.round(stats.accuracy * 1000) / 10}%`
       : "—";
   el.textContent = `Settled predictions: ${stats.correct} of ${stats.total_settled} correct (${pct}).`;
+  syncSeasonAccuracyPromo(stats, opts);
 }
 
 async function refreshJudgeAccuracyFooter() {
