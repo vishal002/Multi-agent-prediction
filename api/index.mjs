@@ -3,7 +3,6 @@
  * Static files under `dist/` are served by the platform first; unmatched paths fall
  * through to this handler (see `vercel.json`).
  *
- * If multi-minute war rooms still time out after Redis + LiteLLM, split work with
- * Inngest or a queue — see `lib/inngestEval.mjs` and `.env.example` placeholders.
+ * Inngest: `GET|POST|PUT /api/inngest` (see `lib/inngest/` + `lib/inngestEval.mjs`).
  */
 export { warRoomHttpHandler as default } from "../server.mjs";

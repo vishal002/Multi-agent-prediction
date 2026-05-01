@@ -1879,6 +1879,12 @@ export async function warRoomHttpHandler(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
   const pathname = normalizeRequestPathname(url.pathname);
 
+  if (pathname === "/api/inngest" || pathname.startsWith("/api/inngest/")) {
+    const { handleInngestRequest } = await import("./lib/inngest/serve.mjs");
+    await handleInngestRequest(req, res);
+    return;
+  }
+
   await ensureShareMapsHydrated();
 
   if (productionCorsConfigBlocked(pathname)) {
@@ -1907,12 +1913,13 @@ export async function warRoomHttpHandler(req, res) {
       pathname === "/api/judge/predictions-by-match" ||
       pathname === "/api/version" ||
       pathname === "/api/share-prediction" ||
+      pathname === "/api/inngest" ||
       pathname.startsWith("/api/share/") ||
       pathname.startsWith("/api/og/share/"))
   ) {
     res.writeHead(204, {
       ...corsHeaders(req),
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
       "Access-Control-Max-Age": "86400",
     });
