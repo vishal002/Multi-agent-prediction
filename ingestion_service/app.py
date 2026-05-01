@@ -24,6 +24,42 @@ logger = logging.getLogger(__name__)
 if not logging.root.handlers:
     logging.basicConfig(level=logging.INFO)
 
+
+_SENTRY_DSN = (os.environ.get("SENTRY_DSN") or "").strip()
+if _SENTRY_DSN:
+    try:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=_SENTRY_DSN,
+            traces_sample_rate=min(
+                1.0, float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE") or "0.1")
+            ),
+            release=os.environ.get("VERCEL_GIT_COMMIT_SHA") or os.environ.get("RENDER_GIT_COMMIT"),
+            environment=os.environ.get("VERCEL_ENV")
+            or os.environ.get("RENDER_SERVICE_NAME")
+            or "development",
+        )
+        sentry_sdk.set_tag("service", "ingestion")
+    except Exception:
+        # Never let Sentry init block real traffic.
+        pass
+
+
+def _capture(exc: BaseException, **tags: str) -> None:
+    if not _SENTRY_DSN:
+        return
+    try:
+        import sentry_sdk
+
+        with sentry_sdk.push_scope() as scope:
+            for k, v in tags.items():
+                scope.set_tag(k, v)
+            sentry_sdk.capture_exception(exc)
+    except Exception:
+        return
+
+
 app = FastAPI(title="Cricket War Room — Ingestion", version="0.1.0")
 
 _EXPOSE_INGESTION_ERRORS = os.environ.get("INGESTION_EXPOSE_ERRORS", "").strip().lower() in (
@@ -61,6 +97,7 @@ async def match_context(
         )
     except Exception as e:  # noqa: BLE001
         logger.exception("ingestion build_match_context failed")
+        _capture(e, stage="build_match_context", label=label or "")
         msg = str(e).strip() or type(e).__name__
         return JSONResponse(
             status_code=502,

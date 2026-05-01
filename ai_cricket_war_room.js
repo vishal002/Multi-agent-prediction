@@ -2840,6 +2840,14 @@ async function applySharedPredictionPreviewFromUrl() {
   document.getElementById("main-content")?.classList.remove("dashboard--pre-war-room");
   setMatchBar(matchLabel, teams);
   scrollVerdictPanelIntoView({ behavior: "auto" });
+
+  trackWarRoomEvent("share_prediction_opened", {
+    match: matchLabel,
+    via: _acwrSharePackP ? (sp.get("sid") ? "sid" : "p") : "verdict",
+    winner: v.winner || "",
+    confidence: Number.isFinite(v.confidence) ? v.confidence : 0,
+    matches_teams: verdictMatchesTeams ? 1 : 0,
+  });
 }
 
 /** Transient gateway / cold-start statuses when the Node proxy calls the Judge service on Render. */
@@ -4644,6 +4652,13 @@ async function runWarRoom() {
       trackWarRoomEvent("warroom_run_complete", { match, ms: Date.now() - warRoomStartedAt });
       scrollVerdictPanelIntoView({ behavior: "smooth" });
     } catch (e) {
+      trackWarRoomEvent("warroom_run_failed", {
+        match,
+        ms: Date.now() - warRoomStartedAt,
+        stage: "completed_row_render",
+        error_kind: e instanceof Error ? e.name : "unknown",
+        error_message: (e instanceof Error ? e.message : String(e)).slice(0, 200),
+      });
       showApiError(e instanceof Error ? e.message : String(e));
       setElDisplay('runBtn', '');
       setElDisplay('resetBtn', 'none');
@@ -4690,6 +4705,13 @@ async function runWarRoom() {
       trackWarRoomEvent("warroom_run_complete", { match, ms: Date.now() - warRoomStartedAt });
       scrollVerdictPanelIntoView({ behavior: "smooth" });
     } catch (e) {
+      trackWarRoomEvent("warroom_run_failed", {
+        match,
+        ms: Date.now() - warRoomStartedAt,
+        stage: "past_no_result_render",
+        error_kind: e instanceof Error ? e.name : "unknown",
+        error_message: (e instanceof Error ? e.message : String(e)).slice(0, 200),
+      });
       showApiError(e instanceof Error ? e.message : String(e));
       setElDisplay('runBtn', '');
       setElDisplay('resetBtn', 'none');
@@ -5008,6 +5030,13 @@ async function runWarRoom() {
       stopLiveMonitor();
     }
   } catch (e) {
+    trackWarRoomEvent("warroom_run_failed", {
+      match: (/** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"))?.value || "").trim(),
+      ms: Date.now() - warRoomStartedAt,
+      stage: "agent_chain",
+      error_kind: e instanceof Error ? e.name : "unknown",
+      error_message: (e instanceof Error ? e.message : String(e)).slice(0, 200),
+    });
     hideTyping();
     setPhase(null);
     showApiError(e instanceof Error ? e.message : String(e));
@@ -6525,29 +6554,41 @@ function initLiveScoreBar() {
         return;
       }
 
+      const refreshStartedAt = Date.now();
       fetchBtn.disabled = true;
       const origLabel = fetchBtn.querySelector("span")?.textContent || "Fetch live";
       const span = fetchBtn.querySelector("span");
       if (span) span.textContent = "Fetching…";
 
+      let outcome = "unknown";
       try {
         const teams = parseTeamsFromMatch(match);
         const d = await fetchLiveScoreDetail(match, teams, { fresh: true });
         if (d.snippet) {
           input.value = d.snippet;
           syncClear();
+          outcome = "snippet";
         } else if (d.unreachable) {
           input.placeholder = "Score service offline — start ingestion on :3334, or paste score";
+          outcome = "unreachable";
         } else if (d.hint) {
           input.placeholder = d.hint.length > 130 ? `${d.hint.slice(0, 127)}…` : d.hint;
+          outcome = "hint";
         } else {
           input.placeholder = "No live score found in RSS — paste manually";
+          outcome = "empty";
         }
       } catch {
         input.placeholder = "Fetch failed — paste score manually";
+        outcome = "error";
       } finally {
         fetchBtn.disabled = false;
         if (span) span.textContent = origLabel;
+        trackWarRoomEvent("live_score_refresh", {
+          match,
+          ms: Date.now() - refreshStartedAt,
+          outcome,
+        });
       }
     });
   }

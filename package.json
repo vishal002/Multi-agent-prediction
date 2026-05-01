@@ -10,8 +10,7 @@
     "ingestion:dev": "node scripts/run-uvicorn.mjs ingestion_service.app:app 3334",
     "judge:dev": "node scripts/run-uvicorn.mjs judge_service.app:app 8000",
     "dev:stack": "concurrently -n war,ing,jdg -c blue,green,magenta \"node server.mjs\" \"node scripts/run-uvicorn.mjs ingestion_service.app:app 3334\" \"node scripts/run-uvicorn.mjs judge_service.app:app 8000\"",
-    "icons": "node scripts/generate-pwa-icons.mjs",
-    "inngest:dev": "npx --yes inngest-cli@latest dev -u http://127.0.0.1:3333/api/inngest"
+    "icons": "node scripts/generate-pwa-icons.mjs"
   },
   "dependencies": {
     "@sentry/node": "^9.5.0",
@@ -19,9 +18,7 @@
     "@upstash/redis": "^1.34.3",
     "dotenv": "^16.4.7",
     "esbuild": "^0.28.0",
-    "express": "^4.22.1",
     "html-minifier": "^4.0.0",
-    "inngest": "^3.21.2",
     "sharp": "^0.33.5"
   },
   "devDependencies": {

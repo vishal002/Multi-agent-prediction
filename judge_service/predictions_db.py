@@ -1,10 +1,10 @@
 """
 Persistence for predictions and running accuracy.
 
-Backends:
-  - **Turso / libSQL (recommended for serverless):** set `TURSO_DATABASE_URL` and
-    `TURSO_AUTH_TOKEN`. Requires `pip install libsql`. Data survives process restarts.
-  - **File SQLite (default):** `WAR_ROOM_DB_PATH` or `data/war_room.db` under the repo.
+Local SQLite store for development (`npm run judge:dev`) and Docker volume
+deployments. Production on Vercel uses `predictions_supabase.SupabasePredictionsStore`
+instead — `judge_service.app.get_store()` picks Supabase when SUPABASE_URL +
+SUPABASE_SERVICE_ROLE_KEY are set, else falls back to this file-backed store.
 
 Schema (table `predictions`):
   id, match_id, predicted_winner, actual_winner, confidence, created_at
@@ -12,7 +12,6 @@ Schema (table `predictions`):
 
 from __future__ import annotations
 
-import os
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -61,63 +60,25 @@ class AccuracyStats:
     accuracy: Optional[float]
 
 
-def _turso_config() -> tuple[str, str] | None:
-    url = os.environ.get("TURSO_DATABASE_URL", "").strip()
-    token = os.environ.get("TURSO_AUTH_TOKEN", "").strip()
-    if url and token:
-        return (url, token)
-    return None
-
-
 class PredictionsStore:
     def __init__(self, db_path: Path | str | None = None) -> None:
         self._path = Path(db_path) if db_path else DEFAULT_DB_PATH
-        self._turso = _turso_config()
 
     @property
     def uses_remote_db(self) -> bool:
-        return self._turso is not None
+        return False
 
     @contextmanager
-    def _conn(self) -> Generator[sqlite3.Connection | object, None, None]:
-        if self._turso:
-            try:
-                import libsql
-            except ImportError as e:  # pragma: no cover
-                raise RuntimeError(
-                    "TURSO_DATABASE_URL and TURSO_AUTH_TOKEN are set but `libsql` is not "
-                    "installed. Run: pip install libsql"
-                ) from e
-
-            url, token = self._turso
-            conn = libsql.connect(database=url, auth_token=token)
-            try:
-                for stmt in SCHEMA_STMTS:
-                    conn.execute(stmt)
-                conn.commit()
-                yield conn
-            finally:
-                closer = getattr(conn, "close", None)
-                if callable(closer):
-                    closer()
-
-        else:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            conn = sqlite3.connect(self._path)
-            conn.row_factory = sqlite3.Row
-            try:
-                conn.executescript("\n".join(SCHEMA_STMTS))
-                conn.commit()
-                yield conn
-            finally:
-                conn.close()
-
-    @staticmethod
-    def _rowcount(cur: object) -> int:
-        rc = getattr(cur, "rowcount", None)
-        if isinstance(rc, int) and rc >= 0:
-            return rc
-        return 0
+    def _conn(self) -> Generator[sqlite3.Connection, None, None]:
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(self._path)
+        conn.row_factory = sqlite3.Row
+        try:
+            conn.executescript("\n".join(SCHEMA_STMTS))
+            conn.commit()
+            yield conn
+        finally:
+            conn.close()
 
     def record_prediction(
         self,
@@ -151,7 +112,7 @@ class PredictionsStore:
                 """,
                 (actual_winner.strip(), int(prediction_id)),
             )
-            n = self._rowcount(cur)
+            n = max(0, cur.rowcount)
             conn.commit()
             return n > 0
 
@@ -186,7 +147,7 @@ class PredictionsStore:
                     """,
                     (aw, mid),
                 )
-            n = self._rowcount(cur)
+            n = max(0, cur.rowcount)
             conn.commit()
             return n
 

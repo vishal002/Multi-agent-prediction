@@ -1879,12 +1879,6 @@ export async function warRoomHttpHandler(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
   const pathname = normalizeRequestPathname(url.pathname);
 
-  if (pathname === "/api/inngest" || pathname.startsWith("/api/inngest/")) {
-    const { handleInngestRequest } = await import("./lib/inngest/serve.mjs");
-    await handleInngestRequest(req, res);
-    return;
-  }
-
   await ensureShareMapsHydrated();
 
   if (productionCorsConfigBlocked(pathname)) {
@@ -1913,7 +1907,6 @@ export async function warRoomHttpHandler(req, res) {
       pathname === "/api/judge/predictions-by-match" ||
       pathname === "/api/version" ||
       pathname === "/api/share-prediction" ||
-      pathname === "/api/inngest" ||
       pathname.startsWith("/api/share/") ||
       pathname.startsWith("/api/og/share/"))
   ) {
@@ -2438,6 +2431,13 @@ export async function warRoomHttpHandler(req, res) {
         result = await forwardGroq(body);
         if (shouldFallbackGroqToGemini(result) && GEMINI_KEY) {
           console.warn(`[llm] Groq returned HTTP ${result.status}; falling back to Gemini (${GEMINI_MODEL}).`);
+          Sentry.captureMessage("groq_fallback_to_gemini", {
+            level: "warning",
+            tags: {
+              groq_status: String(result.status),
+              gemini_model: GEMINI_MODEL,
+            },
+          });
           result = await forwardGemini(body);
         }
       }

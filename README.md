@@ -71,13 +71,8 @@ The Node gateway enforces **max body sizes** on `POST /api/messages`, Judge prox
 
 When the Judge API is enabled, the UI can show **running accuracy** (predictions where an actual winner was recorded vs the model’s pick).
 
-- **Render free + file SQLite** (`WAR_ROOM_DB_PATH=/tmp/...`): the database **dies on restart**—fine for demos, weak for a credibility story.
-- **Turso (libSQL)** — set on the **Judge** process:
-  - `TURSO_DATABASE_URL` — e.g. `libsql://your-db.turso.io`
-  - `TURSO_AUTH_TOKEN` — from the Turso dashboard  
-  When both are set, the service uses **remote libSQL** via the `libsql` package (`pip install -r requirements-judge-turso.txt` in addition to judge deps) and **ignores local file path** for storage. That turns accuracy into a metric that survives deploys and cold starts.
-
-Create a DB in [Turso](https://turso.tech), install deps, run the judge as usual; no schema migration is required beyond the app’s `CREATE TABLE IF NOT EXISTS`.
+- **Local SQLite** (`WAR_ROOM_DB_PATH=/tmp/...` or default `data/war_room.db`): fine for `npm run judge:dev` and Docker volume runs. Resets on Render free restarts.
+- **Supabase Postgres** — preferred for production. Set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` on the Judge process (Vercel Python functions or Render). When both are set, `judge_service.app.get_store()` selects `SupabasePredictionsStore` and the file path is ignored. Predictions survive deploys, cold starts, and cross-region reads. Schema in [`supabase_migrations/migrations/001_initial.sql`](supabase_migrations/migrations/001_initial.sql).
 
 ---
 
@@ -138,8 +133,8 @@ After prediction — Judge verdict, debate transcript, and confidence split
 
 | Piece             | Limitation                      | Free / low-cost direction                                                                                                              |
 | ----------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Render free web   | Cold start ~30s after idle      | [Railway](https://railway.app) ($5/mo credit), paid Render, or self-host Docker                                                        |
-| SQLite on `/tmp`  | Resets → accuracy looks fake    | **[Turso](https://turso.tech)** remote libSQL (wired in `judge_service/predictions_db.py`)                                             |
+| Render free web   | Cold start ~30s after idle      | Vercel (current production target — see `vercel.json`), [Railway](https://railway.app), paid Render, or self-host Docker               |
+| SQLite on `/tmp`  | Resets → accuracy looks fake    | **[Supabase](https://supabase.com)** Postgres (wired in `judge_service/predictions_supabase.py` + `lib/supabaseShare.mjs`)             |
 | CricAPI free tier | ~100 calls/day on busy days     | RSS (ESPN + Cricbuzz) already used; CricAPI optional                                                                                   |
 | Social previews   | Need stable absolute `og:image` | Use a static PNG under `/image/` (e.g. `readme-state-02-after-prediction.png`); set `og:image` in `ai_cricket_war_room.html` to match. |
 
@@ -158,20 +153,20 @@ After prediction — Judge verdict, debate transcript, and confidence split
 1. Push this repo to GitHub.
 2. [dashboard.render.com](https://dashboard.render.com) → **New** → **Blueprint** → select the repo (`render.yaml` provisions three services).
 3. Set environment variables in the dashboard (minimum `**GROQ_API_KEY`** on `cricket-war-room` and `cricket-judge`; URLs for ingestion/judge as in the table below).
-4. **Optional but recommended for Judge accuracy:** on `cricket-judge`, add `**TURSO_DATABASE_URL`** and `**TURSO_AUTH_TOKEN**` so predictions survive restarts.
+4. **Optional but recommended for Judge accuracy:** on `cricket-judge`, add `**SUPABASE_URL`** and `**SUPABASE_SERVICE_ROLE_KEY**` so predictions persist in Postgres instead of `/tmp` SQLite.
 
 
-| Service             | Variable                                  | Value                                        |
-| ------------------- | ----------------------------------------- | -------------------------------------------- |
-| `cricket-war-room`  | `GROQ_API_KEY`                            | [console.groq.com](https://console.groq.com) |
-| `cricket-war-room`  | `INGESTION_SERVICE_URL`                   | `https://cricket-ingestion.onrender.com`     |
-| `cricket-war-room`  | `JUDGE_SERVICE_URL`                       | `https://cricket-judge.onrender.com`         |
-| `cricket-ingestion` | `CRICAPI_KEY`                             | optional                                     |
-| `cricket-judge`     | `GROQ_API_KEY`                            | same as above                                |
-| `cricket-judge`     | `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` | optional persistence                         |
+| Service             | Variable                                          | Value                                        |
+| ------------------- | ------------------------------------------------- | -------------------------------------------- |
+| `cricket-war-room`  | `GROQ_API_KEY`                                    | [console.groq.com](https://console.groq.com) |
+| `cricket-war-room`  | `INGESTION_SERVICE_URL`                           | `https://cricket-ingestion.onrender.com`     |
+| `cricket-war-room`  | `JUDGE_SERVICE_URL`                               | `https://cricket-judge.onrender.com`         |
+| `cricket-ingestion` | `CRICAPI_KEY`                                     | optional                                     |
+| `cricket-judge`     | `GROQ_API_KEY`                                    | same as above                                |
+| `cricket-judge`     | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`      | optional persistence (preferred over `/tmp`) |
 
 
-> **Free-tier note:** web services **spin down** after idle — first request can take ~30s. Without Turso, `**WAR_ROOM_DB_PATH=/tmp`** still loses SQLite on restart.
+> **Free-tier note:** web services **spin down** after idle — first request can take ~30s. Without Supabase, `**WAR_ROOM_DB_PATH=/tmp`** still loses SQLite on restart.
 
 ---
 
@@ -182,7 +177,7 @@ cp .env.example .env   # fill GROQ_API_KEY (minimum)
 docker compose up --build
 ```
 
-Open [http://localhost:3333/](http://localhost:3333/). Judge data persists in the `judge_data` volume unless you override with Turso env on the judge container.
+Open [http://localhost:3333/](http://localhost:3333/). Judge data persists in the `judge_data` volume unless you override with `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` on the judge container.
 
 ---
 
@@ -213,8 +208,8 @@ Opening `ai_cricket_war_room.html` over `file://` uses bundled fallback fixtures
 | `INGESTION_SERVICE_URL` / `JUDGE_SERVICE_URL`                                                              | Python service bases.                                |
 | `CRICAPI_KEY`                                                                                              | On **ingestion** process; optional live scores.      |
 | `INGESTION_*`                                                                                              | RSS URLs, timeouts, cache TTL, `INGESTION_DISABLE`.  |
-| `WAR_ROOM_DB_PATH`                                                                                         | Judge **file** SQLite when Turso env is **not** set. |
-| `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN`                                                                  | Judge **remote** DB (preferred on ephemeral disks).  |
+| `WAR_ROOM_DB_PATH`                                                                                         | Judge **file** SQLite when Supabase env is **not** set. |
+| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`                                                               | Judge + share-link **remote** Postgres (preferred on ephemeral disks). |
 | `GROQ_JUDGE_MODEL` / `ANTHROPIC_JUDGE_MODEL`                                                               | Judge-only model overrides.                          |
 | `WAR_ROOM_API_SECRET` / `JUDGE_SERVICE_SECRET` / `TRUST_PROXY` / `RL_*` / `MAX_BODY_*` / `ALLOWED_ORIGINS` | See [Server hardening](#server-hardening-optional).  |
 
@@ -256,7 +251,7 @@ Edit `**match_suggestions.json`**. Optional `**completed**` + `**result**` (`win
 
 ## Appendix: AI / tooling context
 
-Single-page **vanilla JS**; **Node 20** gateway; optional **FastAPI** ingestion + judge. Fixture JSON + in-JS fallback rows. Build hashes JS/CSS and rewrites HTML + service worker. Python judge: `POST /predict`, `GET /accuracy`, SQLite **or** Turso when `TURSO_`* set. See `judge_service/models.py` for verdict fields.
+Single-page **vanilla JS**; **Node 20** gateway; optional **FastAPI** ingestion + judge. Fixture JSON + in-JS fallback rows. Build hashes JS/CSS and rewrites HTML + service worker. Python judge: `POST /predict`, `GET /accuracy`, local SQLite **or** Supabase Postgres when `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` are set. See `judge_service/models.py` for verdict fields.
 
 ---
 

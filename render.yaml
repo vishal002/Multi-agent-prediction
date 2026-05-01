@@ -76,13 +76,14 @@ services:
       - key: ANTHROPIC_API_KEY
         sync: false
       # SQLite DB path — /tmp is writable on Render free tier
-      # Note: data resets on restart/redeploy on free tier (no persistent disk)
+      # Note: data resets on restart/redeploy on free tier (no persistent disk).
+      # Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY for persistent Postgres-backed
+      # predictions (preferred when this Render service is run as a Vercel fallback).
       - key: WAR_ROOM_DB_PATH
         value: /tmp/war_room.db
-      # Optional — persistent predictions on Turso (overrides ephemeral /tmp SQLite)
-      - key: TURSO_DATABASE_URL
+      - key: SUPABASE_URL
         sync: false
-      - key: TURSO_AUTH_TOKEN
+      - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: JUDGE_SERVICE_SECRET
         sync: false
