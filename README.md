@@ -4,7 +4,7 @@
 
 Scout → Stats → Weather → Pitch → News → **multi-round Bull vs Bear** → structured prediction (winner, confidence, score band, key player, swing factor).
 
-**[Live demo](https://cricket-war-room.onrender.com)** · **[Deploy your own](#deploy-to-render-free)** · **[Share a fixture](#share-links)**
+**[Live demo](https://cricket-war-room.vercel.app)** · **[Deploy your own](#deploy-to-render-free)** · **[Share a fixture](#share-links)**
 
 **Disclaimer (read first):** this product is for **entertainment and fan discussion only**. AI outputs are **not** betting, trading, financial, or professional advice; they can be wrong. The live app repeats this below the header and in the footer.
 
@@ -83,28 +83,28 @@ Open the app with `?share=` to pre-fill the fixture field. The value can be the 
 **Exact label example:**
 
 ```text
-https://cricket-war-room.onrender.com/?share=DC%20vs%20SRH%20%E2%80%94%20IPL%202026%20Match%2031%2C%20Rajiv%20Gandhi%20International%20Stadium%2C%20Hyderabad
+https://cricket-war-room.vercel.app/?share=DC%20vs%20SRH%20%E2%80%94%20IPL%202026%20Match%2031%2C%20Rajiv%20Gandhi%20International%20Stadium%2C%20Hyderabad
 ```
 
 **Shorter (resolved automatically) example — same match:**
 
 ```text
-https://cricket-war-room.onrender.com/?share=IPL%202026%20%E2%80%94%20SRH%20vs%20DC%2C%20Hyderabad
+https://cricket-war-room.vercel.app/?share=IPL%202026%20%E2%80%94%20SRH%20vs%20DC%2C%20Hyderabad
 ```
 
 **Open Graph:** the main app HTML points `og:image` at `**GET /og-homepage.png`** (1200×630, logo + headline + agent strip, Sharp). The URL in HTML includes a `**?v=**` query (increment when the card design changes) so Meta/WhatsApp do not keep serving an old cached bitmap. For `**/s/{id}**` share links, crawlers get HTML whose `og:image` is `**GET /api/og/share/{id}.png**` (same dimensions; per-match verdict with logo in the brand bar and verdict column). Logo file: `image/ai-cricket-war-room-logo.png` (embedded as base64 in the SVG at render time). After deploys, refresh previews with [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) (**Scrape Again** a few times); WhatsApp uses the same scraper cache for `og:image`.
 
 **Share this prediction** (after a full war-room run): the verdict card’s **SHARE THIS PREDICTION** button saves a compact snapshot and returns a short URL under `/s/{id}`. Opening that link loads the **Shared prediction** card (Judge pick, confidence split, score band, key player, swing factor) without re-running agents; use **Run full war room** in the command bar when you want intel agents, live context, and the full Bull vs Bear debate.
 
-[After opening a shared link — Shared prediction card (DC vs RCB), Run full war room](https://cricket-war-room.onrender.com/s/ba91b4c5)
+[After opening a shared link — Shared prediction card (DC vs RCB), Run full war room](https://cricket-war-room.vercel.app/s/ba91b4c5)
 
-**Example link:** [https://cricket-war-room.onrender.com/s/ba91b4c5](https://cricket-war-room.onrender.com/s/ba91b4c5) *(IPL 2026 — DC vs RCB, Delhi; same saved pick as above.)*
+**Example link:** [https://cricket-war-room.vercel.app/s/ba91b4c5](https://cricket-war-room.vercel.app/s/ba91b4c5) *(IPL 2026 — DC vs RCB, Delhi; same saved pick as above.)*
 
 ---
 
 ## Screenshots
 
-Latest production captures from [cricket-war-room.onrender.com](https://cricket-war-room.onrender.com) (IPL 2026 example: **DC vs RCB, Delhi**). Order: **(3) home** → **(1) after search** → **(2) after full prediction** (over-by-over flow through agents, debate, and Judge).
+Latest production captures from [cricket-war-room.vercel.app](https://cricket-war-room.vercel.app) (IPL 2026 example: **DC vs RCB, Delhi**). Order: **(3) home** → **(1) after search** → **(2) after full prediction** (over-by-over flow through agents, debate, and Judge).
 
 ### 3) Homepage — before **Run war room**
 

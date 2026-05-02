@@ -182,7 +182,14 @@ async def fetch_cricapi_live(
     """
     api_key = os.environ.get("CRICAPI_KEY", "").strip()
     if not api_key:
-        return {"bullets": [], "live_score_snippet": "", "richness": 0, "match_count": 0, "error": None}
+        return {
+            "bullets": [],
+            "match_summaries": [],
+            "live_score_snippet": "",
+            "richness": 0,
+            "match_count": 0,
+            "error": None,
+        }
 
     try:
         r = await client.get(
@@ -194,11 +201,25 @@ async def fetch_cricapi_live(
         data = r.json()
     except Exception as e:  # noqa: BLE001
         err = str(e).strip()[:300] or type(e).__name__
-        return {"bullets": [], "live_score_snippet": "", "richness": 0, "match_count": 0, "error": err}
+        return {
+            "bullets": [],
+            "match_summaries": [],
+            "live_score_snippet": "",
+            "richness": 0,
+            "match_count": 0,
+            "error": err,
+        }
 
     if data.get("status") != "success":
         err = str(data.get("status", "unknown_status"))
-        return {"bullets": [], "live_score_snippet": "", "richness": 0, "match_count": 0, "error": err}
+        return {
+            "bullets": [],
+            "match_summaries": [],
+            "live_score_snippet": "",
+            "richness": 0,
+            "match_count": 0,
+            "error": err,
+        }
 
     all_matches: list[dict[str, Any]] = data.get("data") or []
 
@@ -217,6 +238,7 @@ async def fetch_cricapi_live(
         candidates = all_matches[:3]
 
     bullets: list[str] = []
+    match_summaries: list[dict[str, Any]] = []
     best_snippet = ""
     best_richness = 0
 
@@ -232,6 +254,14 @@ async def fetch_cricapi_live(
             line += f" [{status}]"
 
         bullets.append(f"[CricAPI] {line}")
+        if name or score_str or status:
+            match_summaries.append(
+                {
+                    "match": name,
+                    "scorecard": score_str,
+                    "status": status,
+                }
+            )
 
         # Evaluate richness for snippet selection
         richness = _score_richness(score_str + " " + status)
@@ -244,6 +274,7 @@ async def fetch_cricapi_live(
 
     return {
         "bullets": bullets,
+        "match_summaries": match_summaries,
         "live_score_snippet": best_snippet,
         "richness": best_richness,
         "match_count": len(all_matches),
@@ -362,7 +393,10 @@ async def build_match_context(
         280,
     )
 
-    stats_tables: dict[str, Any] = {}
+    summaries = cricapi.get("match_summaries") or []
+    stats_tables: dict[str, Any] = (
+        {"cricapi_current": summaries} if isinstance(summaries, list) and len(summaries) else {}
+    )
 
     # CricAPI structured score takes priority over RSS-scraped snippet
     live_score_snippet = cricapi.get("live_score_snippet") or _extract_live_score_snippet(news_bullets)

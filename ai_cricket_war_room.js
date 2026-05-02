@@ -1783,6 +1783,42 @@ let running = false;
 /** True after homepage demo hydrate; cleared on first real {@link runWarRoom}. */
 let _demoWarRoomActive = false;
 
+/**
+ * Canonical site origin for copied share links (no trailing slash).
+ * Set via `<meta name="war-room-share-origin" content="https://…">` in HTML for production;
+ * otherwise uses `window.location.origin` (localhost, preview hosts, etc.).
+ */
+function shareLinkOrigin() {
+  if (typeof document === "undefined") return "";
+  const el = document.querySelector('meta[name="war-room-share-origin"]');
+  const raw = el && el.getAttribute("content") != null ? String(el.getAttribute("content")).trim() : "";
+  if (raw && /^https?:\/\//i.test(raw)) return raw.replace(/\/+$/, "");
+  if (typeof window !== "undefined" && window.location && window.location.origin) {
+    return String(window.location.origin).replace(/\/+$/, "");
+  }
+  return "";
+}
+
+/**
+ * Absolute URL for shareable prediction links (`/s/{id}` or current path + query).
+ * Uses {@link shareLinkOrigin} when set (production meta), else `window.location.origin`.
+ *
+ * @param {string} pathname e.g. `/` or `/s/abc12345`
+ * @param {string} [search] query string with or without leading `?`
+ */
+function shareUrlFromPathnameAndSearch(pathname, search) {
+  const origin =
+    shareLinkOrigin() ||
+    (typeof window !== "undefined" && window.location && window.location.origin
+      ? String(window.location.origin).replace(/\/+$/, "")
+      : "");
+  let path = pathname != null && String(pathname).trim() ? String(pathname).trim() : "/";
+  if (!path.startsWith("/")) path = `/${path}`;
+  const rawQ = search != null ? String(search) : "";
+  const q = !rawQ ? "" : rawQ.startsWith("?") ? rawQ : `?${rawQ}`;
+  return `${origin}${path}${q}`;
+}
+
 /** Same origin when you open the app via `node server.mjs` (http://localhost:3333). Override if needed. */
 function apiBase() {
   if (typeof window !== 'undefined' && window.WAR_ROOM_API_BASE != null) {
@@ -2663,9 +2699,7 @@ function sharePackFromVerdict(matchLabel, v) {
  * @param {WarRoomVerdict} v
  */
 function buildPredictionShareUrlCompactP(matchLabel, v) {
-  const u = new URL(window.location.href);
-  u.hash = "";
-  u.search = "";
+  const u = new URL(shareUrlFromPathnameAndSearch(window.location.pathname || "/", ""));
   u.searchParams.set("p", encodeSharePack(sharePackFromVerdict(matchLabel, v)));
   return u.toString();
 }
@@ -2688,11 +2722,7 @@ async function resolvePredictionShareUrl(matchLabel, v) {
         const d = await r.json();
         const id = d && d.id != null ? String(d.id).trim().toLowerCase() : "";
         if (id && /^[a-f0-9]{8}$/.test(id)) {
-          const u = new URL(window.location.href);
-          u.hash = "";
-          u.search = "";
-          u.pathname = `/s/${id}`;
-          return u.toString();
+          return shareUrlFromPathnameAndSearch(`/s/${id}`, "");
         }
       }
     } catch {
@@ -3908,6 +3938,8 @@ const WEATHER_RX =
   /\b(rain|dew|humid|hot|cold|weather|forecast|thunder|overcast|heat|cool|wind)\b/i;
 const PITCH_RX =
   /\b(pitch|wicket|spin|seam|bounce|turn|crack|rough|grass|surface)\b/i;
+/** Innings score fragments like 132/3 (20 ov) — CricAPI bullets and many RSS titles. */
+const STATS_SCORELINE_RX = /\b\d{1,3}\/\d{1,2}\s*\([\d.]+\s*ov\)/i;
 
 /**
  * @param {string} agentId
@@ -3931,6 +3963,8 @@ function buildAgentEvidenceString(agentId, ctx) {
         return clipText(String(st), 4000);
       }
     }
+    const scoreHits = bullets.filter((b) => STATS_SCORELINE_RX.test(b));
+    if (scoreHits.length) return clipText(scoreHits.join("\n"), 4000);
     return "";
   }
 
@@ -3994,8 +4028,12 @@ function buildMergedIntelEvidence(agentId, ctx) {
           : agentId === "pitch"
             ? "pitch, surface, spin, seam, bounce, turn, or wear"
             : "your specialty";
+  const statsClarifier =
+    agentId === "stats"
+      ? " Lines that include innings totals (e.g. 132/3 (20 ov)) or stated win margins count as stats evidence for this section."
+      : "";
   return (
-    `[Ingestion did not isolate lines for this agent only — write at most one short sentence using ONLY facts in the headlines below that clearly relate to: ${roleHint}; if none apply, respond with exactly: ${INTEL_FALLBACK}]\n\n` +
+    `[Ingestion did not isolate lines for this agent only — write at most one short sentence using ONLY facts in the headlines below that clearly relate to: ${roleHint}; if none apply, respond with exactly: ${INTEL_FALLBACK}${statsClarifier}]\n\n` +
     clipText(news, 1200)
   );
 }

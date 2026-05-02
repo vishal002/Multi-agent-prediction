@@ -1792,6 +1792,23 @@ async function renderShareOgPng(pack) {
 }
 
 /**
+ * Canonical `https://host` for OG / share metadata (no trailing slash).
+ * Prefer `PUBLIC_SITE_URL`, then `VERCEL_URL`, else the request URL origin.
+ *
+ * @param {URL} reqUrl from `new URL(req.url, …)`
+ */
+function publicOgSiteBase(reqUrl) {
+  const explicit = (process.env.PUBLIC_SITE_URL || "").trim().replace(/\/+$/, "");
+  if (explicit) {
+    if (/^https?:\/\//i.test(explicit)) return explicit;
+    return `https://${explicit.replace(/^\/+/, "")}`;
+  }
+  const vercel = (process.env.VERCEL_URL || "").trim().replace(/\/+$/, "");
+  if (vercel) return `https://${vercel.replace(/^https?:\/\//i, "")}`;
+  return `${reqUrl.protocol}//${reqUrl.host}`;
+}
+
+/**
  * @param {import("http").IncomingMessage} req
  * @param {import("http").ServerResponse} res
  * @param {URL} url
@@ -1802,7 +1819,7 @@ async function renderShareOgPng(pack) {
  */
 function sendShareOgHtml(req, res, url, id, pack, appHref, opts = {}) {
   const clientRedirect = opts.clientRedirect === true;
-  const base = `${url.protocol}//${url.host}`;
+  const base = publicOgSiteBase(url);
   const canonical = `${base}/s/${id}`;
   const imgUrl = `${base}/api/og/share/${id}.png`;
   const w = String(pack.w || "").toUpperCase();
