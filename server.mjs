@@ -48,6 +48,10 @@
  * Short prediction links (no Mongo): POST /api/share-prediction → { id }; GET /api/share/:id → pack JSON;
  * GET /s/:id → 302 to /?sid=:id (pack persisted under data/share_predictions.json by default).
  * Open Graph PNGs (1200×630, Sharp): GET /og-homepage.png (site preview); GET /api/og/share/{id}.png (per share).
+ *
+ * Freemium (optional): GET /api/freemium-status — IST-day cap on successful Judge runs while IPL catalog
+ * has a non-completed fixture today (or IPL_FREEMIUM_ACTIVE=1). FREEMIUM_MAX_RUNS_PER_DAY defaults to 5; set 0 to disable.
+ * Bearer WAR_ROOM_API_SECRET bypasses the cap when the secret is configured.
  */
 
 import dotenv from "dotenv";
@@ -65,6 +69,12 @@ import { redis } from "./lib/redis.js";
 import { sanitizeAnthropicMessagesBody } from "./lib/sanitize.js";
 import { getSupabaseAdmin, sharePackGet, sharePackInsert, sharePacksLoadRecent } from "./lib/supabaseShare.mjs";
 import { rateLimitCheck } from "./middleware/rateLimit.js";
+import {
+  freemiumRecordSuccessfulJudgeRun,
+  freemiumShouldBlock,
+  freemiumStatusPayload,
+  isFreemiumLiveWindow,
+} from "./middleware/freemiumLive.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /**
@@ -552,6 +562,12 @@ function denyUnlessWarRoomSecret(req, res) {
   });
   res.end(JSON.stringify({ error: { message: "Unauthorized — set Authorization: Bearer or unset WAR_ROOM_API_SECRET." } }));
   return false;
+}
+
+/** When the deployer set a shared secret and the client presents it, skip IPL freemium caps. */
+function freemiumBypass(req) {
+  if (!WAR_ROOM_API_SECRET) return false;
+  return warRoomBearerOk(req);
 }
 
 /**
@@ -1482,6 +1498,8 @@ function normalizeSharePredictionPack(body) {
   if (k) pack.k = k;
   const f = clip(o.f, 120);
   if (f) pack.f = f;
+  const h = clip(o.h, 200);
+  if (h) pack.h = h;
   return pack;
 }
 
@@ -1766,6 +1784,13 @@ async function buildShareOgSvg(pack) {
   }
 
   const matchBadge = truncateHard(label.replace(/\s+/g, " "), 40).toUpperCase();
+  const headlineBase =
+    pack.h && String(pack.h).trim()
+      ? String(pack.h).trim().replace(/\s+/g, " ")
+      : `War Room Verdict: ${winnerCode} wins — here's why.`;
+  const headlineLine1 = truncateHard(headlineBase, 58);
+  const headlineLine2 =
+    headlineBase.length > 58 ? truncateHard(headlineBase.slice(58).trim(), 58) : "";
   const summaryRaw = pack.s ? String(pack.s).trim().replace(/\s+/g, " ") : "";
   const insight =
     summaryRaw ||
@@ -1859,6 +1884,13 @@ async function buildShareOgSvg(pack) {
   <!-- Brand -->
   ${brandLogoG}
   <text x="138" y="76" fill="rgba(255,255,255,0.65)" font-family="${fontDisplay}" font-size="26" letter-spacing="3">${escapeXmlText("CRICKET WAR ROOM")}</text>
+  <text x="72" y="108" fill="rgba(248,113,113,0.95)" font-family="${fontUi}" font-size="12" font-weight="700" letter-spacing="2">${escapeXmlText("WAR ROOM VERDICT")}</text>
+  <text x="72" y="132" fill="#f8fafc" font-family="${fontUi}" font-size="19" font-weight="700">${escapeXmlText(headlineLine1)}</text>
+  ${
+    headlineLine2
+      ? `<text x="72" y="158" fill="#e2e8f0" font-family="${fontUi}" font-size="17" font-weight="600">${escapeXmlText(headlineLine2)}</text>`
+      : ""
+  }
 
   <!-- Top badges (right) -->
   <rect x="560" y="46" width="378" height="34" rx="17" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)"/>
@@ -1960,16 +1992,19 @@ function sendShareOgHtml(req, res, url, id, pack, appHref, opts = {}) {
   const base = publicOgSiteBase(req, url);
   const canonical = `${base}/s/${id}`;
   // ?v= bumps when OG pipeline changes so Meta/WhatsApp refetch the bitmap.
-  const imgUrl = `${base}/api/og/share/${id}.png?v=3`;
+  const imgUrl = `${base}/api/og/share/${id}.png?v=4`;
   const ogSecureImgMeta = /^https:\/\//i.test(imgUrl)
     ? `<meta property="og:image:secure_url" content="${escapeHtmlAttr(imgUrl)}" />`
     : "";
   const w = String(pack.w || "").toUpperCase();
   const c = Math.min(100, Math.max(0, Math.round(Number(pack.c) || 55)));
-  const title = `${w} wins (${c}% AI confidence) — tap for the war room`;
+  const hook =
+    (pack.h && truncateHard(String(pack.h), 200)) ||
+    `War Room Verdict: ${w} wins — here's why.`;
+  const title = `${hook} (${c}% confidence)`;
   const desc =
     (pack.s && truncateHard(String(pack.s), 220)) ||
-    `AI verdict: ${w} at ${c}% model confidence — not win odds. Open for Bull vs Bear and the full Judge card.`;
+    `${hook} Open for Bull vs Bear, intel agents, and the full Judge card.`;
   const redirectScript = clientRedirect
     ? `<script>location.replace(${JSON.stringify(appHref)});</script>`
     : "";
@@ -1991,7 +2026,7 @@ function sendShareOgHtml(req, res, url, id, pack, appHref, opts = {}) {
   <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="${escapeHtmlAttr(`${w} wins — AI verdict preview card`)}" />
+  <meta property="og:image:alt" content="${escapeHtmlAttr(truncateHard(hook, 120))}" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${escapeHtmlAttr(title)}" />
   <meta name="twitter:description" content="${escapeHtmlAttr(desc)}" />
@@ -2065,6 +2100,8 @@ export async function warRoomHttpHandler(req, res) {
       pathname === "/api/judge/accuracy" ||
       pathname === "/api/accuracy" ||
       pathname === "/api/judge/predictions-by-match" ||
+      pathname === "/api/judge/recent-settled" ||
+      pathname === "/api/freemium-status" ||
       pathname === "/api/version" ||
       pathname === "/api/share-prediction" ||
       pathname.startsWith("/api/share/") ||
@@ -2088,6 +2125,18 @@ export async function warRoomHttpHandler(req, res) {
       "Cache-Control": "no-cache",
     });
     res.end(VERSION_INFO_JSON);
+    return;
+  }
+
+  if (req.method === "GET" && pathname === "/api/freemium-status") {
+    const ip = clientIp(req);
+    const payload = await freemiumStatusPayload(matchSuggestionsRows, ip);
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      ...corsHeaders(req),
+      "Cache-Control": "no-store",
+    });
+    res.end(JSON.stringify(payload));
     return;
   }
 
@@ -2253,6 +2302,24 @@ export async function warRoomHttpHandler(req, res) {
     }
     if (!denyUnlessWarRoomSecret(req, res)) return;
 
+    const ipJudge = clientIp(req);
+    if (!freemiumBypass(req) && (await freemiumShouldBlock(ipJudge, matchSuggestionsRows))) {
+      const st = await freemiumStatusPayload(matchSuggestionsRows, ipJudge);
+      res.writeHead(429, {
+        "Content-Type": "application/json; charset=utf-8",
+        ...corsHeaders(req),
+        "Retry-After": "3600",
+      });
+      res.end(
+        JSON.stringify({
+          error: "freemium_limit",
+          message: `Free tier: up to ${st.limit} full war rooms per India day while IPL fixtures are live. Resets at midnight IST.`,
+          ...st,
+        })
+      );
+      return;
+    }
+
     const target = `${JUDGE_SERVICE_URL}/predict`;
     const rb = await readBody(req, { maxBytes: MAX_BODY_JUDGE_BYTES });
     if (!rb.ok) {
@@ -2277,6 +2344,20 @@ export async function warRoomHttpHandler(req, res) {
         body: body && body.trim() ? body : "{}",
       });
       const text = await r.text();
+      if (
+        r.ok &&
+        !freemiumBypass(req) &&
+        isFreemiumLiveWindow(matchSuggestionsRows)
+      ) {
+        try {
+          const j = JSON.parse(text);
+          if (j && typeof j.prediction_id === "number") {
+            await freemiumRecordSuccessfulJudgeRun(ipJudge);
+          }
+        } catch {
+          /* ignore */
+        }
+      }
       res.writeHead(r.status, {
         "Content-Type": "application/json; charset=utf-8",
         ...corsHeaders(req),
@@ -2446,6 +2527,42 @@ export async function warRoomHttpHandler(req, res) {
     return;
   }
 
+  if (req.method === "GET" && pathname === "/api/judge/recent-settled") {
+    const limitRaw = url.searchParams.get("limit");
+    let limit = Number(limitRaw);
+    if (!Number.isFinite(limit)) limit = 20;
+    limit = Math.min(100, Math.max(1, Math.floor(limit)));
+    const target = `${JUDGE_SERVICE_URL}/predictions/recent-settled?limit=${limit}`;
+    const ctrl = AbortSignal.timeout(20_000);
+    try {
+      const r = await fetch(target, {
+        method: "GET",
+        signal: ctrl,
+        headers: { Accept: "application/json", ...judgeUpstreamAuthHeaders() },
+      });
+      const text = await r.text();
+      res.writeHead(r.status, {
+        "Content-Type": "application/json; charset=utf-8",
+        ...corsHeaders(req),
+        "Cache-Control": "no-store",
+      });
+      res.end(text);
+    } catch (e) {
+      res.writeHead(503, {
+        "Content-Type": "application/json; charset=utf-8",
+        ...corsHeaders(req),
+        "Cache-Control": "no-store",
+      });
+      res.end(
+        JSON.stringify({
+          error: "judge_service_unreachable",
+          message: e instanceof Error ? e.message : "Judge service unreachable",
+        })
+      );
+    }
+    return;
+  }
+
   if (req.method === "GET" && pathname === "/api/match-by-label") {
     const label = (url.searchParams.get("label") || "").trim();
     const dashNorm = (s) =>
@@ -2494,6 +2611,23 @@ export async function warRoomHttpHandler(req, res) {
       return;
     }
     if (!denyUnlessWarRoomSecret(req, res)) return;
+
+    const ipMsg = clientIp(req);
+    if (!freemiumBypass(req) && (await freemiumShouldBlock(ipMsg, matchSuggestionsRows))) {
+      const st = await freemiumStatusPayload(matchSuggestionsRows, ipMsg);
+      res.writeHead(429, {
+        "Content-Type": "application/json; charset=utf-8",
+        ...corsHeaders(req),
+        "Retry-After": "3600",
+      });
+      res.end(
+        JSON.stringify({
+          error: { type: "freemium_limit", message: `Free tier: up to ${st.limit} full war rooms per India day while IPL is live.` },
+          freemium: st,
+        })
+      );
+      return;
+    }
 
     const rbMsg = await readBody(req, { maxBytes: MAX_BODY_MESSAGES_BYTES });
     if (!rbMsg.ok) {

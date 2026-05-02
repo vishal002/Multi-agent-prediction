@@ -226,3 +226,31 @@ class PredictionsStore:
                 )
             )
         return out
+
+    def recent_settled_predictions(self, *, limit: int = 20) -> list[PredictionRow]:
+        """Most-recent-first rows that already have an actual result (for public accuracy ledger)."""
+        n = max(1, min(int(limit), 100))
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, match_id, predicted_winner, actual_winner, confidence, created_at
+                FROM predictions
+                WHERE actual_winner IS NOT NULL
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (n,),
+            ).fetchall()
+        out: list[PredictionRow] = []
+        for r in rows:
+            out.append(
+                PredictionRow(
+                    id=int(r[0]),
+                    match_id=str(r[1]),
+                    predicted_winner=str(r[2]),
+                    actual_winner=r[3],
+                    confidence=int(r[4]),
+                    created_at=str(r[5]),
+                )
+            )
+        return out

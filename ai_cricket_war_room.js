@@ -2472,7 +2472,7 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
       : "";
   verdictRootEl.innerHTML = `
     <div class="verdict-card">
-      <div class="verdict-kicker">Judge verdict</div>
+      <div class="verdict-kicker">War Room verdict</div>
       ${sub}
       ${judgeNote}
       <div class="verdict-winner-row">${verdictLogoHtml}<div class="verdict-winner">${escapeHtml(String(winDisplay).toUpperCase())} WINS</div></div>
@@ -2538,7 +2538,7 @@ function clipForShareUrl(text, maxLen) {
 }
 
 /**
- * @typedef {{ v: 1, l: string, w: string, c: number, s?: string, r?: string, k?: string, f?: string }} SharePackV1
+ * @typedef {{ v: 1, l: string, w: string, c: number, s?: string, r?: string, k?: string, f?: string, h?: string }} SharePackV1
  */
 
 /** Set when `?p=` or `?sid=` resolves; consumed by {@link applySharedPredictionPreviewFromUrl}. */
@@ -2568,6 +2568,7 @@ function sharePackV1FromApiBody(o) {
   if (raw.r != null && String(raw.r).trim()) out.r = String(raw.r);
   if (raw.k != null && String(raw.k).trim()) out.k = String(raw.k);
   if (raw.f != null && String(raw.f).trim()) out.f = String(raw.f);
+  if (raw.h != null && String(raw.h).trim()) out.h = String(raw.h);
   return out;
 }
 
@@ -2676,6 +2677,8 @@ function sharePackFromVerdict(matchLabel, v) {
   if (kp) pack.k = kp;
   const sf = clipForShareUrl(v.swing_factor === "—" ? "" : v.swing_factor, 48);
   if (sf) pack.f = sf;
+  const wcode = verdictWinnerToShareCode(teams, v.winner);
+  pack.h = clipForShareUrl(`War Room Verdict: ${wcode} wins — here's why.`, 180);
   return pack;
 }
 
@@ -2908,6 +2911,8 @@ function warRoomOptionalAuthHeaders() {
 
 function humanReadableHttpFailureMessage(status, serverDetail) {
   if (status === 429) {
+    const d = serverDetail != null && String(serverDetail).trim();
+    if (d && (d.includes("Free tier") || d.includes("war room") || d.includes("IST"))) return d;
     return "Rate limited — the API is busy. Try again in a minute.";
   }
   if (status === 502 || status === 503 || status === 504) {
@@ -2958,7 +2963,7 @@ async function fetchJudgeProxyWithRetry(url, init) {
 
 /**
  * @typedef {{ ok: true, prediction_id: number, verdict: WarRoomVerdict, accuracy?: { total_settled: number, correct: number, accuracy: number | null } }} JudgePredictOk
- * @typedef {{ ok: false, status: number }} JudgePredictErr
+ * @typedef {{ ok: false, status: number, freemiumMessage?: string }} JudgePredictErr
  */
 
 /**
@@ -2973,8 +2978,18 @@ async function postJudgePredict(matchId, debateTranscript) {
       headers: { "Content-Type": "application/json", Accept: "application/json" },
       body: JSON.stringify({ match_id: matchId, debate_transcript: debateTranscript }),
     });
-    if (!r.ok) return { ok: false, status: r.status };
-    const data = await r.json();
+    const text = await r.text();
+    if (!r.ok) {
+      let freemiumMessage = "";
+      try {
+        const j = JSON.parse(text);
+        if (j && j.error === "freemium_limit" && j.message) freemiumMessage = String(j.message);
+      } catch {
+        /* */
+      }
+      return { ok: false, status: r.status, freemiumMessage: freemiumMessage || undefined };
+    }
+    const data = JSON.parse(text);
     if (!data || typeof data !== "object" || !data.verdict) return { ok: false, status: 0 };
     return {
       ok: true,
@@ -3166,6 +3181,75 @@ function updateJudgeAccuracyFooterFromStats(stats, opts = {}) {
   }
   const pct = formatJudgeAccuracyPct(stats);
   el.textContent = `Settled predictions: ${stats.correct} of ${stats.total_settled} correct (${pct}).`;
+}
+
+/**
+ * @returns {Promise<{ enabled: boolean, live_window: boolean, limit: number, used: number, remaining: number, ist_date: string } | null>}
+ */
+async function fetchJsonFreemiumStatus() {
+  if (apiBase() === null) return null;
+  try {
+    const r = await fetch(`${apiBase()}/api/freemium-status`, { headers: { Accept: "application/json" } });
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j && typeof j === "object" ? j : null;
+  } catch {
+    return null;
+  }
+}
+
+async function refreshFreemiumPill() {
+  const pill = document.getElementById("freemiumStatusPill");
+  if (!pill) return;
+  const fr = await fetchJsonFreemiumStatus();
+  if (!fr || !fr.enabled || !fr.live_window || !fr.limit) {
+    pill.hidden = true;
+    pill.textContent = "";
+    return;
+  }
+  pill.hidden = false;
+  pill.textContent = `IST today: ${fr.remaining}/${fr.limit} free runs left`;
+  pill.title = `Used ${fr.used} of ${fr.limit} full war rooms while IPL fixtures are live. Resets midnight India (IST).`;
+}
+
+async function loadRecentVerdictsPanel() {
+  const box = document.getElementById("recentVerdictsBody");
+  if (!box) return;
+  if (apiBase() === null) {
+    box.innerHTML = '<p class="recent-verdicts__empty">Open over http(s) to load the ledger.</p>';
+    return;
+  }
+  try {
+    const r = await fetchJudgeProxyWithRetry(`${apiBase()}/api/judge/recent-settled?limit=20`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+    });
+    if (!r.ok) {
+      box.innerHTML =
+        '<p class="recent-verdicts__empty">Ledger unavailable — run the Judge service (or deploy with JUDGE_SERVICE_URL).</p>';
+      return;
+    }
+    const data = await r.json();
+    const preds = data && Array.isArray(data.predictions) ? data.predictions : [];
+    if (!preds.length) {
+      box.innerHTML =
+        '<p class="recent-verdicts__empty">No settled predictions yet. When actual winners are recorded for saved picks, they appear here.</p>';
+      return;
+    }
+    const rows = preds
+      .map((p) => {
+        const mid = String(p.match_id || "").trim();
+        const shortLabel = mid.length > 52 ? `${mid.slice(0, 49)}…` : mid;
+        const share = encodeURIComponent(mid);
+        const mark = p.correct ? "✓" : "✗";
+        const cls = p.correct ? "recent-verdicts__mark--ok" : "recent-verdicts__mark--bad";
+        return `<tr><td><span class="recent-verdicts__mark ${cls}" aria-label="${p.correct ? "Correct" : "Wrong"}">${mark}</span></td><td><a class="recent-verdicts__link" href="/?share=${share}">${escapeHtml(shortLabel)}</a></td><td>${escapeHtml(String(p.predicted_winner || "").toUpperCase())}</td><td>${escapeHtml(String(p.actual_winner || "").toUpperCase())}</td><td>${Number(p.confidence) || "—"}%</td></tr>`;
+      })
+      .join("");
+    box.innerHTML = `<table class="recent-verdicts__table"><thead><tr><th></th><th>Match</th><th>Called</th><th>Actual</th><th>Conf.</th></tr></thead><tbody>${rows}</tbody></table>`;
+  } catch {
+    box.innerHTML = '<p class="recent-verdicts__empty">Could not load recent verdicts.</p>';
+  }
 }
 
 async function refreshJudgeAccuracyFooter() {
@@ -3445,11 +3529,21 @@ async function callClaude(messages, system, maxTokens = 1000, groqRoute = 'misc'
     throw new Error(`Bad response (HTTP ${r.status}). Use http://localhost:3333 via "node server.mjs", not a raw .html file.`);
   }
   if (!r.ok) {
-    const raw =
+    let raw =
       d.error?.message ||
       (typeof d.error === "string" ? d.error : null) ||
       d.message ||
       `Request failed (${r.status})`;
+    if (
+      !raw &&
+      r.status === 429 &&
+      d.error &&
+      typeof d.error === "object" &&
+      d.error.type === "freemium_limit" &&
+      typeof d.error.message === "string"
+    ) {
+      raw = d.error.message;
+    }
     const msg =
       r.status === 429 || r.status === 502 || r.status === 503 || r.status === 504
         ? humanReadableHttpFailureMessage(r.status, typeof raw === "string" ? raw : "")
@@ -4918,6 +5012,13 @@ async function runWarRoom() {
   }
 
   try {
+    const frPre = await fetchJsonFreemiumStatus();
+    if (frPre && frPre.live_window && frPre.limit > 0 && frPre.remaining === 0) {
+      throw new Error(
+        `Free tier: all ${frPre.limit} full war rooms used for today (India time). Try again after midnight IST, or use an access key if your host provided one.`
+      );
+    }
+
     const matchContext = buildMatchContextBlock(match, insights, teams, ingestedCtx, liveState);
     setPhase('Debate in progress…', true);
     document.getElementById('runningLabel').textContent = `${teams.codeA} vs ${teams.codeB} · debate`;
@@ -5015,7 +5116,11 @@ async function runWarRoom() {
       } else {
         void refreshJudgeAccuracyFooter();
       }
+      void refreshFreemiumPill();
     } else {
+      if (judgePr.status === 429 && judgePr.freemiumMessage) {
+        throw new Error(judgePr.freemiumMessage);
+      }
       showTyping('bull');
       await sleep(400);
       const judgeReply = await callClaude(
@@ -5078,6 +5183,7 @@ async function runWarRoom() {
     setElDisplay('runningLabel', 'none');
     setElDisplay('runBtn', '');
     setElDisplay('resetBtn', 'none');
+    void refreshFreemiumPill();
   }
   running = false;
 }
@@ -5962,8 +6068,27 @@ void refreshJudgeAccuracyFooter();
 void (async () => {
   await applyShareQueryParam();
   await applySharedPredictionPreviewFromUrl();
-  await tryLoadDemoWarRoom();
+
+  let skipDemo = false;
+  try {
+    const ctx = await getTodayMatchContext();
+    const upcoming = ctx.rows
+      .filter((r) => !r.completed && r.date > ctx.todayStr)
+      .sort((a, b) => {
+        if (a.date !== b.date) return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+        return iplMatchNumberFromLabel(a.label) - iplMatchNumberFromLabel(b.label);
+      });
+    skipDemo = !!(ctx.todayLive[0] || upcoming[0]);
+  } catch {
+    /* keep demo */
+  }
+
+  if (!skipDemo) {
+    await tryLoadDemoWarRoom();
+  }
   const didAutoFillMatch = await autoPopulateTodayMatch();
+  void refreshFreemiumPill();
+  void loadRecentVerdictsPanel();
   if (didAutoFillMatch) await maybeAutoRunWarRoomAfterPopulate();
 })();
 
@@ -6308,6 +6433,9 @@ async function maybeAutoRunWarRoomAfterPopulate() {
 
   const match = (/** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"))?.value || "").trim();
   if (!match) return;
+
+  const fr = await fetchJsonFreemiumStatus();
+  if (fr && fr.live_window && fr.limit > 0 && fr.remaining === 0) return;
 
   trackWarRoomEvent("warroom_autorun_from_detect", { match });
   await runWarRoom();

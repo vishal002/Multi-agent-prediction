@@ -158,6 +158,28 @@ def accuracy(_auth: JudgeAuth) -> dict[str, Any]:
     }
 
 
+@app.get("/predictions/recent-settled")
+def predictions_recent_settled(_auth: JudgeAuth, limit: int = 20) -> dict[str, Any]:
+    """Latest predictions that already have actual_winner (trust / accuracy ledger)."""
+    n = max(1, min(int(limit), 100))
+    rows = get_store().recent_settled_predictions(limit=n)
+    return {
+        "predictions": [
+            {
+                "id": r.id,
+                "match_id": r.match_id,
+                "predicted_winner": r.predicted_winner,
+                "actual_winner": r.actual_winner,
+                "confidence": r.confidence,
+                "created_at": r.created_at,
+                "correct": str(r.predicted_winner).strip().upper()
+                == str(r.actual_winner or "").strip().upper(),
+            }
+            for r in rows
+        ],
+    }
+
+
 @app.get("/predictions/by-match")
 def predictions_by_match(
     _auth: JudgeAuth,

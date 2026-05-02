@@ -5443,3 +5443,135 @@ html[data-ui="ipl"][data-theme="light"] body {
 .verdict-affiliate-btn--my11 {
   border-color: rgba(96, 165, 250, 0.35);
 }
+
+/* ── Freemium pill + accuracy ledger ───────────────────────────── */
+.freemium-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0.28rem 0.55rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary, #94a3b8);
+  background: rgba(234, 179, 8, 0.12);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  border-radius: 999px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-verdicts {
+  width: 100%;
+  max-width: min(720px, 100%);
+  margin: 0 auto 0.65rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--color-border, rgba(148, 163, 184, 0.2));
+  background: var(--color-bg-elevated, rgba(15, 23, 42, 0.6));
+}
+
+.recent-verdicts__summary {
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-secondary, #94a3b8);
+  list-style: none;
+}
+.recent-verdicts__summary::-webkit-details-marker {
+  display: none;
+}
+
+.recent-verdicts__body {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.recent-verdicts__empty {
+  margin: 0;
+  color: var(--color-text-tertiary, #64748b);
+  line-height: 1.45;
+}
+
+.recent-verdicts__table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 280px;
+}
+.recent-verdicts__table th,
+.recent-verdicts__table td {
+  padding: 0.28rem 0.35rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+.recent-verdicts__table th {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary, #64748b);
+}
+
+.recent-verdicts__mark {
+  font-weight: 800;
+}
+.recent-verdicts__mark--ok {
+  color: #4ade80;
+}
+.recent-verdicts__mark--bad {
+  color: #f87171;
+}
+
+.recent-verdicts__link {
+  color: var(--color-accent, #7dd3fc);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Mobile-first: verdict before intel/debate; sticky controls + safe area */
+@media (max-width: 760px) {
+  .dashboard:not(.dashboard--pre-war-room) {
+    display: flex !important;
+    flex-direction: column;
+  }
+  .dashboard:not(.dashboard--pre-war-room) .dash-col--stage {
+    order: 1;
+  }
+  .dashboard:not(.dashboard--pre-war-room) .dash-col--debate {
+    order: 2;
+  }
+  .dashboard:not(.dashboard--pre-war-room) .dash-col--agents {
+    order: 3;
+  }
+
+  .war-room__col--controls {
+    position: sticky;
+    bottom: 0;
+    z-index: 50;
+    padding-bottom: max(0.4rem, env(safe-area-inset-bottom, 0));
+    margin-top: auto;
+    background: color-mix(in srgb, var(--color-bg-base, #070b12) 94%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: var(--radius-md, 10px) var(--radius-md, 10px) 0 0;
+    box-shadow: 0 -6px 28px rgba(0, 0, 0, 0.35);
+  }
+
+  .command-bar__actions {
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .freemium-pill {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+}

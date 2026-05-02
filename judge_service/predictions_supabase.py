@@ -167,6 +167,30 @@ class SupabasePredictionsStore:
             )
         return out
 
+    def recent_settled_predictions(self, *, limit: int = 20) -> list[PredictionRow]:
+        n = max(1, min(int(limit), 100))
+        res = (
+            self._client.table("judge_predictions")
+            .select("id, match_id, predicted_winner, actual_winner, confidence, created_at")
+            .not_.is_("actual_winner", "null")
+            .order("id", desc=True)
+            .limit(n)
+            .execute()
+        )
+        out: list[PredictionRow] = []
+        for r in res.data or []:
+            out.append(
+                PredictionRow(
+                    id=int(r["id"]),
+                    match_id=str(r["match_id"]),
+                    predicted_winner=str(r["predicted_winner"]),
+                    actual_winner=r.get("actual_winner"),
+                    confidence=int(r["confidence"]),
+                    created_at=str(r["created_at"]),
+                )
+            )
+        return out
+
 
 def supabase_configured() -> bool:
     return bool(os.environ.get("SUPABASE_URL", "").strip() and os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip())
