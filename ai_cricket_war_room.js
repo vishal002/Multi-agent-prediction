@@ -1176,6 +1176,49 @@ function compareMatchSuggestionsNewestFirst(a, b) {
   return a.venue.localeCompare(b.venue, undefined, { sensitivity: "base" });
 }
 
+/**
+ * Empty fixture search: today → yesterday → other past (newest first) → nearest upcoming →
+ * undated / placeholder rows (stable catalog order). Mirrors server `compareMatchSuggestionsEmptyQuery`.
+ * @param {{ date: string, label: string, venue: string, order?: number }} a
+ * @param {{ date: string, label: string, venue: string, order?: number }} b
+ */
+function compareMatchSuggestionsEmptyQuery(a, b) {
+  const tier = (row) => {
+    const d = String(row.date || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d === "1970-01-01") return 4;
+    const today = todayLocalDateStr();
+    const yest = yesterdayLocalDateStr();
+    if (d === today) return 0;
+    if (d === yest) return 1;
+    if (d < today) return 2;
+    return 3;
+  };
+  const ta = tier(a);
+  const tb = tier(b);
+  if (ta !== tb) return ta - tb;
+  if (ta === 0 || ta === 1) {
+    const na = iplMatchNumberFromLabel(a.label);
+    const nb = iplMatchNumberFromLabel(b.label);
+    if (na !== nb) return na - nb;
+    return String(a.label).localeCompare(String(b.label), undefined, { sensitivity: "base" });
+  }
+  if (ta === 2) {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    const na = iplMatchNumberFromLabel(a.label);
+    const nb = iplMatchNumberFromLabel(b.label);
+    if (na !== nb) return na - nb;
+    return String(a.venue || "").localeCompare(String(b.venue || ""), undefined, { sensitivity: "base" });
+  }
+  if (ta === 3) {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    const na = iplMatchNumberFromLabel(a.label);
+    const nb = iplMatchNumberFromLabel(b.label);
+    if (na !== nb) return na - nb;
+    return String(a.venue || "").localeCompare(String(b.venue || ""), undefined, { sensitivity: "base" });
+  }
+  return (a.order ?? 0) - (b.order ?? 0);
+}
+
 // ─── Match-status helpers (LIVE / TODAY / UPCOMING / COMPLETED / TBD) ────────
 
 /** Today's date as YYYY-MM-DD in local time — single source of truth. */
@@ -1185,6 +1228,17 @@ function todayLocalDateStr() {
     now.getFullYear(),
     String(now.getMonth() + 1).padStart(2, "0"),
     String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+/** Calendar yesterday as YYYY-MM-DD in local time (for fixture dropdown ordering). */
+function yesterdayLocalDateStr() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, "0"),
+    String(d.getDate()).padStart(2, "0"),
   ].join("-");
 }
 
@@ -1345,7 +1399,7 @@ function getMatchSuggestionHits(rows, q, limit) {
   if (qLower) {
     pool = [...pool].sort(compareMatchSuggestionsNewestFirst);
   } else {
-    pool = [...pool].sort((a, b) => a.order - b.order);
+    pool = [...pool].sort(compareMatchSuggestionsEmptyQuery);
   }
   return pool.slice(0, limit).map((row) => {
     const hit = { label: row.label, date: row.date, venue: row.venue };

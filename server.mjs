@@ -217,6 +217,70 @@ function compareMatchSuggestionsNewestFirst(a, b) {
   return a.venue.localeCompare(b.venue, undefined, { sensitivity: "base" });
 }
 
+/** @returns {string} YYYY-MM-DD in the Node process local timezone */
+function matchSuggestTodayLocalStr() {
+  const now = new Date();
+  return [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+/** @returns {string} YYYY-MM-DD for calendar yesterday (local time) */
+function matchSuggestYesterdayLocalStr() {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, "0"),
+    String(d.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+/**
+ * Empty `q` on /api/match-suggest: today → yesterday → other past (newest first) →
+ * nearest upcoming → undated / sentinel rows (stable catalog order).
+ * @param {{ date: string, label: string, venue: string, order: number }} a
+ * @param {{ date: string, label: string, venue: string, order: number }} b
+ */
+function compareMatchSuggestionsEmptyQuery(a, b) {
+  const tier = (row) => {
+    const d = String(row.date || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d === "1970-01-01") return 4;
+    const today = matchSuggestTodayLocalStr();
+    const yest = matchSuggestYesterdayLocalStr();
+    if (d === today) return 0;
+    if (d === yest) return 1;
+    if (d < today) return 2;
+    return 3;
+  };
+  const ta = tier(a);
+  const tb = tier(b);
+  if (ta !== tb) return ta - tb;
+  if (ta === 0 || ta === 1) {
+    const na = iplMatchNumberFromLabel(a.label);
+    const nb = iplMatchNumberFromLabel(b.label);
+    if (na !== nb) return na - nb;
+    return String(a.label).localeCompare(String(b.label), undefined, { sensitivity: "base" });
+  }
+  if (ta === 2) {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    const na = iplMatchNumberFromLabel(a.label);
+    const nb = iplMatchNumberFromLabel(b.label);
+    if (na !== nb) return na - nb;
+    return String(a.venue || "").localeCompare(String(b.venue || ""), undefined, { sensitivity: "base" });
+  }
+  if (ta === 3) {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    const na = iplMatchNumberFromLabel(a.label);
+    const nb = iplMatchNumberFromLabel(b.label);
+    if (na !== nb) return na - nb;
+    return String(a.venue || "").localeCompare(String(b.venue || ""), undefined, { sensitivity: "base" });
+  }
+  return (a.order ?? 0) - (b.order ?? 0);
+}
+
 const TEAM_SUGGEST_ALIASES = { KXIP: "PBKS", DD: "DC" };
 
 /** @param {string} qRaw */
@@ -2010,7 +2074,7 @@ export async function warRoomHttpHandler(req, res) {
     if (q) {
       pool = [...pool].sort(compareMatchSuggestionsNewestFirst);
     } else {
-      pool = [...pool].sort((a, b) => a.order - b.order);
+      pool = [...pool].sort(compareMatchSuggestionsEmptyQuery);
     }
     const suggestions = pool.slice(0, limit).map((r) => {
       const o = { label: r.label, date: r.date, venue: r.venue };
