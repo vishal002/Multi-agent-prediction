@@ -10,7 +10,7 @@
   "functions": {
     "api/index.mjs": {
       "maxDuration": 300,
-      "includeFiles": "{dist/**,lib/**,middleware/**,package.json,match_suggestions.json,litellm.config.yaml}"
+      "includeFiles": "{dist/**,image/**,lib/**,middleware/**,package.json,match_suggestions.json,litellm.config.yaml}"
     },
     "api/judge/predict.py": {
       "maxDuration": 60,

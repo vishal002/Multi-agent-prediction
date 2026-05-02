@@ -4,11 +4,10 @@ const AGENTS = [
   { id:"weather", sym:"W", name:"Weather agent", role:"Conditions analyzer" },
   { id:"pitch",   sym:"P", name:"Pitch agent",   role:"Surface intelligence" },
   { id:"news",    sym:"N", name:"News agent",    role:"Sentiment & intel" },
-  { id:"live",    sym:"⚡", name:"Live Monitor",  role:"Real-time score & prediction updater" },
 ];
 
 const ARCH = [
-  { title:"Data ingestion agents", desc:"Six specialist agents run in parallel — stats, news, weather, pitch, social signals, and the Live Monitor which tracks real-time in-game scores and refreshes predictions as the match progresses. Output: structured JSON context fed to the orchestrator.", tags:["Parallel execution","Web scraping","ESPN / Cricinfo","OpenMeteo","Live score polling"] },
+  { title:"Data ingestion agents", desc:"Five specialist agents run in parallel — scout, stats, weather, pitch, and news — each with its own evidence slice from RSS, APIs, and structured feeds. Output: structured JSON context fed to the orchestrator.", tags:["Parallel execution","Web scraping","ESPN / Cricinfo","OpenMeteo","RSS context"] },
   { title:"Orchestrator (LangGraph)", desc:"Central orchestrator aggregates all agent outputs into a unified match context object and fans it out to the debate engine. Handles retries, timeouts and context windowing.", tags:["LangGraph","Agent mesh","Context builder","FastAPI"] },
   { title:"Debate engine", desc:"Two adversarial analyst agents — Bull (favors Team A) and Bear (favors Team B) — argue for four rounds. Each has the same context but a different directive persona and cannot see the other's reasoning mid-round.", tags:["Adversarial AI","Multi-turn debate","Tool calls","4-round format"] },
   { title:"Judge agent + confidence scorer", desc:"A neutral Judge LLM reads the full transcript and produces a structured verdict: winner, confidence %, score range, key player, and swing factor. Output validated against a JSON schema.", tags:["Structured output","JSON schema","Confidence scoring","Historical calibration"] },
@@ -1209,17 +1208,6 @@ function isMatchInPast(m) {
 }
 
 /**
- * @param {{ date?: string } | string | null | undefined} m
- * @returns {boolean} true when the fixture is scheduled for today
- */
-function isMatchToday(m) {
-  if (!m) return false;
-  const dateStr = typeof m === "string" ? m : String(m.date || "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
-  return dateStr === todayLocalDateStr();
-}
-
-/**
  * Classify a fixture row into one of the UX modes used by the dropdown badges
  * and the war-room flow.
  *
@@ -1309,7 +1297,7 @@ function cacheMatchResult(label, result, meta) {
 /**
  * Best-effort lookup for the fixture date when we only have the user-typed
  * match label. Used by the date-based past-match guard and the today-only
- * live-monitor gate.
+ * today-only live-score prefill.
  *
  * Order: bundled fallback rows → cached completed result → null.
  *
@@ -1414,10 +1402,7 @@ const HOWTO = [
 
 function renderAgents() {
   document.getElementById('agentsList').innerHTML = AGENTS.map((a) => {
-    const refreshBtn =
-      a.id === "live"
-        ? ""
-        : `<button type="button" class="agent-intel-refresh" id="intel-refresh-${a.id}" data-intel-refresh="${a.id}" hidden aria-label="Refresh ${escapeHtml(a.name)}"><svg class="agent-intel-refresh__icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 .49-3.56"></path></svg></button>`;
+    const refreshBtn = `<button type="button" class="agent-intel-refresh" id="intel-refresh-${a.id}" data-intel-refresh="${a.id}" hidden aria-label="Refresh ${escapeHtml(a.name)}"><svg class="agent-intel-refresh__icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 .49-3.56"></path></svg></button>`;
     return `
     <div class="agent-row agent-row--compact agent-row--skeleton" id="row-${a.id}">
       <div class="agent-icon" id="icon-${a.id}">${a.sym}</div>
@@ -3438,7 +3423,7 @@ function resolveWinnerDisplay(teams, winnerCodeOrName) {
  * @param {Array<{role: string, content: string}>} messages
  * @param {string} system
  * @param {number} [maxTokens]
- * @param {'intel'|'debate'|'judge'|'live'|'over'|'misc'} [groqRoute] forwarded to the proxy for Groq model + cap selection (ignored by Anthropic after strip)
+ * @param {'intel'|'debate'|'judge'|'over'|'misc'} [groqRoute] forwarded to the proxy for Groq model + cap selection (ignored by Anthropic after strip)
  */
 async function callClaude(messages, system, maxTokens = 1000, groqRoute = 'misc') {
   const r = await fetch(`${apiBase()}/api/messages`, {
@@ -3650,7 +3635,6 @@ let intelRefreshSession = null;
 function clearIntelRefreshSession() {
   intelRefreshSession = null;
   for (const a of AGENTS) {
-    if (a.id === "live") continue;
     const btn = document.getElementById(`intel-refresh-${a.id}`);
     if (btn) /** @type {HTMLButtonElement} */ (btn).hidden = true;
   }
@@ -3667,7 +3651,6 @@ function isIntelFallbackInsightText(text) {
  * @param {string} agentId
  */
 function syncIntelRefreshButtonForAgent(agentId) {
-  if (agentId === "live") return;
   const btn = document.getElementById(`intel-refresh-${agentId}`);
   const ins = document.getElementById(`insight-${agentId}`);
   if (!btn || !ins) return;
@@ -3682,7 +3665,7 @@ function syncIntelRefreshButtonForAgent(agentId) {
  */
 function syncAllIntelRefreshButtons() {
   for (const a of AGENTS) {
-    if (a.id !== "live") syncIntelRefreshButtonForAgent(a.id);
+    syncIntelRefreshButtonForAgent(a.id);
   }
 }
 
@@ -3714,7 +3697,7 @@ function buildSingleAgentIntelSystem(agentMeta) {
  * @param {string} agentId
  */
 async function runSingleIntelAgentRefresh(agentId) {
-  if (!intelRefreshSession || agentId === "live") return;
+  if (!intelRefreshSession) return;
   const meta = AGENTS.find((a) => a.id === agentId);
   if (!meta) return;
 
@@ -4184,12 +4167,6 @@ function buildAgentEvidenceString(agentId, ctx) {
     return "";
   }
 
-  if (agentId === "live") {
-    const snippet = ctx?.live_score_snippet;
-    if (snippet && typeof snippet === "string" && snippet.trim()) return snippet.trim();
-    return "";
-  }
-
   return "";
 }
 
@@ -4247,7 +4224,7 @@ function extractLiveStateFromCtx(ctx) {
  * Call the server's /api/live-score endpoint.
  * @param {string} match
  * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
- * @param {{ fresh?: boolean }} [opts] fresh=true bypasses ingestion cache (manual fetch + live monitor polls).
+ * @param {{ fresh?: boolean }} [opts] fresh=true bypasses ingestion cache for a manual refresh.
  * @returns {Promise<{ snippet: string, hint?: string, unreachable?: boolean }>}
  */
 async function fetchLiveScoreDetail(match, teams, opts) {
@@ -4396,154 +4373,6 @@ function debateSystemBear(teams) {
 }
 
 const DEBATE_MAX_TOKENS = 140;
-
-// ─── Live Monitor state ─────────────────────────────────────────────────────
-let liveMonitorTimer = null;
-let liveMonitorUpdateCount = 0;
-const LIVE_MONITOR_MAX_UPDATES = 8;
-let _lastLiveSnippet = "";
-let _liveMonitorActive = false;
-
-/**
- * Starts the background live-score polling loop.
- * @param {string} match
- * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
- * @param {string} initialSnippet
- */
-function startLiveMonitor(match, teams, initialSnippet) {
-  stopLiveMonitor();
-  _lastLiveSnippet = initialSnippet || "";
-  liveMonitorUpdateCount = 0;
-  _liveMonitorActive = true;
-  const dot = document.getElementById("dot-live");
-  if (dot) dot.classList.add("live");
-  liveMonitorTimer = setInterval(async () => {
-    if (!_liveMonitorActive) { stopLiveMonitor(); return; }
-    if (liveMonitorUpdateCount >= LIVE_MONITOR_MAX_UPDATES) { stopLiveMonitor(); return; }
-    await runLiveMonitorCycle(match, teams);
-  }, 45_000);
-}
-
-function stopLiveMonitor() {
-  if (liveMonitorTimer) {
-    clearInterval(liveMonitorTimer);
-    liveMonitorTimer = null;
-  }
-  _liveMonitorActive = false;
-  const dot = document.getElementById("dot-live");
-  if (dot) dot.classList.remove("live");
-}
-
-/**
- * One poll cycle: fetch new score, update agent row, call LLM for revised prediction.
- * @param {string} match
- * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
- */
-async function runLiveMonitorCycle(match, teams) {
-  const snippet = await fetchLiveScore(match, teams, { fresh: true });
-  if (!snippet || snippet === _lastLiveSnippet) return;
-  _lastLiveSnippet = snippet;
-
-  // Update live agent insight row
-  const insightEl = document.getElementById("insight-live");
-  if (insightEl) {
-    insightEl.textContent = snippet.slice(0, 200);
-    insightEl.classList.add("show");
-  }
-
-  // Auto-populate live score bar if user hasn't typed anything
-  const liveInput = /** @type {HTMLInputElement|null} */ (document.getElementById("liveScoreInput"));
-  const liveClear = document.getElementById("liveScoreClear");
-  if (liveInput && !liveInput.value.trim()) {
-    liveInput.value = snippet;
-    if (liveClear) liveClear.hidden = false;
-  }
-
-  // Only update verdict if one is already rendered
-  const verdictEl = document.getElementById("verdictArea");
-  if (!verdictEl || !verdictEl.innerHTML.trim()) return;
-
-  liveMonitorUpdateCount++;
-  await updateLivePrediction(match, teams, snippet);
-}
-
-/**
- * Ask the LLM for a revised win probability given the current live score.
- * @param {string} match
- * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
- * @param {string} liveSnippet
- */
-async function updateLivePrediction(match, teams, liveSnippet) {
-  try {
-    const prompt =
-      `Match: "${match}"\n` +
-      `Teams: ${teams.teamA} (Team A) vs ${teams.teamB} (Team B)\n` +
-      `Current live state: ${liveSnippet}\n\n` +
-      `Based solely on this in-game situation, estimate updated win probabilities.\n` +
-      `Return ONLY this JSON (no markdown, no extra keys):\n` +
-      `{"team_a_win_pct":<integer 0-100>,"team_b_win_pct":<integer 0-100>,"reasoning":"<≤20 words>","situation_label":"<e.g. Team A dominant / Tight contest / Team B on top>"}`;
-    const raw = await callClaude(
-      [{ role: "user", content: prompt }],
-      "You are a live cricket probability estimator. Given the current match state, return only valid JSON with updated win percentages.",
-      120,
-      "live"
-    );
-    let parsed;
-    try {
-      parsed = JSON.parse(extractJudgeJsonObject(raw));
-    } catch { return; }
-    appendLiveUpdate(liveSnippet, parsed, teams);
-  } catch { /* silently fail — never crash the UI */ }
-}
-
-/**
- * Prepend a live-update card to #liveUpdatesArea.
- * @param {string} liveSnippet
- * @param {{ team_a_win_pct?: unknown, team_b_win_pct?: unknown, reasoning?: unknown, situation_label?: unknown }} prediction
- * @param {{ teamA: string, teamB: string }} teams
- */
-function appendLiveUpdate(liveSnippet, prediction, teams) {
-  const container = document.getElementById("liveUpdatesArea");
-  if (!container) return;
-  container.hidden = false;
-
-  const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const teamAPct = Math.min(100, Math.max(0, Number(prediction.team_a_win_pct) || 50));
-  const teamBPct = Math.min(100, Math.max(0, Number(prediction.team_b_win_pct) || (100 - teamAPct)));
-  const reasoning = String(prediction.reasoning || "").trim();
-  const situationLabel = String(prediction.situation_label || "").trim();
-
-  const card = document.createElement("div");
-  card.className = "live-update-card";
-  card.setAttribute("role", "status");
-  card.innerHTML = `
-    <div class="live-update-card__header">
-      <span class="live-dot" aria-hidden="true"></span>
-      <span class="live-update-card__label">Live update</span>
-      <span class="live-update-card__time">${escapeHtml(time)}</span>
-      ${situationLabel ? `<span class="live-update-card__situation">${escapeHtml(situationLabel)}</span>` : ""}
-    </div>
-    <div class="live-update-card__score">${escapeHtml(liveSnippet.slice(0, 280))}</div>
-    <div class="live-update-card__prob">
-      <div class="live-update-card__team-row">
-        <span class="live-update-card__team-name">${escapeHtml(teams.teamA)}</span>
-        <span class="live-update-card__team-pct">${teamAPct}%</span>
-      </div>
-      <div class="live-update-card__bar">
-        <div class="live-update-card__bar-fill live-update-card__bar-fill--a" style="width:${teamAPct}%"></div>
-        <div class="live-update-card__bar-fill live-update-card__bar-fill--b" style="width:${teamBPct}%"></div>
-      </div>
-      <div class="live-update-card__team-row">
-        <span class="live-update-card__team-name">${escapeHtml(teams.teamB)}</span>
-        <span class="live-update-card__team-pct">${teamBPct}%</span>
-      </div>
-    </div>
-    ${reasoning ? `<div class="live-update-card__reasoning">${escapeHtml(reasoning)}</div>` : ""}
-  `;
-  const firstCard = container.querySelector(".live-update-card");
-  if (firstCard) container.insertBefore(card, firstCard);
-  else container.appendChild(card);
-}
 
 /**
  * Pull the scoreline for a specific team out of an `actual_score` string of
@@ -5007,7 +4836,7 @@ async function runWarRoom() {
   showNoLiveDataWarning(!liveState);
 
   const insights = {};
-  /** @type {Record<string, string>} agent.id (excluding live) -> trimmed/clipped evidence string */
+  /** @type {Record<string, string>} agent.id -> trimmed/clipped evidence string */
   const evidenceByAgent = {};
 
   for (const agent of AGENTS) {
@@ -5015,20 +4844,6 @@ async function runWarRoom() {
     removeAgentSkeleton(agent.id);
     document.getElementById('icon-'+agent.id).classList.add('on');
     document.getElementById('dot-'+agent.id).classList.add('live');
-
-    // Live Monitor: set insight directly from live state — no LLM call needed
-    if (agent.id === "live") {
-      const liveText = liveState?.text
-        || (ingestedCtx?.live_score_snippet ? String(ingestedCtx.live_score_snippet).trim() : "");
-      const el = document.getElementById('insight-live');
-      const displayText = liveText
-        ? liveText.slice(0, 200)
-        : "No live score detected — will poll every 45 s once match starts.";
-      el.textContent = displayText;
-      el.classList.add('show');
-      insights[agent.id] = liveText || "No live score available pre-match.";
-      continue;
-    }
 
     const evidenceBlock = clipText(
       buildMergedIntelEvidence(agent.id, ingestedCtx).trim(),
@@ -5046,9 +4861,8 @@ async function runWarRoom() {
   }
 
   // Single merged intel call: one LLM round-trip returns one sentence per specialty.
-  // Skip entirely if every non-live agent had empty evidence (already filled with INTEL_FALLBACK above).
-  const intelAgents = AGENTS.filter((a) => a.id !== "live");
-  const agentsNeedingLLM = intelAgents.filter((a) => evidenceByAgent[a.id]);
+  // Skip entirely if every agent had empty evidence (already filled with INTEL_FALLBACK above).
+  const agentsNeedingLLM = AGENTS.filter((a) => evidenceByAgent[a.id]);
 
   if (agentsNeedingLLM.length) {
     const sections = agentsNeedingLLM
@@ -5249,16 +5063,6 @@ async function runWarRoom() {
     scrollVerdictPanelIntoView({ behavior: "smooth" });
     setPhase(null);
     setElDisplay('runningLabel', 'none');
-
-    // Kick off the Live Monitor polling loop — polls every 45 s for score changes.
-    // Only worth doing for today's fixtures: future matches have nothing to poll
-    // and past matches already short-circuit via the completed-row branch above.
-    const matchDate = (completedRow && completedRow.date) || extractDateFromMatchInput(match);
-    if (isMatchToday({ date: matchDate })) {
-      startLiveMonitor(match, teams, liveState?.text || "");
-    } else {
-      stopLiveMonitor();
-    }
   } catch (e) {
     trackWarRoomEvent("warroom_run_failed", {
       match: (/** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"))?.value || "").trim(),
@@ -5279,10 +5083,7 @@ async function runWarRoom() {
 
 function resetWarRoom() {
   running = false;
-  stopLiveMonitor();
   showNoLiveDataWarning(false);
-  const liveUpdates = document.getElementById("liveUpdatesArea");
-  if (liveUpdates) { liveUpdates.innerHTML = ""; liveUpdates.hidden = true; }
   document.getElementById('debateArea')?.classList.remove('debate-area--final-only');
   document.getElementById('debateArea')?.classList.remove('debate-area--postmatch');
   document.getElementById('debateArea').innerHTML = `

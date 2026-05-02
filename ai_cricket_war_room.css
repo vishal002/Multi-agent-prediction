@@ -3949,119 +3949,6 @@ html.acwr-notice-dismissed .notice-strip {
   100% { opacity: 0; transform: translateY(4px); }
 }
 
-/* ─── Live Monitor agent — real-time prediction update cards ───────── */
-.live-updates-area {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.live-update-card {
-  background: rgba(129, 201, 149, 0.07);
-  border: 1px solid rgba(129, 201, 149, 0.22);
-  border-radius: var(--radius-md);
-  padding: 0.75rem 0.9rem;
-  animation: fadeUp 0.4s var(--ease-out);
-}
-
-.live-update-card__header {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin-bottom: 7px;
-  flex-wrap: wrap;
-}
-
-.live-update-card__label {
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-live);
-}
-
-.live-update-card__time {
-  font-size: 0.68rem;
-  color: var(--color-text-tertiary);
-}
-
-.live-update-card__situation {
-  margin-left: auto;
-  font-size: 0.66rem;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  background: var(--color-bg-muted);
-  border-radius: var(--radius-full);
-  padding: 2px 8px;
-  white-space: nowrap;
-}
-
-.live-update-card__score {
-  font-size: 0.78rem;
-  color: var(--color-text-primary);
-  line-height: 1.45;
-  margin-bottom: 10px;
-}
-
-.live-update-card__prob {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.live-update-card__team-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.live-update-card__team-name {
-  font-size: 0.71rem;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-}
-
-.live-update-card__team-pct {
-  font-size: 0.73rem;
-  font-weight: 700;
-  color: var(--color-text-primary);
-}
-
-.live-update-card__bar {
-  height: 5px;
-  border-radius: var(--radius-full);
-  background: var(--color-bg-muted);
-  overflow: hidden;
-  display: flex;
-  margin: 2px 0;
-}
-
-.live-update-card__bar-fill--a {
-  background: var(--color-accent);
-  height: 100%;
-  transition: width 0.55s var(--ease-out);
-}
-
-.live-update-card__bar-fill--b {
-  background: var(--color-danger);
-  height: 100%;
-  transition: width 0.55s var(--ease-out);
-}
-
-.live-update-card__reasoning {
-  margin-top: 8px;
-  font-size: 0.71rem;
-  color: var(--color-text-secondary);
-  font-style: italic;
-  line-height: 1.4;
-}
-
-/* Live Monitor icon symbol — smaller emoji needs alignment */
-.agent-icon {
-  font-size: 0.85rem;
-}
-
 /* ─── Mobile-first improvements ──────────────────────────────────── */
 
 /* Prevent iOS Safari from auto-zooming into inputs with small font-size */
@@ -4705,12 +4592,6 @@ html[data-ui="ipl"] .ui-toggle[aria-pressed="true"] {
   background: color-mix(in srgb, var(--color-accent) 5%, transparent);
 }
 
-/* ── Light mode: live update cards ──────────────────────────────── */
-[data-theme="light"] .live-update-card {
-  background: rgba(22, 163, 74, 0.05);
-  border-color: rgba(22, 163, 74, 0.20);
-}
-
 /* ── Light mode: over prediction summary ────────────────────────── */
 [data-theme="light"] .over-predict-summary {
   background: rgba(37, 99, 235, 0.06);
@@ -4749,7 +4630,7 @@ html[data-ui="ipl"] .ui-toggle[aria-pressed="true"] {
 html, body, .app-header, .command-bar, .surface, .verdict-card,
 .bubble, .btn, .agent-icon, .status-dot, .live-panel__head,
 .info-sheet, .g-search__shell, .g-search__dropdown,
-.over-card, .win-trend, .wicket-trend, .live-update-card,
+.over-card, .win-trend, .wicket-trend,
 .arch-item, .howto-card, .tip-box {
   transition: background-color 0.22s ease, border-color 0.22s ease,
     color 0.22s ease, box-shadow 0.22s ease;
@@ -4845,18 +4726,6 @@ html, body, .app-header, .command-bar, .surface, .verdict-card,
 
 /* ── Phase stepper separator: colour in light mode ───────────────── */
 [data-theme="light"] .phase-stepper__sep { color: #6b7280; opacity: 0.6; }
-
-/* ── Live Monitor agent icon: green glow ─────────────────────────── */
-.agent-row:has(#icon-live) .agent-icon.on {
-  color: #ecfdf5;
-  border-color: rgba(0, 232, 122, 0.55);
-  background-image: linear-gradient(
-      rgba(0, 232, 122, 0.55),
-      rgba(0, 232, 122, 0.55)
-    ),
-    var(--acwr-icon-app);
-  box-shadow: 0 0 0 3px var(--color-success-soft);
-}
 
 /* ── Mobile header: centered brand + pinned theme toggle ─────────── */
 @media (max-width: 760px) {

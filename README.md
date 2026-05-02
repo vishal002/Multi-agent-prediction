@@ -1,6 +1,6 @@
 # Cricket War Room
 
-> **Six AI roles debate a live fixture. One Judge delivers the verdict.**
+> **Five intel agents plus Bull vs Bear debate a fixture. One Judge delivers the verdict.**
 
 Scout → Stats → Weather → Pitch → News → **multi-round Bull vs Bear** → structured prediction (winner, confidence, score band, key player, swing factor).
 
@@ -92,7 +92,7 @@ https://cricket-war-room.vercel.app/?share=DC%20vs%20SRH%20%E2%80%94%20IPL%20202
 https://cricket-war-room.vercel.app/?share=IPL%202026%20%E2%80%94%20SRH%20vs%20DC%2C%20Hyderabad
 ```
 
-**Open Graph:** the main app HTML points `og:image` at `**GET /og-homepage.png`** (1200×630, logo + headline + agent strip, Sharp). The URL in HTML includes a `**?v=**` query (increment when the card design changes) so Meta/WhatsApp do not keep serving an old cached bitmap. For `**/s/{id}**` share links, crawlers get HTML whose `og:image` is `**GET /api/og/share/{id}.png**` (same dimensions; per-match verdict with logo in the brand bar and verdict column). Logo file: `image/ai-cricket-war-room-logo.png` (embedded as base64 in the SVG at render time). After deploys, refresh previews with [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) (**Scrape Again** a few times); WhatsApp uses the same scraper cache for `og:image`.
+**Open Graph:** the main app HTML points `og:image` at `**GET /og-homepage.png`** (1200×630, logo + headline + agent strip, Sharp). The URL in HTML includes a `**?v=**` query (increment when the card design changes) so Meta/WhatsApp do not keep serving an old cached bitmap. For `**/s/{id}**` share links, crawlers get HTML whose `og:image` is `**GET /api/og/share/{id}.png?v=…**` (same dimensions; per-match verdict with logo in the brand bar and verdict column). Absolute URLs use the request **Host** (or `PUBLIC_SITE_URL`) so `og:url` and `og:image` stay on the same hostname as the shared link — important for WhatsApp previews on custom domains. Logo file: `image/ai-cricket-war-room-logo.png` (embedded as base64 in the SVG at render time). After deploys, refresh previews with [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) (**Scrape Again** a few times); WhatsApp uses the same scraper cache for `og:image`.
 
 **Share this prediction** (after a full war-room run): the verdict card’s **SHARE THIS PREDICTION** button saves a compact snapshot and returns a short URL under `/s/{id}`. Opening that link loads the **Shared prediction** card (Judge pick, confidence split, score band, key player, swing factor) without re-running agents; use **Run full war room** in the command bar when you want intel agents, live context, and the full Bull vs Bear debate.
 

@@ -1594,14 +1594,14 @@ async function buildHomepageOgSvg() {
   ${logoG}
   <line x1="880" y1="100" x2="880" y2="530" stroke="#ffffff" stroke-opacity="0.07"/>
   <text x="380" y="218" fill="rgba(255,255,255,0.32)" font-family="${fontUi}" font-size="13" font-weight="600" letter-spacing="3">IPL 2026 · AI MATCH ANALYSIS</text>
-  <text x="380" y="288" fill="#ffffff" font-family="${fontDisplay}" font-size="86" font-weight="700">6 AIS.</text>
+  <text x="380" y="288" fill="#ffffff" font-family="${fontDisplay}" font-size="86" font-weight="700">5 AIS.</text>
   <text x="380" y="378" font-family="${fontDisplay}" font-size="86" font-weight="700">
     <tspan fill="#22c55e">ONE</tspan><tspan fill="#ffffff"> MATCH.</tspan>
   </text>
   <text x="380" y="468" fill="#ffffff" font-family="${fontDisplay}" font-size="86" font-weight="700">ZERO BIAS.</text>
   <text x="380" y="512" fill="rgba(255,255,255,0.48)" font-family="${fontUi}" font-size="18" font-weight="500">Bull vs Bear multi-round debate. Five intel agents, one Judge verdict.</text>
   <rect x="380" y="528" width="56" height="52" rx="10" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
-  <text x="408" y="562" text-anchor="middle" fill="#22c55e" font-family="${fontDisplay}" font-size="26">6</text>
+  <text x="408" y="562" text-anchor="middle" fill="#22c55e" font-family="${fontDisplay}" font-size="26">5</text>
   <text x="408" y="578" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="10" font-weight="600" letter-spacing="1">AGENTS</text>
   <rect x="448" y="528" width="88" height="52" rx="10" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
   <text x="492" y="562" text-anchor="middle" fill="#fbbf24" font-family="${fontDisplay}" font-size="22">MULTI</text>
@@ -1820,16 +1820,34 @@ async function renderShareOgPng(pack) {
 }
 
 /**
- * Canonical `https://host` for OG / share metadata (no trailing slash).
- * Prefer `PUBLIC_SITE_URL`, then `VERCEL_URL`, else the request URL origin.
+ * Canonical origin for OG / share metadata (no trailing slash).
+ * Prefer `PUBLIC_SITE_URL`, then the **request Host** (so `og:image` matches custom domains —
+ * `VERCEL_URL` alone is often a different `*.vercel.app` host than `og:url`, and link previews
+ * may drop the image). Then `VERCEL_URL`, then the URL object origin.
  *
+ * @param {import("http").IncomingMessage} req
  * @param {URL} reqUrl from `new URL(req.url, …)`
  */
-function publicOgSiteBase(reqUrl) {
+function publicOgSiteBase(req, reqUrl) {
   const explicit = (process.env.PUBLIC_SITE_URL || "").trim().replace(/\/+$/, "");
   if (explicit) {
     if (/^https?:\/\//i.test(explicit)) return explicit;
     return `https://${explicit.replace(/^\/+/, "")}`;
+  }
+  const host = String(req.headers?.host || "")
+    .trim()
+    .replace(/\/+$/, "");
+  if (host) {
+    const local =
+      /^localhost(:\d+)?$/i.test(host) ||
+      /^127\.0\.0\.1(:\d+)?$/i.test(host) ||
+      /^\[::1\](:\d+)?$/i.test(host);
+    const xf = String(req.headers?.["x-forwarded-proto"] || "")
+      .split(",")[0]
+      .trim()
+      .toLowerCase();
+    const proto = local ? (xf === "https" ? "https" : "http") : "https";
+    return `${proto}://${host}`;
   }
   const vercel = (process.env.VERCEL_URL || "").trim().replace(/\/+$/, "");
   if (vercel) return `https://${vercel.replace(/^https?:\/\//i, "")}`;
@@ -1847,9 +1865,13 @@ function publicOgSiteBase(reqUrl) {
  */
 function sendShareOgHtml(req, res, url, id, pack, appHref, opts = {}) {
   const clientRedirect = opts.clientRedirect === true;
-  const base = publicOgSiteBase(url);
+  const base = publicOgSiteBase(req, url);
   const canonical = `${base}/s/${id}`;
-  const imgUrl = `${base}/api/og/share/${id}.png`;
+  // ?v= bumps when OG pipeline changes so Meta/WhatsApp refetch the bitmap.
+  const imgUrl = `${base}/api/og/share/${id}.png?v=3`;
+  const ogSecureImgMeta = /^https:\/\//i.test(imgUrl)
+    ? `<meta property="og:image:secure_url" content="${escapeHtmlAttr(imgUrl)}" />`
+    : "";
   const w = String(pack.w || "").toUpperCase();
   const c = Math.min(100, Math.max(0, Math.round(Number(pack.c) || 55)));
   const title = `${w} wins (${c}% AI confidence) — tap for the war room`;
@@ -1873,6 +1895,7 @@ function sendShareOgHtml(req, res, url, id, pack, appHref, opts = {}) {
   <meta property="og:description" content="${escapeHtmlAttr(desc)}" />
   <meta property="og:url" content="${escapeHtmlAttr(canonical)}" />
   <meta property="og:image" content="${escapeHtmlAttr(imgUrl)}" />
+  ${ogSecureImgMeta}
   <meta property="og:image:type" content="image/png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
