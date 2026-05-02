@@ -238,47 +238,75 @@ function matchSuggestYesterdayLocalStr() {
   ].join("-");
 }
 
+/** Max nearest-upcoming rows to show before today's fixtures (empty search). */
+const EMPTY_SUGGEST_UPCOMING_BEFORE_TODAY_MAX = 3;
+
 /**
- * Empty `q` on /api/match-suggest: today → yesterday → other past (newest first) →
- * nearest upcoming → undated / sentinel rows (stable catalog order).
- * @param {{ date: string, label: string, venue: string, order: number }} a
- * @param {{ date: string, label: string, venue: string, order: number }} b
+ * Empty `q` on /api/match-suggest: up to {@link EMPTY_SUGGEST_UPCOMING_BEFORE_TODAY_MAX} nearest upcoming,
+ * then today → yesterday → other past (newest first) → remaining upcoming → undated / sentinel rows.
+ * @param {{ date: string, label: string, venue: string, order: number }[]} rows
+ * @returns {{ date: string, label: string, venue: string, order: number }[]}
  */
-function compareMatchSuggestionsEmptyQuery(a, b) {
-  const tier = (row) => {
+function orderMatchSuggestionsEmptyQuery(rows) {
+  const today = matchSuggestTodayLocalStr();
+  const yest = matchSuggestYesterdayLocalStr();
+  /** @type {typeof rows} */
+  const invalid = [];
+  /** @type {typeof rows} */
+  const upcoming = [];
+  /** @type {typeof rows} */
+  const todayRows = [];
+  /** @type {typeof rows} */
+  const yesterdayRows = [];
+  /** @type {typeof rows} */
+  const pastRows = [];
+
+  for (const row of rows) {
     const d = String(row.date || "").trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d === "1970-01-01") return 4;
-    const today = matchSuggestTodayLocalStr();
-    const yest = matchSuggestYesterdayLocalStr();
-    if (d === today) return 0;
-    if (d === yest) return 1;
-    if (d < today) return 2;
-    return 3;
-  };
-  const ta = tier(a);
-  const tb = tier(b);
-  if (ta !== tb) return ta - tb;
-  if (ta === 0 || ta === 1) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d === "1970-01-01") {
+      invalid.push(row);
+      continue;
+    }
+    if (d === today) todayRows.push(row);
+    else if (d === yest) yesterdayRows.push(row);
+    else if (d < today) pastRows.push(row);
+    else upcoming.push(row);
+  }
+
+  const bySameDayOrder = (a, b) => {
     const na = iplMatchNumberFromLabel(a.label);
     const nb = iplMatchNumberFromLabel(b.label);
     if (na !== nb) return na - nb;
     return String(a.label).localeCompare(String(b.label), undefined, { sensitivity: "base" });
-  }
-  if (ta === 2) {
+  };
+  const byPastNewest = (a, b) => {
     if (a.date !== b.date) return a.date < b.date ? 1 : -1;
     const na = iplMatchNumberFromLabel(a.label);
     const nb = iplMatchNumberFromLabel(b.label);
     if (na !== nb) return na - nb;
     return String(a.venue || "").localeCompare(String(b.venue || ""), undefined, { sensitivity: "base" });
-  }
-  if (ta === 3) {
+  };
+  const byUpcomingSoonest = (a, b) => {
     if (a.date !== b.date) return a.date < b.date ? -1 : 1;
     const na = iplMatchNumberFromLabel(a.label);
     const nb = iplMatchNumberFromLabel(b.label);
     if (na !== nb) return na - nb;
     return String(a.venue || "").localeCompare(String(b.venue || ""), undefined, { sensitivity: "base" });
-  }
-  return (a.order ?? 0) - (b.order ?? 0);
+  };
+
+  const upcomingSorted = [...upcoming].sort(byUpcomingSoonest);
+  const headUpcoming = upcomingSorted.slice(0, EMPTY_SUGGEST_UPCOMING_BEFORE_TODAY_MAX);
+  const tailUpcoming = upcomingSorted.slice(EMPTY_SUGGEST_UPCOMING_BEFORE_TODAY_MAX);
+  const invalidSorted = [...invalid].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  return [
+    ...headUpcoming,
+    ...[...todayRows].sort(bySameDayOrder),
+    ...[...yesterdayRows].sort(bySameDayOrder),
+    ...[...pastRows].sort(byPastNewest),
+    ...tailUpcoming,
+    ...invalidSorted,
+  ];
 }
 
 const TEAM_SUGGEST_ALIASES = { KXIP: "PBKS", DD: "DC" };
@@ -2074,7 +2102,7 @@ export async function warRoomHttpHandler(req, res) {
     if (q) {
       pool = [...pool].sort(compareMatchSuggestionsNewestFirst);
     } else {
-      pool = [...pool].sort(compareMatchSuggestionsEmptyQuery);
+      pool = orderMatchSuggestionsEmptyQuery(pool);
     }
     const suggestions = pool.slice(0, limit).map((r) => {
       const o = { label: r.label, date: r.date, venue: r.venue };

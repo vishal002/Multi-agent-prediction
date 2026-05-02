@@ -1176,49 +1176,6 @@ function compareMatchSuggestionsNewestFirst(a, b) {
   return a.venue.localeCompare(b.venue, undefined, { sensitivity: "base" });
 }
 
-/**
- * Empty fixture search: today → yesterday → other past (newest first) → nearest upcoming →
- * undated / placeholder rows (stable catalog order). Mirrors server `compareMatchSuggestionsEmptyQuery`.
- * @param {{ date: string, label: string, venue: string, order?: number }} a
- * @param {{ date: string, label: string, venue: string, order?: number }} b
- */
-function compareMatchSuggestionsEmptyQuery(a, b) {
-  const tier = (row) => {
-    const d = String(row.date || "").trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d === "1970-01-01") return 4;
-    const today = todayLocalDateStr();
-    const yest = yesterdayLocalDateStr();
-    if (d === today) return 0;
-    if (d === yest) return 1;
-    if (d < today) return 2;
-    return 3;
-  };
-  const ta = tier(a);
-  const tb = tier(b);
-  if (ta !== tb) return ta - tb;
-  if (ta === 0 || ta === 1) {
-    const na = iplMatchNumberFromLabel(a.label);
-    const nb = iplMatchNumberFromLabel(b.label);
-    if (na !== nb) return na - nb;
-    return String(a.label).localeCompare(String(b.label), undefined, { sensitivity: "base" });
-  }
-  if (ta === 2) {
-    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
-    const na = iplMatchNumberFromLabel(a.label);
-    const nb = iplMatchNumberFromLabel(b.label);
-    if (na !== nb) return na - nb;
-    return String(a.venue || "").localeCompare(String(b.venue || ""), undefined, { sensitivity: "base" });
-  }
-  if (ta === 3) {
-    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-    const na = iplMatchNumberFromLabel(a.label);
-    const nb = iplMatchNumberFromLabel(b.label);
-    if (na !== nb) return na - nb;
-    return String(a.venue || "").localeCompare(String(b.venue || ""), undefined, { sensitivity: "base" });
-  }
-  return (a.order ?? 0) - (b.order ?? 0);
-}
-
 // ─── Match-status helpers (LIVE / TODAY / UPCOMING / COMPLETED / TBD) ────────
 
 /** Today's date as YYYY-MM-DD in local time — single source of truth. */
@@ -1240,6 +1197,77 @@ function yesterdayLocalDateStr() {
     String(d.getMonth() + 1).padStart(2, "0"),
     String(d.getDate()).padStart(2, "0"),
   ].join("-");
+}
+
+/** Max nearest-upcoming rows to show before today's fixtures (empty search). Mirrors server. */
+const EMPTY_SUGGEST_UPCOMING_BEFORE_TODAY_MAX = 3;
+
+/**
+ * Empty fixture search: up to {@link EMPTY_SUGGEST_UPCOMING_BEFORE_TODAY_MAX} nearest upcoming,
+ * then today → yesterday → other past (newest first) → remaining upcoming → undated rows.
+ * @param {{ date: string, label: string, venue: string, order?: number }[]} rows
+ * @returns {{ date: string, label: string, venue: string, order?: number }[]}
+ */
+function orderMatchSuggestionsEmptyQuery(rows) {
+  const today = todayLocalDateStr();
+  const yest = yesterdayLocalDateStr();
+  /** @type {typeof rows} */
+  const invalid = [];
+  /** @type {typeof rows} */
+  const upcoming = [];
+  /** @type {typeof rows} */
+  const todayRows = [];
+  /** @type {typeof rows} */
+  const yesterdayRows = [];
+  /** @type {typeof rows} */
+  const pastRows = [];
+
+  for (const row of rows) {
+    const d = String(row.date || "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || d === "1970-01-01") {
+      invalid.push(row);
+      continue;
+    }
+    if (d === today) todayRows.push(row);
+    else if (d === yest) yesterdayRows.push(row);
+    else if (d < today) pastRows.push(row);
+    else upcoming.push(row);
+  }
+
+  const bySameDayOrder = (a, b) => {
+    const na = iplMatchNumberFromLabel(a.label);
+    const nb = iplMatchNumberFromLabel(b.label);
+    if (na !== nb) return na - nb;
+    return String(a.label).localeCompare(String(b.label), undefined, { sensitivity: "base" });
+  };
+  const byPastNewest = (a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    const na = iplMatchNumberFromLabel(a.label);
+    const nb = iplMatchNumberFromLabel(b.label);
+    if (na !== nb) return na - nb;
+    return String(a.venue || "").localeCompare(String(b.venue || ""), undefined, { sensitivity: "base" });
+  };
+  const byUpcomingSoonest = (a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    const na = iplMatchNumberFromLabel(a.label);
+    const nb = iplMatchNumberFromLabel(b.label);
+    if (na !== nb) return na - nb;
+    return String(a.venue || "").localeCompare(String(b.venue || ""), undefined, { sensitivity: "base" });
+  };
+
+  const upcomingSorted = [...upcoming].sort(byUpcomingSoonest);
+  const headUpcoming = upcomingSorted.slice(0, EMPTY_SUGGEST_UPCOMING_BEFORE_TODAY_MAX);
+  const tailUpcoming = upcomingSorted.slice(EMPTY_SUGGEST_UPCOMING_BEFORE_TODAY_MAX);
+  const invalidSorted = [...invalid].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  return [
+    ...headUpcoming,
+    ...[...todayRows].sort(bySameDayOrder),
+    ...[...yesterdayRows].sort(bySameDayOrder),
+    ...[...pastRows].sort(byPastNewest),
+    ...tailUpcoming,
+    ...invalidSorted,
+  ];
 }
 
 /**
@@ -1399,7 +1427,7 @@ function getMatchSuggestionHits(rows, q, limit) {
   if (qLower) {
     pool = [...pool].sort(compareMatchSuggestionsNewestFirst);
   } else {
-    pool = [...pool].sort(compareMatchSuggestionsEmptyQuery);
+    pool = orderMatchSuggestionsEmptyQuery(pool);
   }
   return pool.slice(0, limit).map((row) => {
     const hit = { label: row.label, date: row.date, venue: row.venue };
