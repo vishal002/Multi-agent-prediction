@@ -1423,6 +1423,34 @@ async function ensureShareMapsHydrated() {
   _shareMapsHydrated = true;
 }
 
+/**
+ * In-memory share row, or Supabase when another serverless instance holds the POST.
+ *
+ * @param {string} id normalized 8-char hex share id
+ * @returns {Promise<{ created: number, pack: Record<string, unknown> } | undefined>}
+ */
+async function resolveSharePredictionRow(id) {
+  const cached = sharePredictionById.get(id);
+  if (cached) return cached;
+  const sbGet = getSupabaseAdmin();
+  if (!sbGet) return undefined;
+  try {
+    const pack = await sharePackGet(sbGet, id);
+    if (pack) {
+      const row = { created: Date.now(), pack };
+      sharePredictionById.set(id, row);
+      return row;
+    }
+  } catch {
+    /* */
+  }
+  return undefined;
+}
+
+/** Sharp/libvips SVG text: generic web stacks (Segoe/Impact) are missing on Linux — use fonts common on Vercel. */
+const OG_FONT_UI = '"DejaVu Sans", "Liberation Sans", "Noto Sans", Ubuntu, Arial, sans-serif';
+const OG_FONT_DISPLAY = '"DejaVu Sans", "Liberation Sans", Ubuntu, Arial, sans-serif';
+
 /** Chat / social crawlers: return OG HTML for short links instead of a 302 to the SPA. */
 function isSharePreviewBot(ua) {
   const s = String(ua || "").toLowerCase();
@@ -1518,8 +1546,8 @@ function parseShareTeamsFromLabel(match) {
 async function buildHomepageOgSvg() {
   const W = 1200;
   const H = 630;
-  const fontUi = "system-ui,Segoe UI,Roboto,Arial,sans-serif";
-  const fontDisplay = "Impact,'Arial Narrow Bold',Arial Black,Arial,sans-serif";
+  const fontUi = OG_FONT_UI;
+  const fontDisplay = OG_FONT_DISPLAY;
   const logoUri = await getOgLogoDataUri();
   const logo = logoUri
     ? `<clipPath id="hpLogoClip"><rect x="72" y="195" width="240" height="240" rx="18"/></clipPath>`
@@ -1659,8 +1687,8 @@ async function buildShareOgSvg(pack) {
   const barW = 420;
   const barInner = Math.max(8, Math.round((barW * c) / 100));
 
-  const fontUi = "system-ui,Segoe UI,Roboto,Arial,sans-serif";
-  const fontDisplay = "Impact,'Arial Narrow Bold',Arial Black,Arial,sans-serif";
+  const fontUi = OG_FONT_UI;
+  const fontDisplay = OG_FONT_DISPLAY;
 
   const logoUri = await getOgLogoDataUri();
   const brandLogoBlock = logoUri
@@ -2540,21 +2568,7 @@ export async function warRoomHttpHandler(req, res) {
       res.end(JSON.stringify({ error: { message: "Invalid id" } }));
       return;
     }
-    let row = sharePredictionById.get(id);
-    if (!row) {
-      const sbGet = getSupabaseAdmin();
-      if (sbGet) {
-        try {
-          const pack = await sharePackGet(sbGet, id);
-          if (pack) {
-            row = { created: Date.now(), pack };
-            sharePredictionById.set(id, row);
-          }
-        } catch {
-          /* */
-        }
-      }
-    }
+    const row = await resolveSharePredictionRow(id);
     if (!row) {
       res.writeHead(404, {
         "Content-Type": "application/json; charset=utf-8",
@@ -2575,7 +2589,7 @@ export async function warRoomHttpHandler(req, res) {
   const ogShareMatch = pathname.match(/^\/api\/og\/share\/([a-f0-9]{8})\.png$/i);
   if ((req.method === "GET" || req.method === "HEAD") && ogShareMatch) {
     const ogId = ogShareMatch[1].toLowerCase();
-    const ogRow = sharePredictionById.get(ogId);
+    const ogRow = await resolveSharePredictionRow(ogId);
     if (!ogRow) {
       res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
       res.end("Not found");
@@ -2632,12 +2646,17 @@ export async function warRoomHttpHandler(req, res) {
 
   if (pathname.startsWith("/s/")) {
     const id = pathname.slice(3).trim().toLowerCase();
-    if (!SHARE_ID_HEX_RX.test(id) || !sharePredictionById.has(id)) {
+    if (!SHARE_ID_HEX_RX.test(id)) {
       res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
       res.end("Share link not found");
       return;
     }
-    const row = sharePredictionById.get(id);
+    const row = await resolveSharePredictionRow(id);
+    if (!row) {
+      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Share link not found");
+      return;
+    }
     /* Chat apps often fetch /s/… once and do not merge OG tags from a 302 target — always return 200 + og:* here and redirect in-page for real browsers. */
     const appHref = `/?sid=${encodeURIComponent(id)}`;
     sendShareOgHtml(req, res, url, id, row.pack, appHref, { clientRedirect: true });
@@ -2649,10 +2668,9 @@ export async function warRoomHttpHandler(req, res) {
     pathname === "/" &&
     sidOnly &&
     SHARE_ID_HEX_RX.test(sidOnly) &&
-    sharePredictionById.has(sidOnly) &&
     isSharePreviewBot(req.headers["user-agent"])
   ) {
-    const row2 = sharePredictionById.get(sidOnly);
+    const row2 = await resolveSharePredictionRow(sidOnly);
     if (row2) {
       sendShareOgHtml(req, res, url, sidOnly, row2.pack, `/?sid=${encodeURIComponent(sidOnly)}`);
       return;
