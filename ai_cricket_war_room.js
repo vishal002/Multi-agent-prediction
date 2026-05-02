@@ -6,14 +6,6 @@ const AGENTS = [
   { id:"news",    sym:"N", name:"News agent",    role:"Sentiment & intel" },
 ];
 
-const ARCH = [
-  { title:"Data ingestion agents", desc:"Five specialist agents run in parallel — scout, stats, weather, pitch, and news — each with its own evidence slice from RSS, APIs, and structured feeds. Output: structured JSON context fed to the orchestrator.", tags:["Parallel execution","Web scraping","ESPN / Cricinfo","OpenMeteo","RSS context"] },
-  { title:"Orchestrator (LangGraph)", desc:"Central orchestrator aggregates all agent outputs into a unified match context object and fans it out to the debate engine. Handles retries, timeouts and context windowing.", tags:["LangGraph","Agent mesh","Context builder","FastAPI"] },
-  { title:"Debate engine", desc:"Two adversarial analyst agents — Bull (favors Team A) and Bear (favors Team B) — argue for four rounds. Each has the same context but a different directive persona and cannot see the other's reasoning mid-round.", tags:["Adversarial AI","Multi-turn debate","Tool calls","4-round format"] },
-  { title:"Judge agent + confidence scorer", desc:"A neutral Judge LLM reads the full transcript and produces a structured verdict: winner, confidence %, score range, key player, and swing factor. Output validated against a JSON schema.", tags:["Structured output","JSON schema","Confidence scoring","Historical calibration"] },
-  { title:"Delivery interface", desc:"Dashboard streams the war-room replay in real time via WebSockets, surfaces the verdict card, agent insight tiles, and an accuracy tracker that updates as results come in.", tags:["Next.js 14","WebSockets","Vercel","Accuracy tracker"] },
-];
-
 /**
  * Offline / file:// fallback — keep in sync with match_suggestions.json on the server.
  * When served via `node server.mjs`, suggestions load from GET /api/match-suggest.
@@ -1393,13 +1385,6 @@ function getMatchSuggestionLabels(rows, q, limit) {
   return getMatchSuggestionHits(rows, q, limit).map((h) => h.label);
 }
 
-const HOWTO = [
-  { sprint:"Sprint 1 · Week 1–2", title:"Data pipeline", steps:["Stand up LangGraph agent skeleton with five nodes","Integrate ESPN Cricinfo scraper via Playwright","Plug in OpenMeteo weather API (free tier)","Model all outputs as typed Pydantic schemas","Validate on three historical match queries"] },
-  { sprint:"Sprint 2 · Week 3", title:"Debate engine", steps:["Define Bull & Bear persona system prompts","Build four-round adversarial loop (configurable depth)","Inject match context into each agent's window","Add tool-calling for live stat lookups mid-debate","Persist full transcript to PostgreSQL"] },
-  { sprint:"Sprint 3 · Week 4", title:"Judge + verdict API", steps:["Build Judge agent with JSON schema output","Add confidence calibration from historical accuracy","Create POST /predict endpoint via FastAPI","Ingest live results via webhook for accuracy tracking","Add Redis caching for repeated match queries"] },
-  { sprint:"Sprint 4 · Week 5–6", title:"Dashboard & launch", steps:["Build Next.js war room UI with WebSocket streaming","User auth + saved predictions history","SEO-optimised public match pages for organic traffic","Deploy frontend on Vercel, agents on Modal.com","Set up daily cron for upcoming match predictions"] },
-];
-
 function renderAgents() {
   document.getElementById('agentsList').innerHTML = AGENTS.map((a) => {
     const refreshBtn = `<button type="button" class="agent-intel-refresh" id="intel-refresh-${a.id}" data-intel-refresh="${a.id}" hidden aria-label="Refresh ${escapeHtml(a.name)}"><svg class="agent-intel-refresh__icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 .49-3.56"></path></svg></button>`;
@@ -1435,29 +1420,6 @@ function initIntelAgentRefreshHandlers() {
 function removeAgentSkeleton(agentId) {
   const row = document.getElementById('row-' + agentId);
   if (row) row.classList.remove('agent-row--skeleton');
-}
-
-function renderArch() {
-  document.getElementById('archList').innerHTML = ARCH.map((a,i) => `
-    <div class="arch-item">
-      <div class="arch-num">${i+1}</div>
-      <div>
-        <div class="arch-title">${a.title}</div>
-        <div class="arch-desc">${a.desc}</div>
-        <div class="arch-tags">${a.tags.map(t=>`<span class="tag">${t}</span>`).join('')}</div>
-      </div>
-    </div>
-  `).join('');
-}
-
-function renderHowto() {
-  document.getElementById('howtoGrid').innerHTML = HOWTO.map(h => `
-    <div class="howto-card">
-      <div class="howto-sprint">${h.sprint}</div>
-      <div class="howto-title">${h.title}</div>
-      ${h.steps.map(s=>`<div class="howto-step">${s}</div>`).join('')}
-    </div>
-  `).join('');
 }
 
 /** Scroll the debate column into view (e.g. when debate phase starts). */
@@ -1704,36 +1666,6 @@ function hideMatchBar() {
   if (summary) summary.hidden = true;
 }
 
-function switchInfoTab(name) {
-  const arch = document.getElementById("panelArch");
-  const how = document.getElementById("panelHowto");
-  const btnA = document.getElementById("tabBtnArch");
-  const btnH = document.getElementById("tabBtnHowto");
-  if (!arch || !how || !btnA || !btnH) return;
-  if (name === "arch") {
-    arch.hidden = false;
-    how.hidden = true;
-    btnA.classList.add("active");
-    btnA.setAttribute("aria-selected", "true");
-    btnH.classList.remove("active");
-    btnH.setAttribute("aria-selected", "false");
-  } else {
-    arch.hidden = true;
-    how.hidden = false;
-    btnH.classList.add("active");
-    btnH.setAttribute("aria-selected", "true");
-    btnA.classList.remove("active");
-    btnA.setAttribute("aria-selected", "false");
-  }
-}
-
-function openInfoSheet(tab) {
-  const d = document.getElementById("infoSheet");
-  if (!d) return;
-  switchInfoTab(tab);
-  d.showModal();
-}
-
 function initNoticeStrip() {
   const btn = document.getElementById("acwrNoticeClose");
   if (!btn) return;
@@ -1746,19 +1678,6 @@ function initNoticeStrip() {
       /* private mode */
     }
     document.documentElement.classList.add("acwr-notice-dismissed");
-  });
-}
-
-function initInfoSheet() {
-  const d = document.getElementById("infoSheet");
-  if (!d) return;
-  document.getElementById("btnOpenArch")?.addEventListener("click", () => openInfoSheet("arch"));
-  document.getElementById("btnOpenHowto")?.addEventListener("click", () => openInfoSheet("howto"));
-  document.getElementById("infoSheetClose")?.addEventListener("click", () => d.close());
-  document.getElementById("tabBtnArch")?.addEventListener("click", () => switchInfoTab("arch"));
-  document.getElementById("tabBtnHowto")?.addEventListener("click", () => switchInfoTab("howto"));
-  d.addEventListener("click", (e) => {
-    if (e.target === d) d.close();
   });
 }
 
@@ -5314,6 +5233,13 @@ function initMatchAutocomplete() {
       if (selectedHit.completed && selectedHit.result) runWarRoom();
       return;
     }
+    if (e.key === "Enter" && n === 0 && q) {
+      e.preventDefault();
+      closeList();
+      updateClearBtn();
+      runWarRoom();
+      return;
+    }
     if (e.key === "Escape") {
       e.preventDefault();
       closeList();
@@ -5943,11 +5869,8 @@ function initUmamiButtonTracking() {
 
 renderAgents();
 initIntelAgentRefreshHandlers();
-renderArch();
-renderHowto();
 initMatchAutocomplete();
 initNoticeStrip();
-initInfoSheet();
 initAgentsToggle();
 initLivePanel();
 initControlsTabs();
@@ -6389,17 +6312,19 @@ function trackWarRoomEvent(name, data) {
 /**
  * Homepage demo: static completed war room from `/public/demo-verdict.json` (copied to `dist/` on build).
  *
+ * Hydrates on every clean landing so first-time visitors see a finished example
+ * (intel + debate + verdict) before they have to type anything. Dismissed on the
+ * user's first keystroke in the fixture input via {@link dismissHomepageDemo}.
+ *
  * Gating:
- * - Suppressed when today has any scheduled match (live, upcoming, or already completed),
- *   so the landing page doesn't show CSK vs MI while a real fixture is in progress.
- * - Always suppressed when share/verdict/sid/p URL params are present (those drive their own UI).
- * - `?demo=1` forces the demo regardless (useful for marketing screenshots / linking).
- * - `force: true` from the in-app "View sample verdict" CTA bypasses the gate.
+ * - Skipped when the verdict area is already populated (share/preview hydrated first).
+ * - Skipped when share/verdict/sid/p URL params are present (those drive their own UI).
+ * - `?demo=1` and `force: true` are retained as backwards-compatible no-ops.
  *
  * @param {{ force?: boolean }} [opts]
  */
 async function tryLoadDemoWarRoom(opts = {}) {
-  const force = opts.force === true;
+  void opts; // `force` is retained on the signature for back-compat with the in-app demo CTA.
   const verdictEl = document.getElementById("verdictArea");
   const input = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
   if (!verdictEl || !input) return;
@@ -6413,23 +6338,6 @@ async function tryLoadDemoWarRoom(opts = {}) {
     return;
   }
   if (sp.get("sid") || sp.get("p") || sp.get("verdict") || sp.get("share")) return;
-
-  const forceDemoParam = sp.get("demo") === "1";
-  if (!force && !forceDemoParam) {
-    try {
-      const ctx = await getTodayMatchContext();
-      if (ctx.hasTodayMatch) {
-        trackWarRoomEvent("demo_suppressed", {
-          today_live: ctx.todayLive.length,
-          today_completed: ctx.todayCompleted.length,
-        });
-        renderDemoCtaInEmptyState();
-        return;
-      }
-    } catch {
-      /* probe failed — fall through and show the demo as an empty-state fallback */
-    }
-  }
 
   let res;
   try {

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#070b12" id="metaThemeColor" />
   <meta name="color-scheme" content="dark light" />
-  <meta name="description" content="Five intel agents (Scout, Stats, Weather, Pitch, News) plus Bull vs Bear debate. One Judge returns a structured verdict. Fan discussion only — not betting advice." />
+  <meta name="description" content="Enter a live cricket match. AI agents debate what happens next. Get a verdict — fan discussion only, not betting advice." />
   <link rel="canonical" href="https://cricket-war-room.vercel.app/" />
   <meta name="war-room-share-origin" content="https://cricket-war-room.vercel.app" />
   <meta property="og:type" content="website" />
@@ -74,7 +74,7 @@
               <h1 class="brand__title"><span class="brand__title-line">Cricket</span> <span class="brand__title-accent">War Room</span></h1>
             </div>
           </div>
-          <p class="brand__tagline">Five intel feeds → multi-round Bull vs Bear → one Judge verdict.</p>
+          <p class="brand__tagline">Enter a live match. AI agents debate what happens next. Get a verdict.</p>
         </div>
         <div class="app-header__actions">
           <div class="header-badge" aria-hidden="true">
@@ -105,19 +105,6 @@
     </div>
 
     <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
-
-    <div class="ticker" aria-hidden="true">
-      <div class="ticker__track">
-        <span class="ticker__item">IND vs AUS — MCG <span class="ticker__sep">·</span> <span class="ticker__up">IND 287/4</span> in 42.3 overs</span>
-        <span class="ticker__item">ENG vs PAK — Lords <span class="ticker__sep">·</span> <span class="ticker__dn">ENG 156 all out</span> · Target 312</span>
-        <span class="ticker__item">SA vs NZ — Wanderers <span class="ticker__sep">·</span> <span class="ticker__up">NZ 198/3</span> in 35 overs</span>
-        <span class="ticker__item">IPL: CSK vs MI — Wankhede <span class="ticker__sep">·</span> Fixture window</span>
-        <span class="ticker__item">IND vs AUS — MCG <span class="ticker__sep">·</span> <span class="ticker__up">IND 287/4</span> in 42.3 overs</span>
-        <span class="ticker__item">ENG vs PAK — Lords <span class="ticker__sep">·</span> <span class="ticker__dn">ENG 156 all out</span> · Target 312</span>
-        <span class="ticker__item">SA vs NZ — Wanderers <span class="ticker__sep">·</span> <span class="ticker__up">NZ 198/3</span> in 35 overs</span>
-        <span class="ticker__item">IPL: CSK vs MI — Wankhede <span class="ticker__sep">·</span> Fixture window</span>
-      </div>
-    </div>
 
     <div class="pipeline pipeline--flow" role="list" aria-label="Pipeline">
       <span class="pipeline__step">Data</span>
@@ -167,7 +154,7 @@
         </div>
         <div class="g-search__dropdown" id="matchAutocompletePanel" hidden>
           <ul class="match-autocomplete g-search__results" id="matchAutocompleteList" role="listbox"></ul>
-          <div class="g-search__empty" id="matchAutocompleteEmpty" hidden role="status">No matching fixtures</div>
+          <div class="g-search__empty" id="matchAutocompleteEmpty" hidden role="status">No catalog match — press <strong>Enter</strong> or <strong>Run war room</strong> to use what you typed.</div>
           <div class="g-search__footer"><span class="g-search__kbd">↑</span><span class="g-search__kbd">↓</span> navigate · <span class="g-search__kbd">Enter</span> select · <span class="g-search__kbd">Esc</span> close</div>
         </div>
       </div>
@@ -357,36 +344,6 @@
       </p>
     </footer>
   </div>
-
-  <dialog class="info-sheet" id="infoSheet" aria-labelledby="info-sheet-title">
-    <div class="info-sheet__header">
-      <h2 id="info-sheet-title" class="info-sheet__title">Reference</h2>
-      <button type="button" class="icon-close" id="infoSheetClose" aria-label="Close">×</button>
-    </div>
-    <div class="info-sheet__tabs" role="tablist">
-      <button type="button" class="info-tab active" role="tab" id="tabBtnArch" aria-selected="true" aria-controls="panelArch">Architecture</button>
-      <button type="button" class="info-tab" role="tab" id="tabBtnHowto" aria-selected="false" aria-controls="panelHowto">Build guide</button>
-    </div>
-    <div class="info-sheet__body">
-      <div id="panelArch" class="info-panel" role="tabpanel" aria-labelledby="tabBtnArch">
-        <p class="info-panel__lede">Five-layer system design</p>
-        <div class="arch-list" id="archList"></div>
-      </div>
-      <div id="panelHowto" class="info-panel" hidden role="tabpanel" aria-labelledby="tabBtnHowto">
-        <p class="info-panel__lede">Four-sprint build roadmap</p>
-        <div class="howto-grid" id="howtoGrid"></div>
-        <div class="tip-box tip-box--dialog">
-          <div class="tip-label">Monetisation angles</div>
-          <div class="tip-text">
-            Freemium: 3 free predictions/month → ₹299/mo unlimited<br>
-            Fantasy partnerships: referral revenue with Dream11, My11Circle<br>
-            B2B API: sell prediction endpoint to cricket news portals<br>
-            Launch timing: 2 weeks before IPL 2026 for peak traffic
-          </div>
-        </div>
-      </div>
-    </div>
-  </dialog>
 
 <script>
   (function () {
