@@ -5835,27 +5835,70 @@ function populateLiveFormFromMatchInput() {
   }
 }
 
+/**
+ * War room vs Live match tab panels (controls column). Primary tab stays the hero path.
+ */
+function initControlsTabs() {
+  const warTab = /** @type {HTMLButtonElement|null} */ (document.getElementById("controlsTabWarRoom"));
+  const liveTab = /** @type {HTMLButtonElement|null} */ (document.getElementById("controlsTabLive"));
+  const warPanel = document.getElementById("controlsPanelWarRoom");
+  const livePanel = document.getElementById("controlsPanelLive");
+  if (!warTab || !liveTab || !warPanel || !livePanel) return;
+
+  const tabs = [warTab, liveTab];
+  const panels = [warPanel, livePanel];
+
+  /**
+   * @param {number} index
+   * @param {{ user?: boolean }} [opts]
+   */
+  function selectTab(index, opts = {}) {
+    const i = Math.max(0, Math.min(index, tabs.length - 1));
+    tabs.forEach((tab, j) => {
+      const on = j === i;
+      tab.setAttribute("aria-selected", on ? "true" : "false");
+      tab.tabIndex = on ? 0 : -1;
+      panels[j].hidden = !on;
+    });
+    if (opts.user && i === 1) {
+      try {
+        populateLiveFormFromMatchInput();
+      } catch (_e) {
+        /* ignore */
+      }
+    }
+    if (opts.user) {
+      trackWarRoomEvent("controls_tab", { tab: i === 0 ? "war_room" : "live_match" });
+    }
+  }
+
+  tabs.forEach((tab, i) => {
+    tab.addEventListener("click", () => selectTab(i, { user: true }));
+    tab.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+        e.preventDefault();
+        const delta = e.key === "ArrowRight" ? 1 : -1;
+        const next = (i + delta + tabs.length) % tabs.length;
+        selectTab(next, { user: true });
+        tabs[next].focus();
+      } else if (e.key === "Home") {
+        e.preventDefault();
+        selectTab(0, { user: true });
+        tabs[0].focus();
+      } else if (e.key === "End") {
+        e.preventDefault();
+        selectTab(tabs.length - 1, { user: true });
+        tabs[tabs.length - 1].focus();
+      }
+    });
+  });
+
+  selectTab(0, {});
+}
+
 function initLivePanel() {
-  const head   = document.querySelector(".live-panel__head");
-  const toggle = document.getElementById("livePanelToggle");
-  const body   = document.getElementById("livePanelBody");
   const innSel = /** @type {HTMLSelectElement|null} */ (document.getElementById("lfInnings"));
   const targetWrap = document.getElementById("lfTargetWrap");
-
-  function setOpen(open) {
-    if (!body || !toggle) return;
-    body.hidden = !open;
-    toggle.setAttribute("aria-expanded", open ? "true" : "false");
-    toggle.textContent = open ? "Collapse" : "Expand";
-    if (open) populateLiveFormFromMatchInput();
-  }
-
-  if (head) {
-    head.addEventListener("click", () => {
-      const isOpen = toggle?.getAttribute("aria-expanded") === "true";
-      setOpen(!isOpen);
-    });
-  }
 
   if (innSel && targetWrap) {
     const updateTargetVisibility = () => {
@@ -5914,6 +5957,7 @@ initNoticeStrip();
 initInfoSheet();
 initAgentsToggle();
 initLivePanel();
+initControlsTabs();
 initLiveScoreBar();
 initUmamiButtonTracking();
 void refreshJudgeAccuracyFooter();

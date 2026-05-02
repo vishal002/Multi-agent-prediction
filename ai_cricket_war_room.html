@@ -131,6 +131,12 @@
 
     <div class="war-room__grid">
       <div class="war-room__col war-room__col--controls">
+    <div class="controls-tabs" id="controlsTabs">
+      <div class="controls-tabs__tablist" role="tablist" aria-label="War room controls">
+        <button type="button" class="controls-tabs__tab" id="controlsTabWarRoom" role="tab" aria-selected="true" aria-controls="controlsPanelWarRoom" tabindex="0">War room</button>
+        <button type="button" class="controls-tabs__tab" id="controlsTabLive" role="tab" aria-selected="false" aria-controls="controlsPanelLive" tabindex="-1">Live match</button>
+      </div>
+      <div class="controls-tabs__panel" id="controlsPanelWarRoom" role="tabpanel" aria-labelledby="controlsTabWarRoom">
     <section class="command-bar" aria-label="Match and run">
       <!-- ── Live score first (ground truth) then fixture search + run ── -->
       <div class="live-score-bar" id="liveScoreBar">
@@ -171,21 +177,20 @@
         <span class="status-pill" id="runningLabel" style="display:none" aria-live="polite"></span>
       </div>
     </section>
+      </div>
 
+      <div class="controls-tabs__panel controls-tabs__panel--live" id="controlsPanelLive" role="tabpanel" aria-labelledby="controlsTabLive" hidden>
     <!-- ── Live match over-by-over prediction panel ──────────────────── -->
     <section class="live-panel" id="livePanel" aria-label="Live match — over-by-over prediction">
-      <div class="live-panel__head">
+      <div class="live-panel__head live-panel__head--static">
         <div class="live-panel__title-row">
           <span class="live-dot" aria-hidden="true"></span>
           <span class="live-panel__title">Live match · Current score · Prediction</span>
         </div>
-        <button type="button" class="text-btn live-panel__toggle" id="livePanelToggle" aria-expanded="false" aria-controls="livePanelBody">
-          Expand
-        </button>
       </div>
       <p class="live-panel__hint">You can <strong>Run war room</strong> anytime; paste or <strong>Fetch live</strong> when you have a score so the debate uses that <strong>ground truth</strong>.</p>
 
-      <div class="live-panel__body" id="livePanelBody" hidden>
+      <div class="live-panel__body" id="livePanelBody">
         <div class="live-form">
           <div class="live-form__row">
             <div class="live-form__teams">
@@ -254,6 +259,8 @@
         <div id="overPredictResult" class="over-predict-result" hidden></div>
       </div>
     </section>
+      </div>
+    </div>
       </div>
 
       <div class="war-room__col war-room__col--intel">
