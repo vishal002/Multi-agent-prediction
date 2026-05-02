@@ -5921,7 +5921,8 @@ void (async () => {
   await applyShareQueryParam();
   await applySharedPredictionPreviewFromUrl();
   await tryLoadDemoWarRoom();
-  await autoPopulateTodayMatch();
+  const didAutoFillMatch = await autoPopulateTodayMatch();
+  if (didAutoFillMatch) await maybeAutoRunWarRoomAfterPopulate();
 })();
 
 /**
@@ -6245,19 +6246,46 @@ function getTodayMatchContext() {
 }
 
 /**
+ * After {@link autoPopulateTodayMatch} fills the fixture from catalog context, run the war room
+ * once so users see intel/debate/verdict without an extra click. Skipped for share/deep links,
+ * demo verdict, or `?noautorun=1`.
+ */
+async function maybeAutoRunWarRoomAfterPopulate() {
+  let sp;
+  try {
+    sp = new URLSearchParams(window.location.search);
+  } catch {
+    return;
+  }
+  if (sp.get("noautorun") === "1") return;
+  if (sp.get("sid") || sp.get("p") || sp.get("share") || sp.get("verdict")) return;
+
+  const verdictEl = document.getElementById("verdictArea");
+  if (verdictEl && verdictEl.innerHTML.trim() !== "") return;
+  if (_demoWarRoomActive) return;
+
+  const match = (/** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"))?.value || "").trim();
+  if (!match) return;
+
+  trackWarRoomEvent("warroom_autorun_from_detect", { match });
+  await runWarRoom();
+}
+
+/**
  * On page load, detect today's fixture (or the nearest upcoming one) and auto-fill the match
  * input, the live panel team/venue fields, and the live score bar.
+ * @returns {Promise<boolean>} true when this function set the match field from auto-detect
  */
 async function autoPopulateTodayMatch() {
   const input = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
-  if (!input || input.value.trim()) return; // user has already typed something
+  if (!input || input.value.trim()) return false; // user has already typed something
 
   /** @type {TodayMatchContext} */
   let ctx;
   try {
     ctx = await getTodayMatchContext();
   } catch {
-    return;
+    return false;
   }
   const { rows, todayStr, todayLive } = ctx;
 
@@ -6270,7 +6298,7 @@ async function autoPopulateTodayMatch() {
     });
 
   const best = todayLive[0] || upcoming[0];
-  if (!best) return;
+  if (!best) return false;
 
   // Populate match input
   input.value = best.label;
@@ -6307,6 +6335,8 @@ async function autoPopulateTodayMatch() {
       } catch { /* best-effort */ }
     }
   }
+
+  return true;
 }
 
 /**
