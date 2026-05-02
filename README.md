@@ -4,19 +4,15 @@
 
 Scout → Stats → Weather → Pitch → News → **multi-round Bull vs Bear** → structured prediction (winner, confidence, score band, key player, swing factor).
 
-**[Live demo](https://cricket-war-room.vercel.app)** · **[Deploy your own](#deploy-to-render-free)** · **[Share a fixture](#share-links)**
+**[Live demo](https://cricket-war-room.vercel.app)** · **[Deploy](#deploy)** · **[Share links](#share-links)**
 
-**Disclaimer (read first):** this product is for **entertainment and fan discussion only**. AI outputs are **not** betting, trading, financial, or professional advice; they can be wrong. The live app repeats this below the header and in the footer.
+**Disclaimer:** for **entertainment and fan discussion only**. AI outputs are **not** betting, trading, financial, or professional advice; they can be wrong. The live app repeats this in the header and footer.
 
 ---
 
-## Why it exists
+## What makes it different
 
-Most “AI sports” demos stop at a single headline prediction. The differentiator here is the **debate transcript**: two adversarial voices (Bull vs Bear) argue over the same grounded context across several rounds before the Judge synthesizes a verdict. That transcript is the asset—shareable, readable, and closer to how analysts actually disagree than a one-shot percentage.
-
-**Positioning / timing:** Tournaments such as **IPL** concentrate search and social traffic for a short window (typically **late March–May**). If you care about discovery, ship **indexed pages, OG previews, and shareable URLs before the first match**, not mid-tournament.
-
-**Example monetisation angles** (PoC only—not implemented as billing here): freemium caps on automated runs; fantasy-app referral partnerships; B2B API for publishers who want debate + verdict widgets.
+Most “AI sports” demos stop at one headline prediction. Here the **debate transcript** matters: Bull vs Bear argue over the same grounded context for several rounds before the Judge synthesizes a verdict—shareable and closer to how analysts disagree than a one-shot percentage.
 
 ---
 
@@ -27,11 +23,11 @@ flowchart LR
   subgraph browser [Browser]
     UI[War room UI]
   end
-  subgraph node [Node server]
+  subgraph node [Node / Vercel]
     S[Static + APIs]
     LLM[POST /api/messages]
   end
-  subgraph py [Optional Python]
+  subgraph py [Python]
     ING[Ingestion RSS / CricAPI]
     JDG[Judge + DB]
   end
@@ -39,46 +35,100 @@ flowchart LR
   UI --> LLM
   S --> ING
   S --> JDG
-  LLM --> GROQ[Groq or Anthropic]
+  LLM --> GROQ[Groq / Anthropic / Gemini]
 ```
 
 1. User picks a fixture (`match_suggestions.json` or `GET /api/match-suggest`).
 2. Optional **match context** from ingestion (`GET /api/match-context`) grounds the agents.
 3. **Five intel agents** run in parallel via `POST /api/messages`.
 4. **Bull vs Bear** multi-round debate uses the same context with opposing goals.
-5. **Judge** returns strict JSON; optional **Judge service** stores predictions for accuracy.
+5. **Judge** returns strict JSON; predictions are stored for **accuracy** and **completed-match** UI (pre-match pick vs result).
 
-### Server hardening (optional)
+**Production (Vercel):** the main app is a Node serverless function; **Judge** routes are **Python** functions under `api/judge/*.py` that bundle `judge_service/` (see `vercel.json`). **Ingestion** stays a separate FastAPI process you host (e.g. Render) and point to with `INGESTION_SERVICE_URL`.
 
-The Node gateway enforces **max body sizes** on `POST /api/messages`, Judge proxy, and share payloads; **sliding-window rate limits** per IP on LLM and Judge predict routes; and **minimal `/api/version`** when `NODE_ENV=production` or `VERSION_INFO_MINIMAL=1` (no git hashes in JSON).
-
-
-| Variable                                           | Purpose                                                                                                                                                                                                                               |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WAR_ROOM_API_SECRET`                              | If set, `POST /api/messages` and `POST /api/judge/predict` require `Authorization: Bearer <secret>`. The UI reads the same value from `**localStorage.WAR_ROOM_API_SECRET**` when present (for locked demos).                         |
-| `JUDGE_SERVICE_SECRET`                             | If set on the **Judge** Python service, all Judge HTTP routes require that Bearer token (or `X-Judge-Secret`). The Node server sends it automatically when this env is set on the web process. Use the **same** value on web + judge. |
-| `TRUST_PROXY`                                      | `1` or `true`: use `X-Forwarded-For` first hop for rate-limit client IP (e.g. behind Render).                                                                                                                                         |
-| `RL_MESSAGES_PER_MIN` / `RL_JUDGE_PER_MIN`         | Per-IP caps in a 60s window (defaults **30** / **15**; set `0` to disable that limit).                                                                                                                                                |
-| `MAX_BODY_MESSAGES_BYTES` / `MAX_BODY_JUDGE_BYTES` | Request body caps (defaults **1 MiB** / **2 MiB**).                                                                                                                                                                                   |
-| `ALLOWED_ORIGINS`                                  | Comma-separated list; when set, CORS reflects a matching `Origin` instead of `*`.                                                                                                                                                     |
-| `INGESTION_EXPOSE_ERRORS`                          | `1` on ingestion: return real exception text in 502 JSON (default: generic `ingestion_failed`).                                                                                                                                       |
-| `INGESTION_RSS_MAX_BYTES`                          | Max RSS download size before parse (default **2 MiB**).                                                                                                                                                                               |
-
+**Optional [Upstash](https://upstash.com) Redis** (`UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`): shared HTTP caching (e.g. Judge accuracy), distributed rate-limit state, and freemium run counts across cold starts. Omit it for local-only dev; Python Judge routes use the same env vars via `api/judge/_cache.py`.
 
 ---
 
-## Judge accuracy & persistence
+## Deploy
 
-When the Judge API is enabled, the UI can show **running accuracy** (predictions where an actual winner was recorded vs the model’s pick).
+### Vercel (recommended for this repo)
 
-- **Local SQLite** (`WAR_ROOM_DB_PATH=/tmp/...` or default `data/war_room.db`): fine for `npm run judge:dev` and Docker volume runs. Resets on Render free restarts.
-- **Supabase Postgres** — preferred for production. Set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` on the Judge process (Vercel Python functions or Render). When both are set, `judge_service.app.get_store()` selects `SupabasePredictionsStore` and the file path is ignored. Predictions survive deploys, cold starts, and cross-region reads. Schema in [`supabase_migrations/migrations/001_initial.sql`](supabase_migrations/migrations/001_initial.sql).
+1. Connect the repo; build is `npm run build`, output `dist/` (see `vercel.json`).
+2. Set **LLM** keys and, for Judge + share links in production, **`SUPABASE_URL`** + **`SUPABASE_SERVICE_ROLE_KEY`** (run [`supabase_migrations/migrations/001_initial.sql`](supabase_migrations/migrations/001_initial.sql)).
+3. Set **`INGESTION_SERVICE_URL`** to your hosted ingestion base URL if you want live RSS/CricAPI context.
+4. Optional: **`UPSTASH_REDIS_*`**, **`WAR_ROOM_API_SECRET`** / **`JUDGE_SERVICE_SECRET`**, freemium vars (below).
+
+Cold starts and platform timeouts apply on free tiers; long agent chains may need Pro or async work if you hit limits.
+
+### Local (no Docker)
+
+```bash
+cp .env.example .env   # add at least one LLM key; see comments inside
+npm run start:dev      # http://localhost:3333
+```
+
+**Full stack:** after `pip install -r requirements-ingestion.txt` and `pip install -r requirements-judge.txt`, use `npm run dev:stack` (Node + ingestion :3334 + judge :8000) or run `ingestion:dev` / `judge:dev` in separate terminals.
+
+`npm run build && npm start` serves hashed assets from `dist/` (`SERVE_DIST=1`).
+
+Opening `ai_cricket_war_room.html` over `file://` uses in-JS fallback fixtures only; use the Node server for autocomplete and `/api/messages`.
+
+### Docker
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+Open [http://localhost:3333/](http://localhost:3333/). Judge data uses the `judge_data` volume unless you use Supabase on the judge container.
+
+### Render (optional blueprint)
+
+[`render.yaml`](render.yaml) can provision web + ingestion + judge. Set `GROQ_API_KEY` (and service URLs as in the blueprint). Prefer **Supabase** on judge for persistence—SQLite on ephemeral disks resets on restart.
+
+---
+
+## Configuration
+
+| Variable | Purpose |
+| -------- | ------- |
+| `GROQ_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` | LLM keys (Node + Judge). `LLM_PROVIDER`: `groq` \| `anthropic` \| `gemini`. |
+| `GROQ_MODEL`, `GROQ_MODEL_LIGHT`, `GROQ_MODEL_DEBATE` | Model mix (see `server.mjs` header). |
+| `PORT` | Node port (default `3333`). |
+| `SERVE_DIST` | `1` → serve production `dist/` assets. |
+| `INGESTION_SERVICE_URL` / `JUDGE_SERVICE_URL` | Python service bases (local / Render); on Vercel, Judge is in-process Python—`JUDGE_SERVICE_URL` is for local proxy only. |
+| `CRICAPI_KEY` | On **ingestion**; optional live scores. |
+| `WAR_ROOM_DB_PATH` | Judge **SQLite** when Supabase env is unset. |
+| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Judge predictions + share packs in Postgres (preferred in production). |
+| `PUBLIC_SITE_URL` | Canonical origin for OG and `/s/{id}` when behind another host. |
+| `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | Optional Redis for caches, rate limits, freemium counts. |
+| `FREEMIUM_MAX_RUNS_PER_DAY` | Daily cap on successful Judge runs per IP during IPL live window (IST); default `5`, `0` disables. |
+| `IPL_FREEMIUM_ACTIVE` | `1` or `true` forces the freemium window on (testing). |
+| `WAR_ROOM_API_SECRET` | If set, `POST /api/messages` and `POST /api/judge/predict` require `Authorization: Bearer …`. UI can store the same value in `localStorage.WAR_ROOM_API_SECRET`. |
+| `JUDGE_SERVICE_SECRET` | If set on Judge, all Judge HTTP routes require that Bearer (or `X-Judge-Secret`). Node forwards it when set on the web process—use the **same** value on web + judge. |
+| `TRUST_PROXY` | `1` / `true`: use `X-Forwarded-For` for rate-limit IP. |
+| `RL_MESSAGES_PER_MIN` / `RL_JUDGE_PER_MIN` | Per-IP caps / 60s (defaults 30 / 15; `0` disables that route’s limit). |
+| `MAX_BODY_MESSAGES_BYTES` / `MAX_BODY_JUDGE_BYTES` | Body size caps (defaults 1 MiB / 2 MiB). |
+| `ALLOWED_ORIGINS` | Comma-separated CORS origins in production instead of `*`. |
+| `INGESTION_EXPOSE_ERRORS` / `INGESTION_RSS_MAX_BYTES` | Ingestion debugging and RSS download cap. |
+
+---
+
+## Judge, accuracy, and persistence
+
+When the Judge API is enabled, the UI shows **running accuracy** and can load **saved pre-match predictions** on completed fixtures.
+
+- **SQLite** (`WAR_ROOM_DB_PATH` or default `data/war_room.db`): fine for `npm run judge:dev` and Docker.
+- **Supabase Postgres** (preferred): set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` on the Judge process. Schema: [`supabase_migrations/migrations/001_initial.sql`](supabase_migrations/migrations/001_initial.sql).
+
+**Freemium:** during an IPL “live” day (catalog has a non-completed fixture on today’s IST date, or `IPL_FREEMIUM_ACTIVE=1`), each successful `POST /api/judge/predict` increments a per-IP counter up to `FREEMIUM_MAX_RUNS_PER_DAY`. When the cap is reached, both `POST /api/messages` and `POST /api/judge/predict` return 429 until the next IST calendar day. `GET /api/freemium-status` drives the UI pill. Clients presenting `WAR_ROOM_API_SECRET` bypass the cap when that secret is configured.
 
 ---
 
 ## Share links
 
-Open the app with `?share=` to pre-fill the fixture field. The value can be the **exact** catalog label, or a **shorter** line: team codes in either order (e.g. `SRH vs DC` or `DC vs SRH`) plus an optional **city/venue** hint after a comma to disambiguate (e.g. `Hyderabad`). The app resolves to the real `match_suggestions` row and fills the search box (no run until the user clicks **Run war room** — no surprise token use).
+Open the app with `?share=` to pre-fill the fixture field: **exact** catalog label, or a **short** line (team codes in either order, optional comma + city/venue to disambiguate). No run until the user clicks **Run war room**.
 
 **Exact label example:**
 
@@ -86,172 +136,80 @@ Open the app with `?share=` to pre-fill the fixture field. The value can be the 
 https://cricket-war-room.vercel.app/?share=DC%20vs%20SRH%20%E2%80%94%20IPL%202026%20Match%2031%2C%20Rajiv%20Gandhi%20International%20Stadium%2C%20Hyderabad
 ```
 
-**Shorter (resolved automatically) example — same match:**
+**Shorter resolved example:**
 
 ```text
 https://cricket-war-room.vercel.app/?share=IPL%202026%20%E2%80%94%20SRH%20vs%20DC%2C%20Hyderabad
 ```
 
-**Open Graph:** the main app HTML points `og:image` at `**GET /og-homepage.png`** (1200×630, logo + headline + agent strip, Sharp). The URL in HTML includes a `**?v=**` query (increment when the card design changes) so Meta/WhatsApp do not keep serving an old cached bitmap. For `**/s/{id}**` share links, crawlers get HTML whose `og:image` is `**GET /api/og/share/{id}.png?v=…**` (same dimensions; per-match verdict with logo in the brand bar and verdict column). Absolute URLs use the request **Host** (or `PUBLIC_SITE_URL`) so `og:url` and `og:image` stay on the same hostname as the shared link — important for WhatsApp previews on custom domains. Logo file: `image/ai-cricket-war-room-logo.png` (embedded as base64 in the SVG at render time). After deploys, refresh previews with [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/) (**Scrape Again** a few times); WhatsApp uses the same scraper cache for `og:image`.
+**Open Graph:** `og:image` for the homepage is `GET /og-homepage.png` (Sharp, 1200×630); shared predictions use `GET /api/og/share/{id}.png`. HTML uses a `?v=` cache-buster when the card design changes. Use `PUBLIC_SITE_URL` (or request host) so previews match the deployed hostname. After deploys, refresh caches with the [Facebook Sharing Debugger](https://developers.facebook.com/tools/debug/).
 
-**Share this prediction** (after a full war-room run): the verdict card’s **SHARE THIS PREDICTION** button saves a compact snapshot and returns a short URL under `/s/{id}`. Opening that link loads the **Shared prediction** card (Judge pick, confidence split, score band, key player, swing factor) without re-running agents; use **Run full war room** in the command bar when you want intel agents, live context, and the full Bull vs Bear debate.
+**Share this prediction:** after a full run, **SHARE THIS PREDICTION** saves a snapshot and returns `/s/{id}`. That view shows the verdict card without re-running agents; **Run full war room** loads intel, context, and debate.
 
-[After opening a shared link — Shared prediction card (DC vs RCB), Run full war room](https://cricket-war-room.vercel.app/s/ba91b4c5)
-
-**Example link:** [https://cricket-war-room.vercel.app/s/ba91b4c5](https://cricket-war-room.vercel.app/s/ba91b4c5) *(IPL 2026 — DC vs RCB, Delhi; same saved pick as above.)*
+Example: [https://cricket-war-room.vercel.app/s/ba91b4c5](https://cricket-war-room.vercel.app/s/ba91b4c5)
 
 ---
 
 ## Screenshots
 
-Latest production captures from [cricket-war-room.vercel.app](https://cricket-war-room.vercel.app) (IPL 2026 example: **DC vs RCB, Delhi**). Order: **(3) home** → **(1) after search** → **(2) after full prediction** (over-by-over flow through agents, debate, and Judge).
+Production UI (IPL example: **DC vs RCB, Delhi**). Order: **(3) home** → **(1) after search** → **(2) after prediction**.
 
-### 3) Homepage — before **Run war room**
+### 3) Homepage — before Run war room
 
-The disclaimer strip is visible, a fixture is in the search field, live / ground-truth areas are available, and the **Debate** stage is **Ready** (nothing run yet).
-
-Home — fixture selected, debate stage ready, Run war room not started yet
+![Home — fixture selected, debate ready](image/readme-state-03-home-before-run.png)
 
 ### 1) After search
 
-Fixture locked in, command row active (**Run war room** / **Reset**), **LIVE MATCH · CURRENT SCORE** / ground-truth block expanded so you can align the model with the real line before a full run.
+![After search — live / ground truth, command row](image/readme-state-01-after-search.png)
 
-After search — match selected, live/ground truth visible, full layout including Intel, Verdict, Debate
+### 2) After full prediction
 
-### 2) After over-by-over prediction
+![After prediction — verdict and debate](image/readme-state-02-after-prediction.png)
 
-Full run: all **intel agents** filled in, **Judge verdict** (winner, confidence, score band, key player, swing factor), and **Bull vs Bear** multi-round debate. Model confidence and sources (RSS / Cricbuzz / CricAPI) surface on the verdict card.
+### Shared prediction link
 
-After prediction — Judge verdict, debate transcript, and confidence split
-
----
-
-
-
-## Free-tier infrastructure (honest trade-offs)
-
-
-| Piece             | Limitation                      | Free / low-cost direction                                                                                                              |
-| ----------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Render free web   | Cold start ~30s after idle      | Vercel (current production target — see `vercel.json`), [Railway](https://railway.app), paid Render, or self-host Docker               |
-| SQLite on `/tmp`  | Resets → accuracy looks fake    | **[Supabase](https://supabase.com)** Postgres (wired in `judge_service/predictions_supabase.py` + `lib/supabaseShare.mjs`)             |
-| CricAPI free tier | ~100 calls/day on busy days     | RSS (ESPN + Cricbuzz) already used; CricAPI optional                                                                                   |
-| Social previews   | Need stable absolute `og:image` | Use a static PNG under `/image/` (e.g. `readme-state-02-after-prediction.png`); set `og:image` in `ai_cricket_war_room.html` to match. |
-
-
-### Monitoring & analytics (implemented)
-
-- **[UptimeRobot](https://dashboard.uptimerobot.com/monitors)** — Monitors the live site’s HTTP availability and sends alerts when checks fail or recover.
-- **[Umami](https://cloud.umami.is/analytics/us/websites/256a7586-1d61-4adc-b10f-9b1a322e3cac)** — Privacy-friendly web analytics (page views, referrers, traffic) for the deployed app without heavy third-party tracking scripts.
+![Shared prediction card](image/readme-shared-prediction-after-link.png)
 
 ---
 
-## Deploy to Render (free)
+## API (Node gateway)
 
-[Deploy to Render](https://render.com/deploy)
-
-1. Push this repo to GitHub.
-2. [dashboard.render.com](https://dashboard.render.com) → **New** → **Blueprint** → select the repo (`render.yaml` provisions three services).
-3. Set environment variables in the dashboard (minimum `**GROQ_API_KEY`** on `cricket-war-room` and `cricket-judge`; URLs for ingestion/judge as in the table below).
-4. **Optional but recommended for Judge accuracy:** on `cricket-judge`, add `**SUPABASE_URL`** and `**SUPABASE_SERVICE_ROLE_KEY**` so predictions persist in Postgres instead of `/tmp` SQLite.
-
-
-| Service             | Variable                                          | Value                                        |
-| ------------------- | ------------------------------------------------- | -------------------------------------------- |
-| `cricket-war-room`  | `GROQ_API_KEY`                                    | [console.groq.com](https://console.groq.com) |
-| `cricket-war-room`  | `INGESTION_SERVICE_URL`                           | `https://cricket-ingestion.onrender.com`     |
-| `cricket-war-room`  | `JUDGE_SERVICE_URL`                               | `https://cricket-judge.onrender.com`         |
-| `cricket-ingestion` | `CRICAPI_KEY`                                     | optional                                     |
-| `cricket-judge`     | `GROQ_API_KEY`                                    | same as above                                |
-| `cricket-judge`     | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`      | optional persistence (preferred over `/tmp`) |
-
-
-> **Free-tier note:** web services **spin down** after idle — first request can take ~30s. Without Supabase, `**WAR_ROOM_DB_PATH=/tmp`** still loses SQLite on restart.
-
----
-
-## Run with Docker
-
-```bash
-cp .env.example .env   # fill GROQ_API_KEY (minimum)
-docker compose up --build
-```
-
-Open [http://localhost:3333/](http://localhost:3333/). Judge data persists in the `judge_data` volume unless you override with `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` on the judge container.
-
----
-
-## Quick start (local, no Docker)
-
-```bash
-cp .env.example .env   # add GROQ_API_KEY (and optional keys); see .env.example
-npm run start:dev      # war room on :3333 (loads .env automatically)
-# Production bundle: npm run build && npm start
-```
-
-**Ingestion** (RSS / match-context, :3334) and **judge** (predictions, :8000) are separate Python processes. After `pip install -r requirements-ingestion.txt` and `pip install -r requirements-judge.txt`, run `npm run ingestion:dev` and `npm run judge:dev` in two extra terminals, or start all three with `**npm run dev:stack`**.
-
-Opening `ai_cricket_war_room.html` over `file://` uses bundled fallback fixtures only; use the Node server for autocomplete and `/api/messages`.
-
----
-
-## Configuration
-
-
-| Variable                                                                                                   | Purpose                                              |
-| ---------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| `GROQ_API_KEY` / `ANTHROPIC_API_KEY`                                                                       | LLM keys (Node + Judge).                             |
-| `LLM_PROVIDER`                                                                                             | `groq` or `anthropic` to force.                      |
-| `GROQ_MODEL`, `GROQ_MODEL_LIGHT`, `GROQ_MODEL_DEBATE`                                                      | Model mix (see `server.mjs` header).                 |
-| `PORT`                                                                                                     | Node port (default `3333`).                          |
-| `SERVE_DIST`                                                                                               | `1` → serve hashed `dist/` assets.                   |
-| `INGESTION_SERVICE_URL` / `JUDGE_SERVICE_URL`                                                              | Python service bases.                                |
-| `CRICAPI_KEY`                                                                                              | On **ingestion** process; optional live scores.      |
-| `INGESTION_*`                                                                                              | RSS URLs, timeouts, cache TTL, `INGESTION_DISABLE`.  |
-| `WAR_ROOM_DB_PATH`                                                                                         | Judge **file** SQLite when Supabase env is **not** set. |
-| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`                                                               | Judge + share-link **remote** Postgres (preferred on ephemeral disks). |
-| `GROQ_JUDGE_MODEL` / `ANTHROPIC_JUDGE_MODEL`                                                               | Judge-only model overrides.                          |
-| `WAR_ROOM_API_SECRET` / `JUDGE_SERVICE_SECRET` / `TRUST_PROXY` / `RL_*` / `MAX_BODY_*` / `ALLOWED_ORIGINS` | See [Server hardening](#server-hardening-optional).  |
-
-
----
-
-## API (Node server)
-
-- `POST /api/messages` — LLM proxy.
-- `GET /api/match-suggest`, `GET /api/match-by-label` — fixtures.
-- `GET /api/match-context` — proxy to ingestion.
-- `GET /api/live-score` — score snippet JSON; uses ingestion cache by default. Add `fresh=1` to force a new RSS+CricAPI fetch (UI uses this for manual refresh and live polling).
-- `POST /api/judge/predict`, `GET /api/judge/accuracy` — Judge proxy.
-- `GET /api/version` — build metadata.
+| Method | Path | Role |
+| ------ | ---- | ---- |
+| POST | `/api/messages` | LLM proxy (intel, debate, live turns). |
+| GET | `/api/match-suggest`, `/api/match-by-label` | Fixture catalog. |
+| GET | `/api/match-context` | Proxy to ingestion. |
+| GET | `/api/live-score` | Score JSON; `fresh=1` forces upstream refresh. |
+| POST | `/api/judge/predict` | Run Judge + store prediction. |
+| GET | `/api/judge/accuracy` | Running accuracy stats (also routed as `/api/accuracy` on Vercel). |
+| GET | `/api/judge/predictions-by-match` | Saved predictions for a `match_id` (completed-match “view pre-match pick”). |
+| GET | `/api/judge/recent-settled` | Latest settled predictions (ledger / trust UI). |
+| GET | `/api/freemium-status` | Freemium cap status for the client IP. |
+| GET | `/api/version` | Build metadata (minimal fields in production when configured). |
+| POST | `/api/share-prediction` | Create short share id; GET `/api/share/:id` returns pack JSON. |
 
 ---
 
 ## Data: fixtures
 
-Edit `**match_suggestions.json`**. Optional `**completed**` + `**result**` (`winner`, `summary`) skips agents/debate. Restart Node after edits. Mirror critical rows in `**MATCH_SUGGESTIONS_FALLBACK_ROWS**` in `ai_cricket_war_room.js` for offline `file://`.
+Edit `match_suggestions.json`. Optional `completed` + `result` (`winner`, `summary`, and optional POTM fields) skips agents/debate and drives post-match cards. Restart Node after edits. Mirror critical rows in `MATCH_SUGGESTIONS_FALLBACK_ROWS` in `ai_cricket_war_room.js` for offline `file://`.
 
 ---
 
-## Project layout (short)
+## Project layout
 
-
-| Path                                               | Role                                           |
-| -------------------------------------------------- | ---------------------------------------------- |
-| `ai_cricket_war_room.{html,css,js}`                | UI, debate flow, share param, prompts          |
-| `server.mjs`                                       | Static host, APIs, `SERVE_DIST`                |
-| `scripts/build.mjs`                                | Production `dist/` + copies `icons/`, `image/` |
-| `match_suggestions.json`                           | Fixture catalog                                |
-| `ingestion_service/`                               | FastAPI RSS/CricAPI                            |
-| `judge_service/`                                   | FastAPI Judge + persistence                    |
-| `render.yaml`, `docker-compose.yml`, `Dockerfile*` | Deploy                                         |
-
-
----
-
-## Appendix: AI / tooling context
-
-Single-page **vanilla JS**; **Node 20** gateway; optional **FastAPI** ingestion + judge. Fixture JSON + in-JS fallback rows. Build hashes JS/CSS and rewrites HTML + service worker. Python judge: `POST /predict`, `GET /accuracy`, local SQLite **or** Supabase Postgres when `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` are set. See `judge_service/models.py` for verdict fields.
+| Path | Role |
+| ---- | ---- |
+| `ai_cricket_war_room.{html,css,js}` | UI, debate, share param, prompts |
+| `server.mjs` | Static host, APIs, `SERVE_DIST` |
+| `api/index.mjs` | Vercel Node entry |
+| `api/judge/*.py` | Vercel Judge serverless handlers |
+| `scripts/build.mjs` | Production `dist/` + assets |
+| `match_suggestions.json` | Fixture catalog |
+| `ingestion_service/` | FastAPI RSS / CricAPI |
+| `judge_service/` | FastAPI Judge + SQLite / Supabase stores |
+| `lib/redis.js`, `middleware/freemiumLive.mjs` | Optional Redis + freemium |
+| `vercel.json`, `render.yaml`, `docker-compose.yml`, `Dockerfile*` | Deploy |
 
 ---
 
