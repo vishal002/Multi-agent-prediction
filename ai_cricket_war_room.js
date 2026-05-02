@@ -3633,6 +3633,9 @@ const MERGED_INTEL_SYSTEM =
   `{"scout":"...","stats":"...","weather":"...","pitch":"...","news":"..."} — no markdown, no extra keys. ` +
   "Each value must be exactly one sentence of 15–20 words, derived strictly from that section's evidence; " +
   "do not invent statistics, scores, or events; do not cross-reference other specialties. " +
+  "For scout: if a section's evidence is only scorecards or results naming a contest-side franchise, cite one such stated result as a recent-team read. " +
+  "For pitch: if a section only names the scheduled venue (no surface or soil wording), give one sentence stating that venue only—do not infer pace, spin, or wear. " +
+  "For stats: if a section is JSON score summaries or headline lines with totals, overs, or margins, summarize exactly one numeric fact stated there—do not invent figures. " +
   `If a section's evidence does not support a substantive claim, set its value to exactly: ${INTEL_FALLBACK}`;
 
 const MAX_EVIDENCE_CHARS_PER_AGENT = 1200;
@@ -3687,9 +3690,21 @@ function syncAllIntelRefreshButtons() {
  * @param {{ id: string, name: string, role: string }} agentMeta
  */
 function buildSingleAgentIntelSystem(agentMeta) {
+  let extra = "";
+  if (agentMeta.id === "scout") {
+    extra =
+      " If the evidence only documents stated recent results for a contest-side franchise, cite one such result in one sentence; do not invent injuries or squad facts not written there.";
+  } else if (agentMeta.id === "pitch") {
+    extra =
+      " If the evidence only names the scheduled venue without surface or soil wording, state that venue in one sentence without inferring how the pitch plays.";
+  } else if (agentMeta.id === "stats") {
+    extra =
+      " If the evidence is JSON score tables or headline scorelines, state one concrete number or margin that appears verbatim there; never invent totals or rates not written.";
+  }
   return (
     "Reply with exactly one sentence of 15–20 words. No preamble, labels, or quotation marks. " +
     `You are the ${agentMeta.name} (${agentMeta.role}). Use ONLY facts stated in the Evidence section; do not invent statistics, scores, or events. ` +
+    extra +
     `If the evidence does not support a substantive claim for your specialty, say exactly: ${INTEL_FALLBACK}`
   );
 }
@@ -3761,6 +3776,7 @@ function emptyMatchContext(reason) {
     weather_note: "",
     sources: [],
     fetched_at: "",
+    query: { label: "", teams: "", venue: "", date: "" },
     _ingestion_error: reason,
   };
 }
@@ -3940,6 +3956,159 @@ const PITCH_RX =
   /\b(pitch|wicket|spin|seam|bounce|turn|crack|rough|grass|surface)\b/i;
 /** Innings score fragments like 132/3 (20 ov) — CricAPI bullets and many RSS titles. */
 const STATS_SCORELINE_RX = /\b\d{1,3}\/\d{1,2}\s*\([\d.]+\s*ov\)/i;
+/** Runs/wickets without overs in parentheses — some headlines omit "(20 ov)". */
+const STATS_SCORE_LOOSE_RX = /\b\d{1,3}\/\d{1,2}\b/;
+
+/** IPL short codes → phrases that appear in CricAPI titles (CSV may be codes while feeds use full names). */
+const IPL_TEAM_SEARCH_PHRASES = {
+  CSK: ["Chennai Super Kings", "Super Kings", "CSK"],
+  DC: ["Delhi Capitals", "Capitals", "DC"],
+  GT: ["Gujarat Titans", "Titans", "GT"],
+  KKR: ["Kolkata Knight Riders", "Knight Riders", "KKR"],
+  LSG: ["Lucknow Super Giants", "Super Giants", "LSG"],
+  MI: ["Mumbai Indians", "MI"],
+  PBKS: ["Punjab Kings", "PBKS"],
+  RCB: ["Royal Challengers Bengaluru", "Royal Challengers Bangalore", "RCB"],
+  RR: ["Rajasthan Royals", "Royals", "RR"],
+  SRH: ["Sunrisers Hyderabad", "Sunrisers", "SRH"],
+};
+
+/**
+ * @param {Record<string, unknown>} ctx
+ */
+function getContextQuery(ctx) {
+  const q = ctx && ctx.query && typeof ctx.query === "object" ? ctx.query : null;
+  if (!q) return { label: "", teams: "", venue: "", date: "" };
+  return {
+    label: q.label != null ? String(q.label) : "",
+    teams: q.teams != null ? String(q.teams) : "",
+    venue: q.venue != null ? String(q.venue) : "",
+    date: q.date != null ? String(q.date) : "",
+  };
+}
+
+/**
+ * @param {Record<string, unknown>} ctx
+ * @returns {string[]}
+ */
+function contestTeamHintsFromCtx(ctx) {
+  const q = getContextQuery(ctx);
+  const hints = new Set();
+  const csv = q.teams.trim();
+  if (csv) {
+    for (const t of csv.split(",")) {
+      const s = t.trim();
+      if (s.length >= 2) hints.add(s);
+    }
+  }
+  const label = q.label.trim();
+  if (label) {
+    let head = label;
+    const sep = head.search(/\s[—–-]\s/);
+    if (sep !== -1) head = head.slice(0, sep).trim();
+    const m = head.match(/^(.+?)\s+vs\s+(.+)$/i);
+    if (m) {
+      hints.add(m[1].trim());
+      hints.add(m[2].trim());
+    }
+  }
+  return [...hints].filter((h) => h.length >= 2);
+}
+
+/**
+ * @param {Record<string, unknown>} ctx
+ * @returns {string[]}
+ */
+function contestSearchPhrases(ctx) {
+  const phrases = new Set();
+  for (const h of contestTeamHintsFromCtx(ctx)) {
+    phrases.add(h);
+    const compact = h.replace(/\s+/g, "").toUpperCase();
+    if (Object.prototype.hasOwnProperty.call(IPL_TEAM_SEARCH_PHRASES, compact)) {
+      for (const p of IPL_TEAM_SEARCH_PHRASES[compact]) phrases.add(p);
+    } else if (/^[A-Za-z]{2,5}$/.test(h.trim())) {
+      const u = h.trim().toUpperCase();
+      if (Object.prototype.hasOwnProperty.call(IPL_TEAM_SEARCH_PHRASES, u)) {
+        for (const p of IPL_TEAM_SEARCH_PHRASES[u]) phrases.add(p);
+      }
+    }
+  }
+  return [...phrases];
+}
+
+/**
+ * @param {string} b
+ * @param {string[]} phrases
+ */
+function bulletMentionsContestPhrase(b, phrases) {
+  if (!phrases.length) return false;
+  const lower = b.toLowerCase();
+  return phrases.some((p) => p.length >= 2 && lower.includes(p.toLowerCase()));
+}
+
+/** Stated scorecard / result cues (not injury copy). */
+const SCOUT_CONTEST_OUTCOME_RX =
+  /\b(won by|lost by|won\s+by|no result|DLS|abandon|tie|Inning)\b/i;
+
+/**
+ * Venue string from ingestion query or, if missing, last comma segment of the label when it looks like a ground.
+ * @param {Record<string, unknown>} ctx
+ */
+function contestVenueFromCtx(ctx) {
+  const q = getContextQuery(ctx);
+  let v = q.venue.trim();
+  if (v && !/^tbd$/i.test(v)) return v;
+  const label = q.label.trim();
+  if (!label) return "";
+  const idx = label.lastIndexOf(",");
+  if (idx === -1) return "";
+  const tail = label.slice(idx + 1).trim();
+  if (tail.length < 8) return "";
+  if (/\b(Stadium|Ground|Arena|Centre|Center|Park)\b/i.test(tail)) return tail;
+  return "";
+}
+
+/**
+ * @param {unknown} st
+ */
+function statsTablesHasSubstantiveStats(st) {
+  if (!st || typeof st !== "object") return false;
+  const o = /** @type {Record<string, unknown>} */ (st);
+  const keys = Object.keys(o);
+  if (!keys.length) return false;
+  const cur = o.cricapi_current;
+  if (Array.isArray(cur)) {
+    if (!cur.length) return false;
+    return cur.some((row) => {
+      if (!row || typeof row !== "object") return false;
+      const rw = /** @type {Record<string, unknown>} */ (row);
+      const sc = rw.scorecard != null ? String(rw.scorecard).trim() : "";
+      const sts = rw.status != null ? String(rw.status).trim() : "";
+      const mt = rw.match != null ? String(rw.match).trim() : "";
+      return sc.length > 2 || sts.length > 2 || mt.length > 8;
+    });
+  }
+  return keys.some((k) => {
+    const v = o[k];
+    if (v == null) return false;
+    if (typeof v === "string") return v.trim().length > 2;
+    if (typeof v === "number") return Number.isFinite(v);
+    if (Array.isArray(v)) return v.length > 0;
+    if (typeof v === "object") return Object.keys(v).length > 0;
+    return false;
+  });
+}
+
+/**
+ * @param {string} b
+ */
+function bulletHasStatsSignal(b) {
+  return (
+    STATS_SCORELINE_RX.test(b) ||
+    STATS_SCORE_LOOSE_RX.test(b) ||
+    /\b(won by|lost by|DLS)\b/i.test(b)
+  );
+}
 
 /**
  * @param {string} agentId
@@ -3956,15 +4125,20 @@ function buildAgentEvidenceString(agentId, ctx) {
 
   if (agentId === "stats") {
     const st = ctx.stats_tables;
-    if (st && typeof st === "object" && Object.keys(st).length) {
+    if (statsTablesHasSubstantiveStats(st)) {
       try {
         return clipText(JSON.stringify(st), 4000);
       } catch {
         return clipText(String(st), 4000);
       }
     }
-    const scoreHits = bullets.filter((b) => STATS_SCORELINE_RX.test(b));
-    if (scoreHits.length) return clipText(scoreHits.join("\n"), 4000);
+    const phrases = contestSearchPhrases(ctx);
+    const withSignal = bullets.filter((b) => bulletHasStatsSignal(b));
+    if (phrases.length) {
+      const contestLines = withSignal.filter((b) => bulletMentionsContestPhrase(b, phrases));
+      if (contestLines.length) return clipText(contestLines.join("\n"), 4000);
+    }
+    if (withSignal.length) return clipText(withSignal.join("\n"), 4000);
     return "";
   }
 
@@ -3983,12 +4157,30 @@ function buildAgentEvidenceString(agentId, ctx) {
     const lines = [];
     if (note) lines.push(note);
     if (hit.length) lines.push(...hit);
-    return lines.join("\n").trim();
+    const joined = lines.join("\n").trim();
+    if (joined) return clipText(joined, 3500);
+    const venue = contestVenueFromCtx(ctx);
+    if (venue) {
+      return clipText(
+        `Fixture venue (no pitch-report lines in current feeds): ${venue}`,
+        600
+      );
+    }
+    return "";
   }
 
   if (agentId === "scout") {
     const hit = bullets.filter((b) => SCOUT_RX.test(b));
     if (hit.length) return clipText(hit.join("\n"), 3500);
+    const phrases = contestSearchPhrases(ctx);
+    if (phrases.length) {
+      const out = bullets.filter(
+        (b) =>
+          bulletMentionsContestPhrase(b, phrases) &&
+          (STATS_SCORELINE_RX.test(b) || SCOUT_CONTEST_OUTCOME_RX.test(b))
+      );
+      if (out.length) return clipText(out.join("\n"), 3500);
+    }
     return "";
   }
 
