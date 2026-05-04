@@ -4323,11 +4323,20 @@ function extractLiveStateFromCtx(ctx) {
  *   batting_team: string | null,
  *   bowling_team: string | null,
  *   innings: 1 | 2 | null,
+ *   target: number | null,
+ *   format: string | null,
+ *   rrr: number | null,
+ *   crr: number | null,
+ *   balls_left: number | null,
+ *   runs_needed: number | null,
  * }} LiveScoreParsed
  */
 
 /**
  * Normalize server `parsed` payload from GET /api/live-score.
+ * Accepts both the legacy regex shape (innings: 1|2, overs: string) and the
+ * richer Cricbuzz-scrape shape (inning: "1st"|"2nd", overs: number, plus
+ * target/rrr/crr/balls_left/runs_needed/format).
  * @param {unknown} raw
  * @returns {LiveScoreParsed | null}
  */
@@ -4337,17 +4346,112 @@ function normalizeLiveScoreParsed(raw) {
   const runs = typeof o.runs === "number" && Number.isFinite(o.runs) ? o.runs : null;
   const wickets =
     typeof o.wickets === "number" && Number.isFinite(o.wickets) ? Math.max(0, Math.floor(o.wickets)) : null;
-  const overs = typeof o.overs === "string" && o.overs.trim() ? o.overs.trim() : null;
+  let overs = null;
+  if (typeof o.overs === "string" && o.overs.trim()) overs = o.overs.trim();
+  else if (typeof o.overs === "number" && Number.isFinite(o.overs)) overs = String(o.overs);
   const batting_team =
     typeof o.batting_team === "string" && o.batting_team.trim() ? o.batting_team.trim().toUpperCase() : null;
   const bowling_team =
     typeof o.bowling_team === "string" && o.bowling_team.trim() ? o.bowling_team.trim().toUpperCase() : null;
   let innings = null;
-  if (o.innings === 1 || o.innings === 2) innings = o.innings;
-  else if (typeof o.innings === "number" && (o.innings === 1 || o.innings === 2)) innings = /** @type {1|2} */ (o.innings);
-  const out = { runs, wickets, overs, batting_team, bowling_team, innings };
+  if (o.innings === 1 || o.innings === 2) innings = /** @type {1|2} */ (o.innings);
+  else if (typeof o.inning === "string") {
+    const lo = o.inning.trim().toLowerCase();
+    if (lo === "2nd" || lo === "2" || lo.startsWith("second")) innings = 2;
+    else if (lo === "1st" || lo === "1" || lo.startsWith("first")) innings = 1;
+  }
+  const target = typeof o.target === "number" && Number.isFinite(o.target) ? Math.max(0, Math.floor(o.target)) : null;
+  const format = typeof o.format === "string" && o.format.trim() ? o.format.trim() : null;
+  const rrr = typeof o.rrr === "number" && Number.isFinite(o.rrr) ? o.rrr : null;
+  const crr = typeof o.crr === "number" && Number.isFinite(o.crr) ? o.crr : null;
+  const balls_left =
+    typeof o.balls_left === "number" && Number.isFinite(o.balls_left) ? Math.max(0, Math.floor(o.balls_left)) : null;
+  const runs_needed =
+    typeof o.runs_needed === "number" && Number.isFinite(o.runs_needed) ? Math.max(0, Math.floor(o.runs_needed)) : null;
+
+  const out = {
+    runs,
+    wickets,
+    overs,
+    batting_team,
+    bowling_team,
+    innings,
+    target,
+    format,
+    rrr,
+    crr,
+    balls_left,
+    runs_needed,
+  };
   if (runs == null || overs == null) return null;
   return out;
+}
+
+/**
+ * Deterministic over-by-over win-probability calculator.
+ *
+ * Pure JS, zero LLM cost. Calibrated against the RRR thresholds the Judge
+ * already uses in {@link enrichLiveStateText} so the live ticker, the over
+ * cards, and the Judge verdict tell the same story when a full debate run
+ * concludes mid-innings.
+ *
+ * Output is the probability that the BATTING team wins, expressed as a 0–100
+ * integer percentage (matches the existing sparkline scale).
+ *
+ * Model: a logistic on "scoring pressure" per ball, with a wicket-loss
+ * penalty. For 1st innings we return null (Google does the same — the win
+ * bar there only appears once a target has been set).
+ *
+ * @param {LiveScoreParsed | null} parsed
+ * @returns {number | null}
+ */
+function computeWinProbability(parsed) {
+  if (!parsed) return null;
+  const runs = typeof parsed.runs === "number" ? parsed.runs : null;
+  const wickets = typeof parsed.wickets === "number" ? parsed.wickets : 0;
+  const target = typeof parsed.target === "number" ? parsed.target : null;
+  let oversFloat = null;
+  if (typeof parsed.overs === "string") {
+    const v = parseFloat(parsed.overs);
+    if (Number.isFinite(v)) oversFloat = v;
+  }
+
+  const fmt = (parsed.format || "T20").toUpperCase();
+  const totalOvers = fmt === "TEST" ? 90 : fmt === "ODI" ? 50 : 20;
+  const totalBalls = totalOvers * 6;
+
+  if (runs == null || target == null || oversFloat == null) {
+    return null;
+  }
+
+  const completedBalls = Math.floor(oversFloat) * 6 + Math.round((oversFloat % 1) * 10);
+  const ballsLeft = Math.max(0, totalBalls - completedBalls);
+  const runsNeeded = Math.max(0, target - runs);
+
+  if (runsNeeded <= 0) return 100;
+  if (wickets >= 10 || ballsLeft <= 0) return 0;
+
+  const rrr = (runsNeeded / ballsLeft) * 6;
+  const crr = oversFloat > 0 ? runs / oversFloat : 0;
+  const wicketsLost = Math.min(10, Math.max(0, wickets));
+
+  // Higher pressure = harder for the batting side. Wickets lost ADD to pressure
+  // (each lost top-order wicket meaningfully drags chances down). Sigmoid maps
+  // pressure to P(batting wins), with batting comfortable when RRR ≤ CRR.
+  // Coefficients calibrated against:
+  //   - LSG 228, MI 201/3 (16.5), RRR 8.84, CRR 12.18 → Google says MI ~94%
+  //   - RRR > 14 thresholds in enrichLiveStateText (ai_cricket_war_room.js:2303)
+  const pressure = (rrr - crr) + 0.2 * wicketsLost;
+  let p = 1 / (1 + Math.exp(0.7 * pressure));
+
+  // Hard guard so the curve matches the Judge's "near-impossible" thresholds
+  // from enrichLiveStateText — a runaway RRR should collapse the chase.
+  if (rrr > 30) p = Math.min(p, 0.01);
+  else if (rrr > 20) p = Math.min(p, 0.03);
+  else if (rrr > 14) p = Math.min(p, 0.10);
+  else if (rrr > 12) p = Math.min(p, 0.18);
+
+  return Math.max(0, Math.min(100, Math.round(p * 100)));
 }
 
 /**
@@ -4389,7 +4493,15 @@ function applyLiveScoreParsedToForm(parsed, teams) {
  * @param {string} match
  * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
  * @param {{ fresh?: boolean }} [opts] fresh=true bypasses ingestion cache for a manual refresh.
- * @returns {Promise<{ snippet: string, hint?: string, unreachable?: boolean, parsed?: LiveScoreParsed | null }>}
+ * @returns {Promise<{
+ *   snippet: string,
+ *   hint?: string,
+ *   unreachable?: boolean,
+ *   parsed?: LiveScoreParsed | null,
+ *   source?: string,
+ *   match_status?: string,
+ *   fetched_at?: string | null,
+ * }>}
  */
 async function fetchLiveScoreDetail(match, teams, opts) {
   const base = apiBase();
@@ -4420,7 +4532,10 @@ async function fetchLiveScoreDetail(match, teams, opts) {
     const sn = typeof data.snippet === "string" ? data.snippet.trim() : "";
     const hint = typeof data.hint === "string" && data.hint.trim() ? data.hint.trim() : undefined;
     const parsed = normalizeLiveScoreParsed(data.parsed);
-    return { snippet: sn, hint, parsed };
+    const source = typeof data.source === "string" ? data.source : undefined;
+    const matchStatus = typeof data.match_status === "string" ? data.match_status : undefined;
+    const fetchedAt = typeof data.fetched_at === "string" ? data.fetched_at : null;
+    return { snippet: sn, hint, parsed, source, match_status: matchStatus, fetched_at: fetchedAt };
   } catch {
     return { snippet: "", parsed: null };
   }
@@ -5812,6 +5927,9 @@ function buildWicketProbSparkline(overs) {
     </div>`;
 }
 
+/** @type {((evt: Event) => void) | null} */
+let __overPredictLiveHandler = null;
+
 /**
  * @param {HTMLElement} container
  * @param {OverPredictionResult} result
@@ -5862,6 +5980,10 @@ function renderOverPredictionResult(container, result, ctx) {
         <div class="over-predict-summary__val">+${totalRuns}</div>
       </div>
       ${winProbCell}
+      <div class="over-predict-summary__cell over-predict-summary__cell--live" id="overPredictLiveCell" hidden>
+        <div class="over-predict-summary__label">Live win % (${escapeHtml(ctx.bat)})</div>
+        <div class="over-predict-summary__val" id="overPredictLiveVal">—</div>
+      </div>
       <div class="over-predict-summary__cell">
         <div class="over-predict-summary__label">Overs predicted</div>
         <div class="over-predict-summary__val">${(result.overs || []).length}</div>
@@ -5923,6 +6045,24 @@ function renderOverPredictionResult(container, result, ctx) {
       });
     });
   });
+
+  // Bind live deterministic win-prob into the summary cell so the LLM forecast
+  // (one-shot snapshot) gets a continuously-updating live sibling. Replaces
+  // the previous handler if renderOverPredictionResult is called again.
+  if (typeof __overPredictLiveHandler === "function") {
+    document.removeEventListener("livescore:wp", __overPredictLiveHandler);
+  }
+  __overPredictLiveHandler = (/** @type {Event} */ evt) => {
+    const ce = /** @type {CustomEvent} */ (evt);
+    const cell = container.querySelector("#overPredictLiveCell");
+    const val = container.querySelector("#overPredictLiveVal");
+    if (!cell || !val) return;
+    const wp = Number(ce.detail?.wp);
+    if (!Number.isFinite(wp)) return;
+    cell.removeAttribute("hidden");
+    val.textContent = `${wp}%`;
+  };
+  document.addEventListener("livescore:wp", __overPredictLiveHandler);
 }
 
 let overPredicting = false;
@@ -6133,6 +6273,7 @@ initAgentsToggle();
 initLivePanel();
 initControlsTabs();
 initLiveScoreBar();
+initLivePollLoop();
 initUmamiButtonTracking();
 void refreshJudgeAccuracyFooter();
 void (async () => {
@@ -6890,4 +7031,354 @@ function initLiveScoreBar() {
   }
 
   syncClear();
+}
+
+// ─── Live ticker + auto-poll loop ──────────────────────────────────────────
+// Auto-polls /api/live-score every 30s when (a) the user has selected a fixture
+// and (b) the document is visible. Updates the sticky live ticker with score,
+// RRR, and the deterministic over-by-over win-probability — all with zero LLM
+// cost. The Bull/Bear debate stays one-shot; this just keeps the score and
+// win-percent fresh between debate runs, like Google's live cricket card.
+
+const LIVE_POLL_INTERVAL_MS = 30_000;
+const LIVE_POLL_STALE_THRESHOLD_MS = 90_000;
+
+const livePoll = /** @type {{
+ *   timer: number | null,
+ *   staleTimer: number | null,
+ *   running: boolean,
+ *   paused: boolean,
+ *   lockedMatch: string | null,
+ *   match: string,
+ *   teams: { teamA: string, teamB: string, codeA: string, codeB: string } | null,
+ *   lastSignature: string,
+ *   lastUpdateAt: number | null,
+ *   inFlight: boolean,
+ *   trajectory: Array<{ overs: number, wp: number, ts: number }>,
+ * }} */ ({
+  timer: null,
+  staleTimer: null,
+  running: false,
+  paused: false,
+  lockedMatch: null,
+  match: "",
+  teams: null,
+  lastSignature: "",
+  lastUpdateAt: null,
+  inFlight: false,
+  trajectory: [],
+});
+
+function liveTickerEl() {
+  return /** @type {HTMLElement|null} */ (document.getElementById("liveTicker"));
+}
+
+function showLiveTicker() {
+  const el = liveTickerEl();
+  if (el) el.hidden = false;
+}
+
+function hideLiveTicker() {
+  const el = liveTickerEl();
+  if (el) el.hidden = true;
+}
+
+function setLiveTickerText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+/**
+ * Format a "x seconds/minutes ago" relative timestamp.
+ * @param {number} ms
+ * @returns {string}
+ */
+function formatAgo(ms) {
+  const sec = Math.max(0, Math.round(ms / 1000));
+  if (sec < 5) return "updated just now";
+  if (sec < 60) return `updated ${sec}s ago`;
+  const min = Math.round(sec / 60);
+  if (min < 60) return `updated ${min}m ago`;
+  const hr = Math.round(min / 60);
+  return `updated ${hr}h ago`;
+}
+
+/** @param {LiveScoreParsed} parsed */
+function liveSignature(parsed) {
+  return [
+    parsed.runs ?? "",
+    parsed.wickets ?? "",
+    parsed.overs ?? "",
+    parsed.target ?? "",
+    parsed.innings ?? "",
+  ].join("|");
+}
+
+/**
+ * Render the live ticker from the latest parsed payload.
+ * @param {LiveScoreParsed} parsed
+ * @param {{ source?: string, match_status?: string }} meta
+ */
+function renderLiveTicker(parsed, meta) {
+  showLiveTicker();
+  const el = liveTickerEl();
+  if (!el) return;
+
+  const bat = parsed.batting_team || "Bat";
+  const score = `${bat} ${parsed.runs ?? "?"}/${parsed.wickets ?? "?"}` +
+    (parsed.overs != null ? ` (${parsed.overs})` : "");
+  setLiveTickerText("liveTickerScore", score);
+
+  const parts = [];
+  if (parsed.crr != null) parts.push(`CRR ${parsed.crr.toFixed(2)}`);
+  if (parsed.rrr != null) parts.push(`RRR ${parsed.rrr.toFixed(2)}`);
+  if (parsed.runs_needed != null && parsed.balls_left != null) {
+    parts.push(`need ${parsed.runs_needed} in ${parsed.balls_left}`);
+  } else if (parsed.target != null) {
+    parts.push(`target ${parsed.target}`);
+  }
+  setLiveTickerText("liveTickerRrr", parts.length ? parts.join(" · ") : "—");
+
+  const wp = computeWinProbability(parsed);
+  if (wp == null) {
+    setLiveTickerText("liveTickerWp", "Win% —");
+  } else {
+    const bowling = parsed.bowling_team || "Bowl";
+    setLiveTickerText("liveTickerWp", `${bat} ${wp}% · ${bowling} ${100 - wp}%`);
+  }
+
+  const sourceLabel = (() => {
+    const s = (meta.source || "").toLowerCase();
+    if (s === "cricbuzz_scrape") return "source: Cricbuzz live";
+    if (s === "cricapi") return "source: CricAPI";
+    if (s === "rss") return "source: RSS";
+    if (s === "none") return "source: none";
+    return "source: —";
+  })();
+  setLiveTickerText("liveTickerSource", sourceLabel);
+
+  const status = (meta.match_status || "").toLowerCase();
+  if (status === "completed") {
+    el.classList.add("live-ticker--locked");
+    setLiveTickerText("liveTickerUpdated", "match ended — feed locked");
+  } else if (status === "innings_break") {
+    el.classList.remove("live-ticker--locked");
+    setLiveTickerText("liveTickerUpdated", "innings break");
+  } else {
+    el.classList.remove("live-ticker--locked");
+    livePoll.lastUpdateAt = Date.now();
+    setLiveTickerText("liveTickerUpdated", formatAgo(0));
+    el.classList.remove("live-ticker--stale");
+  }
+
+  if (wp != null && parsed.overs != null) {
+    const overs = parseFloat(String(parsed.overs));
+    if (Number.isFinite(overs)) {
+      const last = livePoll.trajectory[livePoll.trajectory.length - 1];
+      if (!last || Math.abs(last.overs - overs) >= 0.05 || Math.abs(last.wp - wp) >= 1) {
+        livePoll.trajectory.push({ overs, wp, ts: Date.now() });
+        if (livePoll.trajectory.length > 240) livePoll.trajectory.shift();
+        document.dispatchEvent(
+          new CustomEvent("livescore:wp", {
+            detail: { wp, overs, parsed, trajectory: livePoll.trajectory.slice() },
+          })
+        );
+      }
+    }
+  }
+}
+
+function refreshLiveTickerFreshnessLabel() {
+  const el = liveTickerEl();
+  if (!el || el.hidden) return;
+  if (!livePoll.lastUpdateAt) return;
+  if (el.classList.contains("live-ticker--locked")) return;
+  const age = Date.now() - livePoll.lastUpdateAt;
+  setLiveTickerText("liveTickerUpdated", formatAgo(age));
+  if (age > LIVE_POLL_STALE_THRESHOLD_MS) {
+    el.classList.add("live-ticker--stale");
+  } else {
+    el.classList.remove("live-ticker--stale");
+  }
+}
+
+async function pollLiveScoreOnce() {
+  if (livePoll.inFlight || livePoll.paused) return;
+  if (!livePoll.match || !livePoll.teams) return;
+  livePoll.inFlight = true;
+  try {
+    const detail = await fetchLiveScoreDetail(livePoll.match, livePoll.teams, { fresh: true });
+    if (!detail) return;
+
+    if (detail.snippet) {
+      const input = /** @type {HTMLInputElement|null} */ (document.getElementById("liveScoreInput"));
+      if (input && input.value.trim() !== detail.snippet) {
+        input.value = detail.snippet;
+        const clear = document.getElementById("liveScoreClear");
+        if (clear) clear.hidden = false;
+      }
+    }
+
+    if (detail.parsed) {
+      const sig = liveSignature(detail.parsed);
+      const changed = sig !== livePoll.lastSignature;
+      livePoll.lastSignature = sig;
+      renderLiveTicker(detail.parsed, {
+        source: detail.source,
+        match_status: detail.match_status,
+      });
+      if (changed) {
+        applyLiveScoreParsedToForm(detail.parsed, livePoll.teams);
+        document.dispatchEvent(
+          new CustomEvent("livescore:update", {
+            detail: {
+              parsed: detail.parsed,
+              source: detail.source || null,
+              match_status: detail.match_status || null,
+              snippet: detail.snippet || "",
+            },
+          })
+        );
+      }
+    } else if (detail.snippet) {
+      showLiveTicker();
+      setLiveTickerText("liveTickerScore", detail.snippet.slice(0, 80));
+      setLiveTickerText("liveTickerRrr", "");
+      setLiveTickerText("liveTickerWp", "Win% —");
+      setLiveTickerText("liveTickerSource", `source: ${detail.source || "—"}`);
+      livePoll.lastUpdateAt = Date.now();
+    }
+
+    const status = (detail.match_status || "").toLowerCase();
+    if (status === "completed") {
+      stopLivePollLoop({ lock: true });
+    }
+  } catch {
+    /* swallow — next tick retries */
+  } finally {
+    livePoll.inFlight = false;
+  }
+}
+
+/**
+ * Start (or restart) the 30s poll loop for the given fixture.
+ * @param {string} match
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ */
+function startLivePollLoop(match, teams) {
+  if (!match || !teams) return;
+  if (livePoll.running && livePoll.match === match) return;
+  stopLivePollLoop();
+  livePoll.match = match;
+  livePoll.teams = teams;
+  livePoll.lastSignature = "";
+  livePoll.lastUpdateAt = null;
+  livePoll.trajectory = [];
+  livePoll.running = true;
+  livePoll.paused = false;
+  livePoll.lockedMatch = null;
+
+  showLiveTicker();
+  setLiveTickerText("liveTickerScore", "fetching live score…");
+  setLiveTickerText("liveTickerRrr", "");
+  setLiveTickerText("liveTickerWp", "Win% —");
+  setLiveTickerText("liveTickerUpdated", "updated just now");
+  setLiveTickerText("liveTickerSource", "source: —");
+
+  void pollLiveScoreOnce();
+  livePoll.timer = window.setInterval(() => {
+    if (document.hidden) return;
+    void pollLiveScoreOnce();
+  }, LIVE_POLL_INTERVAL_MS);
+  livePoll.staleTimer = window.setInterval(refreshLiveTickerFreshnessLabel, 5_000);
+
+  trackWarRoomEvent("live_poll_start", { match });
+}
+
+/** @param {{ lock?: boolean }} [opts] */
+function stopLivePollLoop(opts) {
+  const lock = Boolean(opts && opts.lock);
+  if (livePoll.timer != null) {
+    clearInterval(livePoll.timer);
+    livePoll.timer = null;
+  }
+  if (livePoll.staleTimer != null) {
+    clearInterval(livePoll.staleTimer);
+    livePoll.staleTimer = null;
+  }
+  livePoll.running = false;
+  if (lock && livePoll.match) {
+    livePoll.lockedMatch = livePoll.match;
+    const el = liveTickerEl();
+    if (el) {
+      el.classList.add("live-ticker--locked");
+      setLiveTickerText("liveTickerUpdated", "match ended — feed locked");
+    }
+  }
+  if (!lock) {
+    livePoll.match = "";
+    livePoll.teams = null;
+  }
+}
+
+function isFixtureLiveCandidate(match) {
+  if (!match) return false;
+  if (livePoll.lockedMatch && livePoll.lockedMatch === match) return false;
+  return true;
+}
+
+function initLivePollLoop() {
+  const matchInput = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+  const liveInput = /** @type {HTMLInputElement|null} */ (document.getElementById("liveScoreInput"));
+  if (!matchInput) return;
+
+  const tryStart = () => {
+    const match = matchInput.value.trim();
+    if (!isFixtureLiveCandidate(match)) {
+      stopLivePollLoop();
+      hideLiveTicker();
+      return;
+    }
+    if (!match) {
+      stopLivePollLoop();
+      hideLiveTicker();
+      return;
+    }
+    let teams;
+    try {
+      teams = parseTeamsFromMatch(match);
+    } catch {
+      return;
+    }
+    if (!teams || !teams.codeA || !teams.codeB) return;
+    startLivePollLoop(match, teams);
+  };
+
+  matchInput.addEventListener("change", tryStart);
+  matchInput.addEventListener("blur", tryStart);
+
+  if (liveInput) {
+    liveInput.addEventListener("input", () => {
+      if (liveInput.value.trim() && matchInput.value.trim()) {
+        tryStart();
+      }
+    });
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (!livePoll.running || livePoll.paused) return;
+    if (!document.hidden) void pollLiveScoreOnce();
+  });
+
+  const pauseBtn = /** @type {HTMLButtonElement|null} */ (document.getElementById("liveTickerPause"));
+  if (pauseBtn) {
+    pauseBtn.addEventListener("click", () => {
+      livePoll.paused = !livePoll.paused;
+      pauseBtn.setAttribute("aria-pressed", livePoll.paused ? "true" : "false");
+      pauseBtn.textContent = livePoll.paused ? "Resume" : "Pause";
+      if (!livePoll.paused) void pollLiveScoreOnce();
+    });
+  }
+
+  setTimeout(tryStart, 800);
 }

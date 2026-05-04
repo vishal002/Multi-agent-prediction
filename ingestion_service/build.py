@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 from ingestion_service.cache import cache_get, cache_key as make_cache_key, cache_set
+from ingestion_service.cricbuzz_live import fetch_cricbuzz_live
 from ingestion_service.rss import fetch_feed
 
 ESPN_FEED = os.environ.get(
@@ -313,7 +314,7 @@ async def build_match_context(
         headers={"User-Agent": "CricketWarRoom-Ingestion/1.0 (+local dev)"},
         limits=limits,
     ) as client:
-        espn, buzz, cricapi = await asyncio.gather(
+        espn, buzz, cricapi, scrape = await asyncio.gather(
             fetch_feed(
                 client,
                 source_id="espncricinfo",
@@ -329,6 +330,7 @@ async def build_match_context(
                 timeout_sec=timeout,
             ),
             fetch_cricapi_live(client, tokens=tokens, timeout_sec=timeout),
+            fetch_cricbuzz_live(client, tokens=tokens),
         )
 
     sources: list[dict[str, Any]] = []
@@ -359,6 +361,19 @@ async def build_match_context(
             "ok": cricapi.get("error") is None,
             "error": cricapi.get("error"),
             "item_count": len(cricapi.get("bullets") or []),
+        }
+    )
+
+    scrape_struct = scrape.get("struct") if isinstance(scrape, dict) else None
+    sources.append(
+        {
+            "id": "cricbuzz_live",
+            "name": "Cricbuzz (live scrape)",
+            "url": "https://www.cricbuzz.com/cricket-match/live-scores",
+            "ok": bool(scrape and scrape.get("ok")) and scrape_struct is not None,
+            "error": scrape.get("error") if isinstance(scrape, dict) else None,
+            "item_count": 1 if scrape_struct else 0,
+            "disabled": bool(scrape and scrape.get("disabled")),
         }
     )
 
@@ -398,8 +413,30 @@ async def build_match_context(
         {"cricapi_current": summaries} if isinstance(summaries, list) and len(summaries) else {}
     )
 
-    # CricAPI structured score takes priority over RSS-scraped snippet
-    live_score_snippet = cricapi.get("live_score_snippet") or _extract_live_score_snippet(news_bullets)
+    # Source priority for live state:
+    #   1. Cricbuzz scrape (structured + ball-level freshness when enabled)
+    #   2. CricAPI structured (rate-limited but reliable)
+    #   3. RSS-scraped snippet (slow, headline-only)
+    if scrape_struct and scrape_struct.get("snippet"):
+        live_score_snippet = str(scrape_struct.get("snippet") or "")
+        live_score_source = "cricbuzz_scrape"
+    elif cricapi.get("live_score_snippet"):
+        live_score_snippet = cricapi.get("live_score_snippet") or ""
+        live_score_source = "cricapi"
+    else:
+        rss_snippet = _extract_live_score_snippet(news_bullets)
+        live_score_snippet = rss_snippet
+        live_score_source = "rss" if rss_snippet else "none"
+
+    live_score_struct: dict[str, Any] | None = None
+    match_status: str = "unknown"
+    if scrape_struct:
+        live_score_struct = {
+            k: v
+            for k, v in scrape_struct.items()
+            if not k.startswith("_") and k != "snippet"
+        }
+        match_status = str(scrape_struct.get("status") or "live")
 
     fetched_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
@@ -409,6 +446,9 @@ async def build_match_context(
         "pitch_note": pitch_note,
         "weather_note": weather_note,
         "live_score_snippet": live_score_snippet,
+        "live_score_source": live_score_source,
+        "live_score_struct": live_score_struct,
+        "match_status": match_status,
         "sources": sources,
         "fetched_at": fetched_at,
         "query": params,

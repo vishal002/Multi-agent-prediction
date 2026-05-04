@@ -266,6 +266,22 @@
             </div>
           </div>
         </div>
+        <div class="live-ticker" id="liveTicker" hidden aria-live="polite" aria-label="Live match ticker">
+          <div class="live-ticker__row">
+            <span class="live-ticker__dot live-dot" aria-hidden="true"></span>
+            <span class="live-ticker__score" id="liveTickerScore">—</span>
+            <span class="live-ticker__sep" aria-hidden="true">·</span>
+            <span class="live-ticker__rrr" id="liveTickerRrr">RRR —</span>
+            <span class="live-ticker__sep" aria-hidden="true">·</span>
+            <span class="live-ticker__wp" id="liveTickerWp" title="Deterministic win-probability based on RRR + wickets in hand">Win% —</span>
+          </div>
+          <div class="live-ticker__meta">
+            <span class="live-ticker__source" id="liveTickerSource">source: —</span>
+            <span class="live-ticker__sep" aria-hidden="true">·</span>
+            <span class="live-ticker__updated" id="liveTickerUpdated">updated just now</span>
+            <button type="button" class="live-ticker__pause" id="liveTickerPause" aria-pressed="false" title="Pause auto-refresh">Pause</button>
+          </div>
+        </div>
         <div class="surface surface--stage surface--verdict surface--panel" id="debateCard">
           <div id="phaseBanner" class="phase-banner" style="display:none"></div>
           <div class="stage-fixture-verdict" id="stageFixtureVerdict" hidden>

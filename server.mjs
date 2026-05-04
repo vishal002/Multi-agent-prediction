@@ -2334,7 +2334,44 @@ export async function warRoomHttpHandler(req, res) {
         .filter(Boolean);
       const fixtureTeams =
         fixtureCodes.length >= 2 ? { codeA: fixtureCodes[0], codeB: fixtureCodes[1] } : null;
-      const parsed = snippet ? parseLiveScoreSnippet(snippet, fixtureTeams) : null;
+
+      // Prefer the structured live_score_struct from the ingestion service
+      // (Cricbuzz scrape, when enabled) over our regex extraction. The struct
+      // carries fields the regex parser can't see — RRR, CRR, runs needed,
+      // balls left, target, format — which the frontend uses to drive the
+      // deterministic over-by-over win-probability without any LLM call.
+      const struct =
+        data.live_score_struct && typeof data.live_score_struct === "object"
+          ? data.live_score_struct
+          : null;
+      const regexParsed = snippet ? parseLiveScoreSnippet(snippet, fixtureTeams) : null;
+      const parsed = struct
+        ? {
+            runs: struct.runs ?? regexParsed?.runs ?? null,
+            wickets: struct.wickets ?? regexParsed?.wickets ?? null,
+            overs: struct.overs ?? regexParsed?.overs ?? null,
+            target: struct.target ?? null,
+            inning: struct.inning ?? regexParsed?.innings ?? null,
+            format: struct.format ?? null,
+            batting_team: struct.batting_team || regexParsed?.batting_team || null,
+            bowling_team: struct.bowling_team || regexParsed?.bowling_team || null,
+            rrr: struct.rrr ?? null,
+            crr: struct.crr ?? null,
+            balls_left: struct.balls_left ?? null,
+            runs_needed: struct.runs_needed ?? null,
+          }
+        : regexParsed;
+
+      const matchStatus =
+        typeof data.match_status === "string" ? data.match_status : "unknown";
+      const liveSource =
+        typeof data.live_score_source === "string"
+          ? data.live_score_source
+          : struct
+            ? "cricbuzz_scrape"
+            : snippet
+              ? "rss"
+              : "none";
 
       res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
@@ -2347,8 +2384,10 @@ export async function warRoomHttpHandler(req, res) {
           richness: bestScore,
           fetched_at: data.fetched_at || null,
           parsed,
+          source: liveSource,
+          match_status: matchStatus,
           hint:
-            !snippet && bestScore > 0
+            !snippet && !struct && bestScore > 0
               ? "RSS had a weak score signal for this fixture; paste the score or set CRICAPI_KEY on the ingestion service."
               : null,
         })
