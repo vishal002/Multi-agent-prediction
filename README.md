@@ -46,7 +46,7 @@ flowchart LR
 
 **Production (Vercel):** the main app is a Node serverless function; **Judge** routes are **Python** functions under `api/judge/*.py` that bundle `judge_service/` (see `vercel.json`). **Ingestion** stays a separate FastAPI process you host (e.g. Render) and point to with `INGESTION_SERVICE_URL`.
 
-**Optional [Upstash](https://upstash.com) Redis** (`UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`): shared HTTP caching (e.g. Judge accuracy), distributed rate-limit state, and freemium run counts across cold starts. Omit it for local-only dev; Python Judge routes use the same env vars via `api/judge/_cache.py`.
+**Optional [Upstash](https://upstash.com) Redis** (`UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`): shared HTTP caching (e.g. Judge accuracy), distributed rate-limit state, and freemium run counts across cold starts. Omit it for local-only dev; Python Judge routes use the same env vars via `api/judge/_cache.py`.ana
 
 ---
 
@@ -55,9 +55,9 @@ flowchart LR
 ### Vercel (recommended for this repo)
 
 1. Connect the repo; build is `npm run build`, output `dist/` (see `vercel.json`).
-2. Set **LLM** keys and, for Judge + share links in production, **`SUPABASE_URL`** + **`SUPABASE_SERVICE_ROLE_KEY`** (run [`supabase_migrations/migrations/001_initial.sql`](supabase_migrations/migrations/001_initial.sql)).
-3. Set **`INGESTION_SERVICE_URL`** to your hosted ingestion base URL if you want live RSS/CricAPI context.
-4. Optional: **`UPSTASH_REDIS_*`**, **`WAR_ROOM_API_SECRET`** / **`JUDGE_SERVICE_SECRET`**, freemium vars (below).
+2. Set **LLM** keys and, for Judge + share links in production, `**SUPABASE_URL`** + `**SUPABASE_SERVICE_ROLE_KEY**` (run `[supabase_migrations/migrations/001_initial.sql](supabase_migrations/migrations/001_initial.sql)`).
+3. Set `**INGESTION_SERVICE_URL**` to your hosted ingestion base URL if you want live RSS/CricAPI context.
+4. Optional: `**UPSTASH_REDIS_***`, `**WAR_ROOM_API_SECRET**` / `**JUDGE_SERVICE_SECRET**`, freemium vars (below).
 
 Cold starts and platform timeouts apply on free tiers; long agent chains may need Pro or async work if you hit limits.
 
@@ -85,33 +85,35 @@ Open [http://localhost:3333/](http://localhost:3333/). Judge data uses the `judg
 
 ### Render (optional blueprint)
 
-[`render.yaml`](render.yaml) can provision web + ingestion + judge. Set `GROQ_API_KEY` (and service URLs as in the blueprint). Prefer **Supabase** on judge for persistence—SQLite on ephemeral disks resets on restart.
+`[render.yaml](render.yaml)` can provision web + ingestion + judge. Set `GROQ_API_KEY` (and service URLs as in the blueprint). Prefer **Supabase** on judge for persistence—SQLite on ephemeral disks resets on restart.
 
 ---
 
 ## Configuration
 
-| Variable | Purpose |
-| -------- | ------- |
-| `GROQ_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` | LLM keys (Node + Judge). `LLM_PROVIDER`: `groq` \| `anthropic` \| `gemini`. |
-| `GROQ_MODEL`, `GROQ_MODEL_LIGHT`, `GROQ_MODEL_DEBATE` | Model mix (see `server.mjs` header). |
-| `PORT` | Node port (default `3333`). |
-| `SERVE_DIST` | `1` → serve production `dist/` assets. |
-| `INGESTION_SERVICE_URL` / `JUDGE_SERVICE_URL` | Python service bases (local / Render); on Vercel, Judge is in-process Python—`JUDGE_SERVICE_URL` is for local proxy only. |
-| `CRICAPI_KEY` | On **ingestion**; optional live scores. |
-| `WAR_ROOM_DB_PATH` | Judge **SQLite** when Supabase env is unset. |
-| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` | Judge predictions + share packs in Postgres (preferred in production). |
-| `PUBLIC_SITE_URL` | Canonical origin for OG and `/s/{id}` when behind another host. |
-| `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` | Optional Redis for caches, rate limits, freemium counts. |
-| `FREEMIUM_MAX_RUNS_PER_DAY` | Daily cap on successful Judge runs per IP during IPL live window (IST); default `5`, `0` disables. |
-| `IPL_FREEMIUM_ACTIVE` | `1` or `true` forces the freemium window on (testing). |
-| `WAR_ROOM_API_SECRET` | If set, `POST /api/messages` and `POST /api/judge/predict` require `Authorization: Bearer …`. UI can store the same value in `localStorage.WAR_ROOM_API_SECRET`. |
-| `JUDGE_SERVICE_SECRET` | If set on Judge, all Judge HTTP routes require that Bearer (or `X-Judge-Secret`). Node forwards it when set on the web process—use the **same** value on web + judge. |
-| `TRUST_PROXY` | `1` / `true`: use `X-Forwarded-For` for rate-limit IP. |
-| `RL_MESSAGES_PER_MIN` / `RL_JUDGE_PER_MIN` | Per-IP caps / 60s (defaults 30 / 15; `0` disables that route’s limit). |
-| `MAX_BODY_MESSAGES_BYTES` / `MAX_BODY_JUDGE_BYTES` | Body size caps (defaults 1 MiB / 2 MiB). |
-| `ALLOWED_ORIGINS` | Comma-separated CORS origins in production instead of `*`. |
-| `INGESTION_EXPOSE_ERRORS` / `INGESTION_RSS_MAX_BYTES` | Ingestion debugging and RSS download cap. |
+
+| Variable                                                | Purpose                                                                                                                                                               |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GROQ_API_KEY` / `ANTHROPIC_API_KEY` / `GEMINI_API_KEY` | LLM keys (Node + Judge). `LLM_PROVIDER`: `groq` | `anthropic` | `gemini`.                                                                                             |
+| `GROQ_MODEL`, `GROQ_MODEL_LIGHT`, `GROQ_MODEL_DEBATE`   | Model mix (see `server.mjs` header).                                                                                                                                  |
+| `PORT`                                                  | Node port (default `3333`).                                                                                                                                           |
+| `SERVE_DIST`                                            | `1` → serve production `dist/` assets.                                                                                                                                |
+| `INGESTION_SERVICE_URL` / `JUDGE_SERVICE_URL`           | Python service bases (local / Render); on Vercel, Judge is in-process Python—`JUDGE_SERVICE_URL` is for local proxy only.                                             |
+| `CRICAPI_KEY`                                           | On **ingestion**; optional live scores.                                                                                                                               |
+| `WAR_ROOM_DB_PATH`                                      | Judge **SQLite** when Supabase env is unset.                                                                                                                          |
+| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`            | Judge predictions + share packs in Postgres (preferred in production).                                                                                                |
+| `PUBLIC_SITE_URL`                                       | Canonical origin for OG and `/s/{id}` when behind another host.                                                                                                       |
+| `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`   | Optional Redis for caches, rate limits, freemium counts.                                                                                                              |
+| `FREEMIUM_MAX_RUNS_PER_DAY`                             | Daily cap on successful Judge runs per IP during IPL live window (IST); default `5`, `0` disables.                                                                    |
+| `IPL_FREEMIUM_ACTIVE`                                   | `1` or `true` forces the freemium window on (testing).                                                                                                                |
+| `WAR_ROOM_API_SECRET`                                   | If set, `POST /api/messages` and `POST /api/judge/predict` require `Authorization: Bearer …`. UI can store the same value in `localStorage.WAR_ROOM_API_SECRET`.      |
+| `JUDGE_SERVICE_SECRET`                                  | If set on Judge, all Judge HTTP routes require that Bearer (or `X-Judge-Secret`). Node forwards it when set on the web process—use the **same** value on web + judge. |
+| `TRUST_PROXY`                                           | `1` / `true`: use `X-Forwarded-For` for rate-limit IP.                                                                                                                |
+| `RL_MESSAGES_PER_MIN` / `RL_JUDGE_PER_MIN`              | Per-IP caps / 60s (defaults 30 / 15; `0` disables that route’s limit).                                                                                                |
+| `MAX_BODY_MESSAGES_BYTES` / `MAX_BODY_JUDGE_BYTES`      | Body size caps (defaults 1 MiB / 2 MiB).                                                                                                                              |
+| `ALLOWED_ORIGINS`                                       | Comma-separated CORS origins in production instead of `*`.                                                                                                            |
+| `INGESTION_EXPOSE_ERRORS` / `INGESTION_RSS_MAX_BYTES`   | Ingestion debugging and RSS download cap.                                                                                                                             |
+
 
 ---
 
@@ -120,7 +122,7 @@ Open [http://localhost:3333/](http://localhost:3333/). Judge data uses the `judg
 When the Judge API is enabled, the UI shows **running accuracy** and can load **saved pre-match predictions** on completed fixtures.
 
 - **SQLite** (`WAR_ROOM_DB_PATH` or default `data/war_room.db`): fine for `npm run judge:dev` and Docker.
-- **Supabase Postgres** (preferred): set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` on the Judge process. Schema: [`supabase_migrations/migrations/001_initial.sql`](supabase_migrations/migrations/001_initial.sql).
+- **Supabase Postgres** (preferred): set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` on the Judge process. Schema: `[supabase_migrations/migrations/001_initial.sql](supabase_migrations/migrations/001_initial.sql)`.
 
 **Freemium:** during an IPL “live” day (catalog has a non-completed fixture on today’s IST date, or `IPL_FREEMIUM_ACTIVE=1`), each successful `POST /api/judge/predict` increments a per-IP counter up to `FREEMIUM_MAX_RUNS_PER_DAY`. When the cap is reached, both `POST /api/messages` and `POST /api/judge/predict` return 429 until the next IST calendar day. `GET /api/freemium-status` drives the UI pill. Clients presenting `WAR_ROOM_API_SECRET` bypass the cap when that secret is configured.
 
@@ -156,37 +158,39 @@ Production UI (IPL example: **DC vs RCB, Delhi**). Order: **(3) home** → **(1)
 
 ### 3) Homepage — before Run war room
 
-![Home — fixture selected, debate ready](image/readme-state-03-home-before-run.png)
+Home — fixture selected, debate ready
 
 ### 1) After search
 
-![After search — live / ground truth, command row](image/readme-state-01-after-search.png)
+After search — live / ground truth, command row
 
 ### 2) After full prediction
 
-![After prediction — verdict and debate](image/readme-state-02-after-prediction.png)
+After prediction — verdict and debate
 
 ### Shared prediction link
 
-![Shared prediction card](image/readme-shared-prediction-after-link.png)
+Shared prediction card
 
 ---
 
 ## API (Node gateway)
 
-| Method | Path | Role |
-| ------ | ---- | ---- |
-| POST | `/api/messages` | LLM proxy (intel, debate, live turns). |
-| GET | `/api/match-suggest`, `/api/match-by-label` | Fixture catalog. |
-| GET | `/api/match-context` | Proxy to ingestion. |
-| GET | `/api/live-score` | Score JSON; `fresh=1` forces upstream refresh. |
-| POST | `/api/judge/predict` | Run Judge + store prediction. |
-| GET | `/api/judge/accuracy` | Running accuracy stats (also routed as `/api/accuracy` on Vercel). |
-| GET | `/api/judge/predictions-by-match` | Saved predictions for a `match_id` (completed-match “view pre-match pick”). |
-| GET | `/api/judge/recent-settled` | Latest settled predictions (ledger / trust UI). |
-| GET | `/api/freemium-status` | Freemium cap status for the client IP. |
-| GET | `/api/version` | Build metadata (minimal fields in production when configured). |
-| POST | `/api/share-prediction` | Create short share id; GET `/api/share/:id` returns pack JSON. |
+
+| Method | Path                                        | Role                                                                        |
+| ------ | ------------------------------------------- | --------------------------------------------------------------------------- |
+| POST   | `/api/messages`                             | LLM proxy (intel, debate, live turns).                                      |
+| GET    | `/api/match-suggest`, `/api/match-by-label` | Fixture catalog.                                                            |
+| GET    | `/api/match-context`                        | Proxy to ingestion.                                                         |
+| GET    | `/api/live-score`                           | Score JSON; `fresh=1` forces upstream refresh.                              |
+| POST   | `/api/judge/predict`                        | Run Judge + store prediction.                                               |
+| GET    | `/api/judge/accuracy`                       | Running accuracy stats (also routed as `/api/accuracy` on Vercel).          |
+| GET    | `/api/judge/predictions-by-match`           | Saved predictions for a `match_id` (completed-match “view pre-match pick”). |
+| GET    | `/api/judge/recent-settled`                 | Latest settled predictions (ledger / trust UI).                             |
+| GET    | `/api/freemium-status`                      | Freemium cap status for the client IP.                                      |
+| GET    | `/api/version`                              | Build metadata (minimal fields in production when configured).              |
+| POST   | `/api/share-prediction`                     | Create short share id; GET `/api/share/:id` returns pack JSON.              |
+
 
 ---
 
@@ -198,31 +202,35 @@ Edit `match_suggestions.json`. Optional `completed` + `result` (`winner`, `summa
 
 Each catalog row is classified by `getMatchStatus()` in `ai_cricket_war_room.js`. The status drives the dropdown badge, ordering, and whether the war-room flow runs agents or jumps straight to the result/past-match view.
 
-| Status | When it applies |
-| ------ | --------------- |
+
+| Status      | When it applies                                                                                                |
+| ----------- | -------------------------------------------------------------------------------------------------------------- |
 | `COMPLETED` | `completed: true` with a recorded `result.winner`. Skips agents; renders the post-match card (verdict + POTM). |
-| `LIVE` | `date` = today **and** a live score snippet is present in `result` / live-score cache (in-flight match). |
-| `TODAY` | `date` = today, no live score yet (pre-toss / awaiting first ball). |
-| `UPCOMING` | `date` > today. |
-| `PAST` | `date` < today but **not** flagged `completed` — date-based fallback guard so missing flags still skip agents. |
-| `TBD` | No date or non-ISO date (e.g. playoff placeholders like `IPL 2026 Final — TBD`). No badge is shown. |
+| `LIVE`      | `date` = today **and** a live score snippet is present in `result` / live-score cache (in-flight match).       |
+| `TODAY`     | `date` = today, no live score yet (pre-toss / awaiting first ball).                                            |
+| `UPCOMING`  | `date` > today.                                                                                                |
+| `PAST`      | `date` < today but **not** flagged `completed` — date-based fallback guard so missing flags still skip agents. |
+| `TBD`       | No date or non-ISO date (e.g. playoff placeholders like `IPL 2026 Final — TBD`). No badge is shown.            |
+
 
 ---
 
 ## Project layout
 
-| Path | Role |
-| ---- | ---- |
-| `ai_cricket_war_room.{html,css,js}` | UI, debate, share param, prompts |
-| `server.mjs` | Static host, APIs, `SERVE_DIST` |
-| `api/index.mjs` | Vercel Node entry |
-| `api/judge/*.py` | Vercel Judge serverless handlers |
-| `scripts/build.mjs` | Production `dist/` + assets |
-| `match_suggestions.json` | Fixture catalog |
-| `ingestion_service/` | FastAPI RSS / CricAPI |
-| `judge_service/` | FastAPI Judge + SQLite / Supabase stores |
-| `lib/redis.js`, `middleware/freemiumLive.mjs` | Optional Redis + freemium |
-| `vercel.json`, `render.yaml`, `docker-compose.yml`, `Dockerfile*` | Deploy |
+
+| Path                                                              | Role                                     |
+| ----------------------------------------------------------------- | ---------------------------------------- |
+| `ai_cricket_war_room.{html,css,js}`                               | UI, debate, share param, prompts         |
+| `server.mjs`                                                      | Static host, APIs, `SERVE_DIST`          |
+| `api/index.mjs`                                                   | Vercel Node entry                        |
+| `api/judge/*.py`                                                  | Vercel Judge serverless handlers         |
+| `scripts/build.mjs`                                               | Production `dist/` + assets              |
+| `match_suggestions.json`                                          | Fixture catalog                          |
+| `ingestion_service/`                                              | FastAPI RSS / CricAPI                    |
+| `judge_service/`                                                  | FastAPI Judge + SQLite / Supabase stores |
+| `lib/redis.js`, `middleware/freemiumLive.mjs`                     | Optional Redis + freemium                |
+| `vercel.json`, `render.yaml`, `docker-compose.yml`, `Dockerfile`* | Deploy                                   |
+
 
 ---
 

@@ -47,7 +47,7 @@
  *
  * Short prediction links (no Mongo): POST /api/share-prediction → { id }; GET /api/share/:id → pack JSON;
  * GET /s/:id → 302 to /?sid=:id (pack persisted under data/share_predictions.json by default).
- * Open Graph PNGs (1200×630, Sharp): GET /og-homepage.png (site preview); GET /api/og/share/{id}.png (per share).
+ * Open Graph PNGs (1200×630, @vercel/og / Satori): GET /og-homepage.png (site preview); GET /api/og/share/{id}.png (per share).
  *
  * Freemium (optional): GET /api/freemium-status — IST-day cap on successful Judge runs while IPL catalog
  * has a non-completed fixture today (or IPL_FREEMIUM_ACTIVE=1). FREEMIUM_MAX_RUNS_PER_DAY defaults to 5; set 0 to disable.
@@ -63,6 +63,7 @@ import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import * as Sentry from "@sentry/node";
+import { ImageResponse } from "@vercel/og";
 import { withCache, TTL } from "./lib/cache.js";
 import { forwardLiteLLM, liteLLMEnabled } from "./lib/litellmForward.mjs";
 import { redis } from "./lib/redis.js";
@@ -92,17 +93,6 @@ if (SENTRY_DSN) {
     dsn: SENTRY_DSN,
     tracesSampleRate: Math.min(1, Number(process.env.SENTRY_TRACES_SAMPLE_RATE) || 0.1),
   });
-}
-
-/** Lazy so the handler loads on Vercel even if the native `sharp` binary fails until OG routes run. */
-/** @type {typeof import("sharp").default | null} */
-let sharpModule = null;
-async function loadSharp() {
-  if (!sharpModule) {
-    const mod = await import("sharp");
-    sharpModule = mod.default;
-  }
-  return sharpModule;
 }
 
 const MATCH_SUGGESTIONS_PATH = path.join(APP_ROOT, "match_suggestions.json");
@@ -1121,11 +1111,18 @@ async function forwardAnthropic(body) {
 const SERVE_DIST = process.env.SERVE_DIST === "1" || process.env.VERCEL === "1";
 const STATIC_ROOT = SERVE_DIST ? path.join(APP_ROOT, "dist") : __dirname;
 
-/** OG card background (#060a12) — flatten logo alpha onto this so librsvg does not render transparency as white/checkerboard. */
-const OG_LOGO_FLATTEN_BG = { r: 6, g: 10, b: 18 };
-
+/**
+ * Prefer `image/og-logo-flat.png` — a 480×480 logo pre-flattened against the
+ * OG navy background at build/commit time. Satori's PNG path keeps premultiplied
+ * alpha but doesn't redraw transparent pixels against the parent background, so
+ * raw `ai-cricket-war-room-logo.png` would expose checkerboard gray on the OG
+ * card. Falls back to the raw transparent logo if the flattened sibling isn't
+ * present (e.g. fresh checkout before rerunning the flatten step).
+ */
 function findOgLogoPath() {
   const candidates = [
+    path.join(STATIC_ROOT, "image", "og-logo-flat.png"),
+    path.join(APP_ROOT, "image", "og-logo-flat.png"),
     path.join(STATIC_ROOT, "image", "ai-cricket-war-room-logo.png"),
     path.join(APP_ROOT, "image", "ai-cricket-war-room-logo.png"),
     path.join(APP_ROOT, "ai-cricket-war-room-logo.png"),
@@ -1141,54 +1138,26 @@ function findOgLogoPath() {
 }
 
 /**
- * Trim transparent padding, flatten alpha to OG navy (fixes SVG raster white box),
- * return data URI for embedding. Cached after first successful read.
- * @type {string | null | undefined}
+ * Read the brand logo PNG once at module init, base64-encode for inline `<img>`
+ * use inside the @vercel/og JSX tree. Satori composites onto our solid navy
+ * background so we don't need to pre-flatten transparency.
+ * @type {string | null}
  */
-let ogLogoDataUriMemo = undefined;
-/** @type {Promise<string | null> | null} */
-let ogLogoPreparePromise = null;
-
-async function getOgLogoDataUri() {
-  if (ogLogoDataUriMemo !== undefined) return ogLogoDataUriMemo;
-  if (ogLogoPreparePromise) return ogLogoPreparePromise;
-  ogLogoPreparePromise = (async () => {
-    const logoPath = findOgLogoPath();
-    if (!logoPath) {
-      console.warn(
-        "War room: ai-cricket-war-room-logo.png not found (image/ or project root) — OG images use WR text / omit logo until the file is present."
-      );
-      ogLogoDataUriMemo = null;
-      return null;
-    }
-    try {
-      const raw = fs.readFileSync(logoPath);
-      const sharp = await loadSharp();
-      let buf;
-      try {
-        buf = await sharp(raw)
-          .ensureAlpha()
-          .trim({ threshold: 18 })
-          .flatten({ background: OG_LOGO_FLATTEN_BG })
-          .png({ compressionLevel: 9 })
-          .toBuffer();
-      } catch {
-        buf = await sharp(raw)
-          .ensureAlpha()
-          .flatten({ background: OG_LOGO_FLATTEN_BG })
-          .png({ compressionLevel: 9 })
-          .toBuffer();
-      }
-      ogLogoDataUriMemo = `data:image/png;base64,${buf.toString("base64")}`;
-      return ogLogoDataUriMemo;
-    } catch (e) {
-      console.warn("War room: OG logo preprocess failed:", e instanceof Error ? e.message : e);
-      ogLogoDataUriMemo = null;
-      return null;
-    }
-  })();
-  return ogLogoPreparePromise;
-}
+const OG_LOGO_DATA_URI = (() => {
+  const logoPath = findOgLogoPath();
+  if (!logoPath) {
+    console.warn(
+      "War room: ai-cricket-war-room-logo.png not found (image/ or project root) — OG images use WR text / omit logo until the file is present."
+    );
+    return null;
+  }
+  try {
+    return `data:image/png;base64,${fs.readFileSync(logoPath).toString("base64")}`;
+  } catch (e) {
+    console.warn("War room: OG logo read failed:", e instanceof Error ? e.message : e);
+    return null;
+  }
+})();
 
 /**
  * Hashed asset filename suffix from build.mjs (8-char SHA-256 prefix).
@@ -1557,9 +1526,63 @@ async function resolveSharePredictionRow(id) {
   return undefined;
 }
 
-/** Sharp/libvips SVG text: generic web stacks (Segoe/Impact) are missing on Linux — use fonts common on Vercel. */
-const OG_FONT_UI = '"DejaVu Sans", "Liberation Sans", "Noto Sans", Ubuntu, Arial, sans-serif';
-const OG_FONT_DISPLAY = '"DejaVu Sans", "Liberation Sans", Ubuntu, Arial, sans-serif';
+/**
+ * Inter TTF buffers, read once at module init and reused for every OG render.
+ * Satori needs explicit font Buffers — it does not load system fonts.
+ * `fonts:[...]` is forwarded into every `new ImageResponse(...)` call below.
+ * @type {{ data: Buffer, name: string, weight: 400 | 700, style: "normal" }[]}
+ */
+const OG_FONTS = (() => {
+  const dir = path.join(APP_ROOT, "public", "fonts");
+  const out = [];
+  try {
+    out.push({
+      data: fs.readFileSync(path.join(dir, "Inter-Regular.ttf")),
+      name: "Inter",
+      weight: 400,
+      style: "normal",
+    });
+    out.push({
+      data: fs.readFileSync(path.join(dir, "Inter-Bold.ttf")),
+      name: "Inter",
+      weight: 700,
+      style: "normal",
+    });
+  } catch (e) {
+    console.warn("War room: Inter font load failed — OG images will fall back to Satori's default font:", e instanceof Error ? e.message : e);
+  }
+  return out;
+})();
+
+/**
+ * Tiny `React.createElement`-equivalent: builds a plain `{ type, props, key }`
+ * literal that Satori (used by `@vercel/og`) accepts as a valid element tree.
+ * Avoids pulling in React just to author the OG layout in this single file.
+ * @param {string} type tag name (`div`, `span`, `img`)
+ * @param {Record<string, unknown> | null} props
+ * @param {...(unknown)} children
+ */
+function el(type, props, ...children) {
+  const merged = props ? { ...props } : {};
+  const flat = [];
+  const collect = (c) => {
+    if (c == null || c === false || c === true) return;
+    if (Array.isArray(c)) {
+      for (const x of c) collect(x);
+      return;
+    }
+    flat.push(c);
+  };
+  for (const c of children) collect(c);
+  if (flat.length > 0) merged.children = flat.length === 1 ? flat[0] : flat;
+  return { type, props: merged, key: null };
+}
+
+/** Drain a `Response` returned by `@vercel/og`'s `ImageResponse` into a Node `Buffer`. */
+async function imageResponseToBuffer(response) {
+  const ab = await response.arrayBuffer();
+  return Buffer.from(ab);
+}
 
 /** Chat / social crawlers: return OG HTML for short links instead of a 302 to the SPA. */
 function isSharePreviewBot(ua) {
@@ -1596,13 +1619,6 @@ function escapeHtmlAttr(s) {
 
 function escapeHtmlPcdata(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-function escapeXmlText(s) {
-  return String(s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
 }
 
 function truncateHard(s, max) {
@@ -1649,118 +1665,319 @@ function parseShareTeamsFromLabel(match) {
   return fallback;
 }
 
-/**
- * 1200×630 homepage Open Graph card (logo + headline + agents strip).
- * @returns {Promise<string>}
- */
-async function buildHomepageOgSvg() {
-  const W = 1200;
-  const H = 630;
-  const fontUi = OG_FONT_UI;
-  const fontDisplay = OG_FONT_DISPLAY;
-  const logoUri = await getOgLogoDataUri();
-  const logo = logoUri
-    ? `<clipPath id="hpLogoClip"><rect x="72" y="195" width="240" height="240" rx="18"/></clipPath>`
-    : "";
-  const logoG = logoUri
-    ? `<g clip-path="url(#hpLogoClip)"><image href="${logoUri}" x="72" y="195" width="240" height="240" preserveAspectRatio="xMidYMid slice"/></g>`
-    : `<text x="192" y="320" text-anchor="middle" fill="#64748b" font-family="${fontUi}" font-size="22" font-weight="700">Cricket War Room</text>`;
+const OG_W = 1200;
+const OG_H = 630;
+const OG_BG = "#060a12";
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-  <defs>
-    ${logo}
-    <linearGradient id="hpTop" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#1e3a8a" stop-opacity="0"/>
-      <stop offset="0.1" stop-color="#1e3a8a"/>
-      <stop offset="0.22" stop-color="#2563eb"/>
-      <stop offset="0.38" stop-color="#16a34a"/>
-      <stop offset="0.5" stop-color="#22c55e"/>
-      <stop offset="0.65" stop-color="#eab308"/>
-      <stop offset="0.8" stop-color="#f97316"/>
-      <stop offset="0.9" stop-color="#ef4444"/>
-      <stop offset="1" stop-color="#ef4444" stop-opacity="0"/>
-    </linearGradient>
-    <pattern id="hpGrid" width="60" height="60" patternUnits="userSpaceOnUse">
-      <path d="M60 0H0V60" fill="none" stroke="#ffffff" stroke-opacity="0.028" stroke-width="1"/>
-    </pattern>
-    <radialGradient id="hpHalo" cx="50%" cy="50%" r="50%">
-      <stop offset="0" stop-color="#2563eb" stop-opacity="0.38"/>
-      <stop offset="0.45" stop-color="#16a34a" stop-opacity="0.22"/>
-      <stop offset="1" stop-color="#16a34a" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="hpCta" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#16a34a"/>
-      <stop offset="1" stop-color="#14532d"/>
-    </linearGradient>
-  </defs>
-  <rect width="${W}" height="${H}" fill="#060a12"/>
-  <ellipse cx="600" cy="700" rx="560" ry="380" fill="#16a34a" fill-opacity="0.16"/>
-  <ellipse cx="40" cy="20" rx="220" ry="180" fill="#1e3a8a" fill-opacity="0.22"/>
-  <ellipse cx="1180" cy="30" rx="200" ry="160" fill="#eab308" fill-opacity="0.1"/>
-  <rect width="${W}" height="${H}" fill="url(#hpGrid)" opacity="0.9"/>
-  <rect x="0" y="0" width="${W}" height="4" fill="url(#hpTop)"/>
-  <ellipse cx="192" cy="315" rx="150" ry="150" fill="url(#hpHalo)"/>
-  ${logoG}
-  <line x1="880" y1="100" x2="880" y2="530" stroke="#ffffff" stroke-opacity="0.07"/>
-  <text x="380" y="218" fill="rgba(255,255,255,0.32)" font-family="${fontUi}" font-size="13" font-weight="600" letter-spacing="3">IPL 2026 · AI MATCH ANALYSIS</text>
-  <text x="380" y="288" fill="#ffffff" font-family="${fontDisplay}" font-size="86" font-weight="700">5 AIS.</text>
-  <text x="380" y="378" font-family="${fontDisplay}" font-size="86" font-weight="700">
-    <tspan fill="#22c55e">ONE</tspan><tspan fill="#ffffff"> MATCH.</tspan>
-  </text>
-  <text x="380" y="468" fill="#ffffff" font-family="${fontDisplay}" font-size="86" font-weight="700">ZERO BIAS.</text>
-  <text x="380" y="512" fill="rgba(255,255,255,0.48)" font-family="${fontUi}" font-size="18" font-weight="500">Bull vs Bear multi-round debate. Five intel agents, one Judge verdict.</text>
-  <rect x="380" y="528" width="56" height="52" rx="10" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
-  <text x="408" y="562" text-anchor="middle" fill="#22c55e" font-family="${fontDisplay}" font-size="26">5</text>
-  <text x="408" y="578" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="10" font-weight="600" letter-spacing="1">AGENTS</text>
-  <rect x="448" y="528" width="88" height="52" rx="10" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
-  <text x="492" y="562" text-anchor="middle" fill="#fbbf24" font-family="${fontDisplay}" font-size="22">MULTI</text>
-  <text x="492" y="578" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="10" font-weight="600" letter-spacing="1">ROUNDS</text>
-  <rect x="548" y="528" width="72" height="52" rx="10" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
-  <text x="584" y="562" text-anchor="middle" fill="#f87171" font-family="${fontDisplay}" font-size="22">LIVE</text>
-  <text x="584" y="578" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="10" font-weight="600" letter-spacing="1">DATA</text>
-  <rect x="632" y="528" width="72" height="52" rx="10" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
-  <text x="668" y="562" text-anchor="middle" fill="#a78bfa" font-family="${fontDisplay}" font-size="22">FREE</text>
-  <text x="668" y="578" text-anchor="middle" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="10" font-weight="600" letter-spacing="1">ALWAYS</text>
-  <rect x="720" y="528" width="200" height="52" rx="12" fill="url(#hpCta)" stroke="rgba(255,255,255,0.14)"/>
-  <text x="820" y="562" text-anchor="middle" fill="#ffffff" font-family="${fontUi}" font-size="14" font-weight="700" letter-spacing="1.5">ANALYSE MY MATCH \u2192</text>
-  <text x="920" y="168" fill="rgba(255,255,255,0.24)" font-family="${fontUi}" font-size="11" font-weight="600" letter-spacing="2">ACTIVE AI AGENTS</text>
-  <rect x="920" y="186" width="260" height="46" rx="23" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
-  <circle cx="944" cy="209" r="5" fill="#22c55e"/>
-  <text x="968" y="216" fill="rgba(255,255,255,0.72)" font-family="${fontUi}" font-size="14" font-weight="600">Bull Agent</text>
-  <text x="1140" y="216" text-anchor="end" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="11">Makes the case</text>
-  <rect x="920" y="242" width="260" height="46" rx="23" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
-  <circle cx="944" cy="265" r="5" fill="#ef4444"/>
-  <text x="968" y="272" fill="rgba(255,255,255,0.72)" font-family="${fontUi}" font-size="14" font-weight="600">Bear Agent</text>
-  <text x="1140" y="272" text-anchor="end" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="11">Counters hard</text>
-  <rect x="920" y="298" width="260" height="46" rx="23" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
-  <circle cx="944" cy="321" r="5" fill="#818cf8"/>
-  <text x="968" y="328" fill="rgba(255,255,255,0.72)" font-family="${fontUi}" font-size="14" font-weight="600">5 Intel Agents</text>
-  <text x="1140" y="328" text-anchor="end" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="11">Form · Pitch · News</text>
-  <rect x="920" y="354" width="260" height="46" rx="23" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.1)"/>
-  <circle cx="944" cy="377" r="5" fill="#eab308"/>
-  <text x="968" y="384" fill="rgba(255,255,255,0.72)" font-family="${fontUi}" font-size="14" font-weight="600">Judge Agent</text>
-  <text x="1140" y="384" text-anchor="end" fill="rgba(255,255,255,0.28)" font-family="${fontUi}" font-size="11">Final verdict</text>
-</svg>`;
+/** One pill for the "ACTIVE AI AGENTS" stack on the homepage card. */
+function homepageAgentPill(top, dotColor, label, hint) {
+  return el(
+    "div",
+    {
+      style: {
+        position: "absolute",
+        left: 920,
+        top,
+        width: 260,
+        height: 46,
+        borderRadius: 23,
+        background: "rgba(255,255,255,0.05)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        display: "flex",
+        alignItems: "center",
+        padding: "0 22px",
+      },
+    },
+    el("div", {
+      style: { width: 10, height: 10, borderRadius: 5, background: dotColor, marginRight: 14 },
+    }),
+    el(
+      "div",
+      {
+        style: {
+          color: "rgba(255,255,255,0.72)",
+          fontSize: 14,
+          fontWeight: 600,
+          flex: 1,
+          display: "flex",
+        },
+      },
+      label
+    ),
+    el(
+      "div",
+      {
+        style: {
+          color: "rgba(255,255,255,0.28)",
+          fontSize: 11,
+          display: "flex",
+        },
+      },
+      hint
+    )
+  );
+}
+
+/** One small stat pill in the homepage CTA row (5 / MULTI / LIVE / FREE). */
+function homepageStatPill(left, width, valueColor, value, captionLabel) {
+  return el(
+    "div",
+    {
+      style: {
+        position: "absolute",
+        left,
+        top: 528,
+        width,
+        height: 52,
+        borderRadius: 10,
+        background: "rgba(255,255,255,0.05)",
+        border: "1px solid rgba(255,255,255,0.1)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+      },
+    },
+    el(
+      "div",
+      { style: { color: valueColor, fontSize: 22, fontWeight: 700, display: "flex" } },
+      value
+    ),
+    el(
+      "div",
+      {
+        style: {
+          color: "rgba(255,255,255,0.28)",
+          fontSize: 10,
+          fontWeight: 600,
+          letterSpacing: 1,
+          marginTop: 2,
+          display: "flex",
+        },
+      },
+      captionLabel
+    )
+  );
 }
 
 /**
+ * 1200×630 homepage OG card rendered with @vercel/og (Satori).
+ * Layout mirrors the previous SVG: brand logo block on the left, big headline
+ * stack centered, agent pill rail and CTA row on the right/bottom.
  * @returns {Promise<Buffer>}
  */
 async function renderHomepageOgPng() {
-  const svg = await buildHomepageOgSvg();
-  const sharp = await loadSharp();
-  return sharp(Buffer.from(svg, "utf8")).png({ compressionLevel: 9 }).toBuffer();
+  const tree = el(
+    "div",
+    {
+      style: {
+        position: "relative",
+        width: OG_W,
+        height: OG_H,
+        display: "flex",
+        background: OG_BG,
+        fontFamily: "Inter",
+        color: "#ffffff",
+      },
+    },
+    el("div", {
+      style: {
+        position: "absolute",
+        left: 0,
+        top: 0,
+        width: OG_W,
+        height: 4,
+        background:
+          "linear-gradient(90deg, rgba(30,58,138,0) 0%, #1e3a8a 10%, #2563eb 22%, #16a34a 38%, #22c55e 50%, #eab308 65%, #f97316 80%, #ef4444 90%, rgba(239,68,68,0) 100%)",
+      },
+    }),
+    el("div", {
+      style: {
+        position: "absolute",
+        left: 880,
+        top: 100,
+        width: 1,
+        height: 430,
+        background: "rgba(255,255,255,0.07)",
+      },
+    }),
+    OG_LOGO_DATA_URI
+      ? el("img", {
+          src: OG_LOGO_DATA_URI,
+          width: 240,
+          height: 240,
+          style: {
+            position: "absolute",
+            left: 72,
+            top: 195,
+            width: 240,
+            height: 240,
+            borderRadius: 18,
+            objectFit: "cover",
+          },
+        })
+      : el(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              left: 72,
+              top: 195,
+              width: 240,
+              height: 240,
+              borderRadius: 18,
+              background: "rgba(100,116,139,0.14)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#64748b",
+              fontSize: 22,
+              fontWeight: 700,
+            },
+          },
+          "Cricket War Room"
+        ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 380,
+          top: 200,
+          color: "rgba(255,255,255,0.32)",
+          fontSize: 13,
+          fontWeight: 600,
+          letterSpacing: 3,
+          display: "flex",
+        },
+      },
+      "IPL 2026 · AI MATCH ANALYSIS"
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 380,
+          top: 230,
+          fontSize: 86,
+          fontWeight: 700,
+          color: "#ffffff",
+          display: "flex",
+          lineHeight: 1.05,
+        },
+      },
+      "5 AIS."
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 380,
+          top: 320,
+          fontSize: 86,
+          fontWeight: 700,
+          display: "flex",
+          lineHeight: 1.05,
+        },
+      },
+      el("span", { style: { color: "#22c55e" } }, "ONE"),
+      el("span", { style: { color: "#ffffff" } }, " MATCH.")
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 380,
+          top: 410,
+          fontSize: 86,
+          fontWeight: 700,
+          color: "#ffffff",
+          display: "flex",
+          lineHeight: 1.05,
+        },
+      },
+      "ZERO BIAS."
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 380,
+          top: 502,
+          color: "rgba(255,255,255,0.48)",
+          fontSize: 18,
+          fontWeight: 500,
+          display: "flex",
+        },
+      },
+      "Bull vs Bear multi-round debate. Five intel agents, one Judge verdict."
+    ),
+    homepageStatPill(380, 56, "#22c55e", "5", "AGENTS"),
+    homepageStatPill(448, 88, "#fbbf24", "MULTI", "ROUNDS"),
+    homepageStatPill(548, 72, "#f87171", "LIVE", "DATA"),
+    homepageStatPill(632, 72, "#a78bfa", "FREE", "ALWAYS"),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 720,
+          top: 528,
+          width: 200,
+          height: 52,
+          borderRadius: 12,
+          background: "linear-gradient(135deg, #16a34a 0%, #14532d 100%)",
+          border: "1px solid rgba(255,255,255,0.14)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#ffffff",
+          fontSize: 14,
+          fontWeight: 700,
+          letterSpacing: 1.5,
+        },
+      },
+      "ANALYSE MY MATCH \u2192"
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 920,
+          top: 156,
+          color: "rgba(255,255,255,0.24)",
+          fontSize: 11,
+          fontWeight: 600,
+          letterSpacing: 2,
+          display: "flex",
+        },
+      },
+      "ACTIVE AI AGENTS"
+    ),
+    homepageAgentPill(186, "#22c55e", "Bull Agent", "Makes the case"),
+    homepageAgentPill(242, "#ef4444", "Bear Agent", "Counters hard"),
+    homepageAgentPill(298, "#818cf8", "5 Intel Agents", "Form · Pitch · News"),
+    homepageAgentPill(354, "#eab308", "Judge Agent", "Final verdict")
+  );
+
+  const ir = new ImageResponse(tree, { width: OG_W, height: OG_H, fonts: OG_FONTS });
+  return imageResponseToBuffer(ir);
 }
 
 /**
- * 1200×630 Open Graph card: high-contrast verdict, confidence bar, share CTA (Sharp rasterizes SVG).
+ * 1200×630 Open Graph card: high-contrast verdict, confidence bar, share CTA.
+ * Rendered with @vercel/og (Satori). Layout mirrors the previous SVG: brand
+ * row + headline (left), big AI VERDICT block (right), confidence bar, summary
+ * line, "SEE FULL ANALYSIS" CTA pill.
  * @param {Record<string, unknown>} pack
- * @returns {Promise<string>}
+ * @returns {Promise<Buffer>}
  */
-async function buildShareOgSvg(pack) {
-  const W = 1200;
-  const H = 630;
+async function renderShareOgPng(pack) {
   const winRaw = String(pack.w || "—").trim().toUpperCase().slice(0, 4);
   const c = Math.min(100, Math.max(0, Math.round(Number(pack.c) || 55)));
   const label = String(pack.l || "").trim();
@@ -1804,143 +2021,506 @@ async function buildShareOgSvg(pack) {
   const barW = 420;
   const barInner = Math.max(8, Math.round((barW * c) / 100));
 
-  const fontUi = OG_FONT_UI;
-  const fontDisplay = OG_FONT_DISPLAY;
+  const verdictBg = "linear-gradient(135deg, #ef4444 0%, #f97316 45%, #eab308 100%)";
+  const ctaBg = "linear-gradient(135deg, #ef4444 0%, #991b1b 100%)";
+  const confFillBg = "linear-gradient(90deg, #ef4444 0%, #f97316 100%)";
+  const topAccentBg =
+    "linear-gradient(90deg, rgba(239,68,68,0) 0%, #ef4444 10%, #f97316 28%, #eab308 48%, #22c55e 68%, #2563eb 85%, rgba(37,99,235,0) 100%)";
 
-  const logoUri = await getOgLogoDataUri();
-  const brandLogoBlock = logoUri
-    ? `<clipPath id="ogBrandLogoClip"><rect x="72" y="39" width="52" height="52" rx="12"/></clipPath>`
-    : "";
-  const brandLogoG = logoUri
-    ? `<g clip-path="url(#ogBrandLogoClip)"><image href="${logoUri}" x="72" y="39" width="52" height="52" preserveAspectRatio="xMidYMid slice"/></g>`
-    : `<rect x="72" y="40" width="48" height="48" rx="12" fill="#ef4444"/>
-  <text x="96" y="76" text-anchor="middle" fill="#ffffff" font-family="${fontUi}" font-size="15" font-weight="700">WR</text>`;
-  const verdictLogoClip = logoUri
-    ? `<clipPath id="ogVerdictLogoClip"><rect x="1048" y="118" width="80" height="80" rx="12"/></clipPath>`
-    : "";
-  const verdictLogoBlock = logoUri
-    ? `<g clip-path="url(#ogVerdictLogoClip)"><image href="${logoUri}" x="1048" y="118" width="80" height="80" preserveAspectRatio="xMidYMid slice"/></g>`
-    : "";
+  const brandLogo = OG_LOGO_DATA_URI
+    ? el("img", {
+        src: OG_LOGO_DATA_URI,
+        width: 52,
+        height: 52,
+        style: {
+          position: "absolute",
+          left: 72,
+          top: 39,
+          width: 52,
+          height: 52,
+          borderRadius: 12,
+          objectFit: "cover",
+        },
+      })
+    : el(
+        "div",
+        {
+          style: {
+            position: "absolute",
+            left: 72,
+            top: 40,
+            width: 48,
+            height: 48,
+            borderRadius: 12,
+            background: "#ef4444",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#ffffff",
+            fontSize: 15,
+            fontWeight: 700,
+          },
+        },
+        "WR"
+      );
 
-  const insightBlock =
-    insightRest.length > 0
-      ? `<text x="122" y="548" fill="rgba(255,255,255,0.5)" font-family="${fontUi}" font-size="17">${escapeXmlText(insightLine1)}</text>
-    <text x="122" y="574" fill="rgba(255,255,255,0.5)" font-family="${fontUi}" font-size="17">${escapeXmlText(insightRest)}</text>`
-      : `<text x="122" y="556" fill="rgba(255,255,255,0.5)" font-family="${fontUi}" font-size="17">${escapeXmlText(insightLine1)}</text>`;
+  const verdictLogo = OG_LOGO_DATA_URI
+    ? el("img", {
+        src: OG_LOGO_DATA_URI,
+        width: 80,
+        height: 80,
+        style: {
+          position: "absolute",
+          left: 1048,
+          top: 118,
+          width: 80,
+          height: 80,
+          borderRadius: 12,
+          objectFit: "cover",
+        },
+      })
+    : null;
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-  <defs>
-    ${brandLogoBlock}
-    ${verdictLogoClip}
-    <linearGradient id="ogTopAccent" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#ef4444" stop-opacity="0"/>
-      <stop offset="0.1" stop-color="#ef4444"/>
-      <stop offset="0.28" stop-color="#f97316"/>
-      <stop offset="0.48" stop-color="#eab308"/>
-      <stop offset="0.68" stop-color="#22c55e"/>
-      <stop offset="0.85" stop-color="#2563eb"/>
-      <stop offset="1" stop-color="#2563eb" stop-opacity="0"/>
-    </linearGradient>
-    <linearGradient id="verdictGrad" x1="0" y1="0" x2="0.85" y2="1">
-      <stop offset="0" stop-color="#ef4444"/>
-      <stop offset="0.45" stop-color="#f97316"/>
-      <stop offset="1" stop-color="#eab308"/>
-    </linearGradient>
-    <linearGradient id="confFill" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#ef4444"/>
-      <stop offset="1" stop-color="#f97316"/>
-    </linearGradient>
-    <linearGradient id="ctaGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#ef4444"/>
-      <stop offset="1" stop-color="#991b1b"/>
-    </linearGradient>
-    <pattern id="shareGrid" width="55" height="55" patternUnits="userSpaceOnUse">
-      <path d="M55 0H0V55" fill="none" stroke="#ffffff" stroke-opacity="0.022" stroke-width="1"/>
-    </pattern>
-    <pattern id="pitchStripe" patternUnits="userSpaceOnUse" width="4" height="19">
-      <rect width="4" height="19" fill="transparent"/>
-      <line x1="0" y1="18" x2="4" y2="18" stroke="#16a34a" stroke-opacity="0.12" stroke-width="1"/>
-    </pattern>
-    <linearGradient id="pitchFade" x1="0" y1="1" x2="0" y2="0">
-      <stop offset="0" stop-color="#060a12" stop-opacity="1"/>
-      <stop offset="1" stop-color="#060a12" stop-opacity="0"/>
-    </linearGradient>
-  </defs>
-
-  <rect width="${W}" height="${H}" fill="#060a12"/>
-
-  <ellipse cx="600" cy="700" rx="520" ry="360" fill="#16a34a" fill-opacity="0.12"/>
-  <ellipse cx="60" cy="40" rx="200" ry="170" fill="#ef4444" fill-opacity="0.1"/>
-  <ellipse cx="1140" cy="50" rx="180" ry="150" fill="#eab308" fill-opacity="0.09"/>
-  <ellipse cx="80" cy="580" rx="220" ry="160" fill="#1e3a8a" fill-opacity="0.14"/>
-
-  <rect width="${W}" height="${H}" fill="url(#shareGrid)" opacity="0.75"/>
-  <rect x="0" y="430" width="${W}" height="200" fill="url(#pitchStripe)" opacity="0.5"/>
-  <rect x="0" y="430" width="${W}" height="200" fill="url(#pitchFade)"/>
-
-  <rect x="0" y="0" width="${W}" height="4" fill="url(#ogTopAccent)"/>
-
-  <!-- Brand -->
-  ${brandLogoG}
-  <text x="138" y="76" fill="rgba(255,255,255,0.65)" font-family="${fontDisplay}" font-size="26" letter-spacing="3">${escapeXmlText("CRICKET WAR ROOM")}</text>
-  <text x="72" y="108" fill="rgba(248,113,113,0.95)" font-family="${fontUi}" font-size="12" font-weight="700" letter-spacing="2">${escapeXmlText("WAR ROOM VERDICT")}</text>
-  <text x="72" y="132" fill="#f8fafc" font-family="${fontUi}" font-size="19" font-weight="700">${escapeXmlText(headlineLine1)}</text>
-  ${
+  const tree = el(
+    "div",
+    {
+      style: {
+        position: "relative",
+        width: OG_W,
+        height: OG_H,
+        display: "flex",
+        background: OG_BG,
+        fontFamily: "Inter",
+        color: "#ffffff",
+      },
+    },
+    el("div", {
+      style: {
+        position: "absolute",
+        left: 0,
+        top: 0,
+        width: OG_W,
+        height: 4,
+        background: topAccentBg,
+      },
+    }),
+    el("div", {
+      style: {
+        position: "absolute",
+        left: 752,
+        top: 96,
+        width: 1,
+        height: 344,
+        background: "rgba(255,255,255,0.08)",
+      },
+    }),
+    brandLogo,
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 138,
+          top: 50,
+          color: "rgba(255,255,255,0.65)",
+          fontSize: 26,
+          letterSpacing: 3,
+          display: "flex",
+        },
+      },
+      "CRICKET WAR ROOM"
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 72,
+          top: 96,
+          color: "rgba(248,113,113,0.95)",
+          fontSize: 12,
+          fontWeight: 700,
+          letterSpacing: 2,
+          display: "flex",
+        },
+      },
+      "WAR ROOM VERDICT"
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 72,
+          top: 116,
+          color: "#f8fafc",
+          fontSize: 19,
+          fontWeight: 700,
+          display: "flex",
+          width: 660,
+        },
+      },
+      headlineLine1
+    ),
     headlineLine2
-      ? `<text x="72" y="158" fill="#e2e8f0" font-family="${fontUi}" font-size="17" font-weight="600">${escapeXmlText(headlineLine2)}</text>`
-      : ""
-  }
+      ? el(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              left: 72,
+              top: 142,
+              color: "#e2e8f0",
+              fontSize: 17,
+              fontWeight: 600,
+              display: "flex",
+              width: 660,
+            },
+          },
+          headlineLine2
+        )
+      : null,
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 560,
+          top: 46,
+          width: 378,
+          height: 34,
+          borderRadius: 17,
+          background: "rgba(255,255,255,0.06)",
+          border: "1px solid rgba(255,255,255,0.12)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "rgba(255,255,255,0.55)",
+          fontSize: 12,
+          fontWeight: 600,
+          letterSpacing: 1.5,
+        },
+      },
+      matchBadge
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 952,
+          top: 46,
+          width: 176,
+          height: 34,
+          borderRadius: 17,
+          background: "rgba(239,68,68,0.15)",
+          border: "1px solid rgba(239,68,68,0.45)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#f87171",
+          fontSize: 13,
+          fontWeight: 700,
+          letterSpacing: 2,
+        },
+      },
+      el("div", {
+        style: {
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          background: "#ef4444",
+          marginRight: 10,
+        },
+      }),
+      "LIVE AI"
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 70,
+          top: 182,
+          width: 76,
+          height: 76,
+          borderRadius: 38,
+          background: "rgba(239,68,68,0.2)",
+          border: "2px solid rgba(239,68,68,0.55)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#f87171",
+          fontSize: 18,
+          fontWeight: 700,
+        },
+      },
+      winnerCode
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 168,
+          top: 188,
+          color: "#ffffff",
+          fontSize: 52,
+          fontWeight: 700,
+          display: "flex",
+          lineHeight: 1.1,
+        },
+      },
+      winnerCode
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 350,
+          top: 220,
+          color: "rgba(255,255,255,0.22)",
+          fontSize: 16,
+          fontWeight: 700,
+          letterSpacing: 3,
+          display: "flex",
+        },
+      },
+      "VS"
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 390,
+          top: 182,
+          width: 76,
+          height: 76,
+          borderRadius: 38,
+          background: "rgba(255,255,255,0.05)",
+          border: "2px solid rgba(255,255,255,0.18)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "rgba(255,255,255,0.35)",
+          fontSize: 18,
+          fontWeight: 700,
+        },
+      },
+      loserCode
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 488,
+          top: 188,
+          color: "rgba(255,255,255,0.32)",
+          fontSize: 52,
+          fontWeight: 700,
+          display: "flex",
+          lineHeight: 1.1,
+        },
+      },
+      loserCode
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 72,
+          top: 296,
+          color: "rgba(255,255,255,0.32)",
+          fontSize: 12,
+          fontWeight: 600,
+          letterSpacing: 2,
+          display: "flex",
+        },
+      },
+      "AI CONFIDENCE"
+    ),
+    el("div", {
+      style: {
+        position: "absolute",
+        left: 200,
+        top: 298,
+        width: barW,
+        height: 8,
+        borderRadius: 4,
+        background: "rgba(255,255,255,0.1)",
+      },
+    }),
+    el("div", {
+      style: {
+        position: "absolute",
+        left: 200,
+        top: 298,
+        width: barInner,
+        height: 8,
+        borderRadius: 4,
+        background: confFillBg,
+      },
+    }),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 200 + barW + 14,
+          top: 290,
+          color: "#f97316",
+          fontSize: 18,
+          fontWeight: 700,
+          display: "flex",
+        },
+      },
+      `${c}%`
+    ),
+    verdictLogo,
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 880,
+          top: 196,
+          width: 248,
+          color: "rgba(255,255,255,0.32)",
+          fontSize: 12,
+          fontWeight: 600,
+          letterSpacing: 4,
+          display: "flex",
+          justifyContent: "flex-end",
+        },
+      },
+      "AI VERDICT"
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 760,
+          top: 220,
+          width: 368,
+          color: "transparent",
+          backgroundImage: verdictBg,
+          backgroundClip: "text",
+          fontSize: 88,
+          fontWeight: 700,
+          display: "flex",
+          justifyContent: "flex-end",
+          lineHeight: 1.05,
+        },
+      },
+      winnerCode
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 760,
+          top: 320,
+          width: 368,
+          color: "transparent",
+          backgroundImage: verdictBg,
+          backgroundClip: "text",
+          fontSize: 88,
+          fontWeight: 700,
+          display: "flex",
+          justifyContent: "flex-end",
+          lineHeight: 1.05,
+        },
+      },
+      "WINS"
+    ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 72,
+          top: 518,
+          width: 38,
+          height: 38,
+          borderRadius: 10,
+          background: "rgba(234,179,8,0.12)",
+          border: "1px solid rgba(234,179,8,0.28)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#eab308",
+          fontSize: 17,
+        },
+      },
+      "\u26a1"
+    ),
+    insightRest.length > 0
+      ? el(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              left: 122,
+              top: 528,
+              width: 700,
+              color: "rgba(255,255,255,0.5)",
+              fontSize: 17,
+              display: "flex",
+              flexDirection: "column",
+              lineHeight: 1.4,
+            },
+          },
+          el("div", { style: { display: "flex" } }, insightLine1),
+          el("div", { style: { display: "flex" } }, insightRest)
+        )
+      : el(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              left: 122,
+              top: 538,
+              width: 700,
+              color: "rgba(255,255,255,0.5)",
+              fontSize: 17,
+              display: "flex",
+            },
+          },
+          insightLine1
+        ),
+    el(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          left: 848,
+          top: 508,
+          width: 280,
+          height: 52,
+          borderRadius: 10,
+          background: ctaBg,
+          border: "1px solid rgba(255,255,255,0.15)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#ffffff",
+          fontSize: 14,
+          fontWeight: 700,
+          letterSpacing: 1.5,
+        },
+      },
+      "SEE FULL ANALYSIS \u2192"
+    )
+  );
 
-  <!-- Top badges (right) -->
-  <rect x="560" y="46" width="378" height="34" rx="17" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)"/>
-  <text x="749" y="69" text-anchor="middle" fill="rgba(255,255,255,0.5)" font-family="${fontUi}" font-size="12" font-weight="600" letter-spacing="1.5">${escapeXmlText(matchBadge)}</text>
-  <rect x="952" y="46" width="176" height="34" rx="17" fill="rgba(239,68,68,0.15)" stroke="rgba(239,68,68,0.45)"/>
-  <circle cx="974" cy="63" r="4" fill="#ef4444"/>
-  <text x="1040" y="69" text-anchor="middle" fill="#f87171" font-family="${fontUi}" font-size="13" font-weight="700" letter-spacing="2">LIVE AI</text>
-
-  <!-- Teams row: winner left -->
-  <circle cx="108" cy="220" r="38" fill="rgba(239,68,68,0.2)" stroke="rgba(239,68,68,0.55)" stroke-width="2"/>
-  <text x="108" y="232" text-anchor="middle" fill="#f87171" font-family="${fontUi}" font-size="18" font-weight="700">${escapeXmlText(winnerCode)}</text>
-  <text x="168" y="232" fill="#ffffff" font-family="${fontUi}" font-size="52" font-weight="700">${escapeXmlText(winnerCode)}</text>
-
-  <text x="360" y="232" fill="rgba(255,255,255,0.22)" font-family="${fontUi}" font-size="16" font-weight="700" letter-spacing="3">VS</text>
-
-  <circle cx="428" cy="220" r="38" fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>
-  <text x="428" y="232" text-anchor="middle" fill="rgba(255,255,255,0.35)" font-family="${fontUi}" font-size="18" font-weight="700">${escapeXmlText(loserCode)}</text>
-  <text x="488" y="232" fill="rgba(255,255,255,0.32)" font-family="${fontUi}" font-size="52" font-weight="700">${escapeXmlText(loserCode)}</text>
-
-  <!-- Confidence -->
-  <text x="72" y="312" fill="rgba(255,255,255,0.32)" font-family="${fontUi}" font-size="12" font-weight="600" letter-spacing="2">AI CONFIDENCE</text>
-  <rect x="200" y="298" width="${barW}" height="8" rx="4" fill="rgba(255,255,255,0.1)"/>
-  <rect x="200" y="298" width="${barInner}" height="8" rx="4" fill="url(#confFill)"/>
-  <text x="${208 + barW + 14}" y="308" fill="#f97316" font-family="${fontUi}" font-size="18" font-weight="700">${c}%</text>
-
-  <!-- Verdict column -->
-  <line x1="752" y1="96" x2="752" y2="440" stroke="rgba(255,255,255,0.08)"/>
-  ${verdictLogoBlock}
-  <text x="1128" y="212" text-anchor="end" fill="rgba(255,255,255,0.32)" font-family="${fontUi}" font-size="12" font-weight="600" letter-spacing="4">AI VERDICT</text>
-  <text x="1128" y="298" text-anchor="end" fill="url(#verdictGrad)" font-family="${fontDisplay}" font-size="88" font-weight="700">${escapeXmlText(winnerCode)}</text>
-  <text x="1128" y="398" text-anchor="end" fill="url(#verdictGrad)" font-family="${fontDisplay}" font-size="88" font-weight="700">WINS</text>
-
-  <!-- Bottom: insight + CTA -->
-  <rect x="72" y="518" width="38" height="38" rx="10" fill="rgba(234,179,8,0.12)" stroke="rgba(234,179,8,0.28)"/>
-  <text x="91" y="544" text-anchor="middle" fill="#eab308" font-family="${fontUi}" font-size="17">\u26a1</text>
-  ${insightBlock}
-
-  <rect x="848" y="508" width="280" height="52" rx="10" fill="url(#ctaGrad)" stroke="rgba(255,255,255,0.15)"/>
-  <text x="988" y="542" text-anchor="middle" fill="#ffffff" font-family="${fontUi}" font-size="14" font-weight="700" letter-spacing="1.5">SEE FULL ANALYSIS \u2192</text>
-</svg>`;
-}
-
-/**
- * @param {Record<string, unknown>} pack
- * @returns {Promise<Buffer>}
- */
-async function renderShareOgPng(pack) {
-  const svg = await buildShareOgSvg(pack);
-  const sharp = await loadSharp();
-  return sharp(Buffer.from(svg, "utf8")).png({ compressionLevel: 9 }).toBuffer();
+  const ir = new ImageResponse(tree, { width: OG_W, height: OG_H, fonts: OG_FONTS });
+  return imageResponseToBuffer(ir);
 }
 
 /**
@@ -1992,7 +2572,7 @@ function sendShareOgHtml(req, res, url, id, pack, appHref, opts = {}) {
   const base = publicOgSiteBase(req, url);
   const canonical = `${base}/s/${id}`;
   // ?v= bumps when OG pipeline changes so Meta/WhatsApp refetch the bitmap.
-  const imgUrl = `${base}/api/og/share/${id}.png?v=4`;
+  const imgUrl = `${base}/api/og/share/${id}.png?v=5`;
   const ogSecureImgMeta = /^https:\/\//i.test(imgUrl)
     ? `<meta property="og:image:secure_url" content="${escapeHtmlAttr(imgUrl)}" />`
     : "";
