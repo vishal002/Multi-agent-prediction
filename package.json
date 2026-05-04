@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prebuild": "node scripts/enrich-completed-matches.mjs",
     "build": "node scripts/build.mjs",
+    "enrich": "node scripts/enrich-completed-matches.mjs",
     "start": "cross-env SERVE_DIST=1 node server.mjs",
     "start:dev": "node server.mjs",
     "ingestion:dev": "node scripts/run-uvicorn.mjs ingestion_service.app:app 3334",

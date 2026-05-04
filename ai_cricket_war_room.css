@@ -2277,6 +2277,17 @@ html.acwr-notice-dismissed .notice-strip {
   gap: 0.5rem 0.65rem;
 }
 
+/* Team-vs-team variant used by the past-pending-result card: smaller logos
+   on either side of "TEAM A vs TEAM B" so the row reads as a head-to-head
+   header rather than a single winner badge. */
+.verdict-winner-row--vs {
+  justify-content: flex-start;
+}
+.verdict-winner-row--vs .verdict-winner-logo {
+  width: 2.25rem;
+  height: 2.25rem;
+}
+
 .verdict-winner-logo {
   width: 2.75rem;
   height: 2.75rem;

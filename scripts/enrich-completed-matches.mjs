@@ -1,23 +1,34 @@
 /**
- * One-shot enrichment script for completed IPL 2026 fixtures.
+ * Build-time enrichment script for IPL 2026 fixtures (Path B automation).
  *
- * For every row in match_suggestions.json with `completed: true` + a winner:
- *   1. Expands `key_player` from short form ("V Kohli") to a full display name.
- *   2. Adds `potm_team` based on the player's franchise.
- *   3. Adds `potm_batting` or `potm_bowling` from the per-match override table
- *      below (uses representative figures consistent with the recorded summary).
- *   4. Adds `actual_score` derived from the match summary when missing.
- *   5. Adds `player_photo` pointing at /image/potm/{slug}-potm.png — the
- *      front-end's <img> onerror handler swaps to the placeholder if the file
- *      isn't on disk yet, so this is always safe.
+ * Two responsibilities, applied in order to each row in match_suggestions.json:
+ *
+ *   A. SYNTHESIS — for past fixtures (date < today, IST) that don't yet have a
+ *      `completed: true` + `result {...}` block, look up an entry in
+ *      `RESULT_TEMPLATES` (keyed by match label) and create the result block
+ *      from it. This is what makes "PAST" badges flip to "Completed" in the UI
+ *      without manual JSON edits — drop a template, run the script, done.
+ *
+ *   B. ENRICHMENT — for any row with `completed: true` + a winner:
+ *        1. Expand `key_player` from short form ("V Kohli") to a full display
+ *           name from `PLAYER_META`.
+ *        2. Add `potm_team` based on the player's franchise.
+ *        3. Add `potm_batting` or `potm_bowling` from the per-match override
+ *           table when missing.
+ *        4. Add `actual_score` from the same overrides when missing.
+ *        5. Add `player_photo` pointing at /image/potm/{slug}-potm.png — the
+ *           front-end resolves missing files to a placeholder via the photo
+ *           hydration helper, so this is always safe.
  *
  * Then re-syncs the inlined `MATCH_SUGGESTIONS_FALLBACK_ROWS` literal inside
  * ai_cricket_war_room.js so the offline / file:// path stays consistent.
  *
- * Usage:  node scripts/enrich-completed-matches.mjs
+ * Usage:    node scripts/enrich-completed-matches.mjs
+ * Auto-run: wired into the `prebuild` hook in package.json so every
+ *           `npm run build` re-applies any new templates.
  *
  * Idempotent — fields that already exist are left untouched; only missing ones
- * are filled in. Re-running after a manual correction won't clobber it.
+ * are filled in. Re-running after a manual correction never clobbers it.
  */
 
 import fs from "node:fs";
@@ -51,6 +62,130 @@ const PLAYER_META = {
   "Donovan Ferreira": { fullName: "Donovan Ferreira", team: "RR",  slug: "donovan-ferreira" },
   "Josh Hazlewood":   { fullName: "Josh Hazlewood",   team: "RCB", slug: "josh-hazlewood" },
 };
+
+// ─── RESULT_TEMPLATES: synthesize completed/result for un-played past rows ──
+//
+// Keyed by match label. Each entry creates the full `completed: true + result`
+// block when the row in match_suggestions.json is in the past (date < today,
+// IST) and has no `completed: true` flag yet. Use this for synthetic IPL 2026
+// fixtures whose outcomes aren't coming from a real upstream API.
+//
+// Conventions (kept consistent with the existing match_suggestions rows):
+//   - `winner` is the team code (matches a row in `teams`).
+//   - `summary` reads naturally as a one-liner: "<Team> won by N wickets/runs
+//     (<Loser score>, <Winner score>)".
+//   - `actual_score` is the same scoreline split by " · " for the dashboard.
+//   - `key_player` matches a key in `PLAYER_META` so the franchise + slug get
+//     auto-filled by the enrichment pass below; you don't need to repeat
+//     `potm_team` or `player_photo` here.
+//
+// Idempotent: rows that already have `completed: true` are left untouched, so
+// editing match_suggestions.json by hand always wins over the template.
+
+/**
+ * @typedef {{
+ *   winner: string,
+ *   summary: string,
+ *   key_player?: string,
+ *   actual_score?: string,
+ *   potm_batting?: string,
+ *   potm_bowling?: string
+ * }} ResultTemplate
+ */
+
+/** @type {Record<string, ResultTemplate>} */
+const RESULT_TEMPLATES = {
+  "MI vs SRH — IPL 2026 Match 41, Wankhede Stadium, Mumbai": {
+    winner: "SRH",
+    summary: "Sunrisers Hyderabad won by 7 wickets (MI 188/6 in 20 ov, SRH 191/3 in 17.4 ov)",
+    key_player: "T Head",
+    actual_score: "MI 188/6 (20 ov) · SRH 191/3 (17.4 ov)",
+    potm_batting: "87 (44)",
+  },
+  "GT vs RCB — IPL 2026 Match 42, Narendra Modi Stadium, Ahmedabad": {
+    winner: "GT",
+    summary: "Gujarat Titans won by 6 wickets (RCB 174/8 in 20 ov, GT 175/4 in 19.1 ov)",
+    key_player: "S Gill",
+    actual_score: "RCB 174/8 (20 ov) · GT 175/4 (19.1 ov)",
+    potm_batting: "78* (52)",
+  },
+  "DC vs RR — IPL 2026 Match 43, Sawai Mansingh Stadium, Jaipur": {
+    winner: "RR",
+    summary: "Rajasthan Royals won by 7 wickets (DC 167/9 in 20 ov, RR 170/3 in 16.5 ov)",
+    key_player: "Y Jaiswal",
+    actual_score: "DC 167/9 (20 ov) · RR 170/3 (16.5 ov)",
+    potm_batting: "82 (49)",
+  },
+  "CSK vs MI — IPL 2026 Match 44, M. A. Chidambaram Stadium, Chennai": {
+    winner: "CSK",
+    summary: "Chennai Super Kings won by 5 wickets (MI 162/7 in 20 ov, CSK 163/5 in 19.2 ov)",
+    key_player: "R Ravindra",
+    actual_score: "MI 162/7 (20 ov) · CSK 163/5 (19.2 ov)",
+    potm_batting: "67 (43)",
+  },
+  "KKR vs SRH — IPL 2026 Match 45, Rajiv Gandhi International Stadium, Hyderabad": {
+    winner: "KKR",
+    summary: "Kolkata Knight Riders won by 4 wickets (SRH 195/6 in 20 ov, KKR 198/6 in 19.4 ov)",
+    key_player: "A Russell",
+    actual_score: "SRH 195/6 (20 ov) · KKR 198/6 (19.4 ov)",
+    potm_batting: "56* (24)",
+  },
+  "GT vs PBKS — IPL 2026 Match 46, Narendra Modi Stadium, Ahmedabad": {
+    winner: "PBKS",
+    summary: "Punjab Kings won by 6 wickets (GT 178/5 in 20 ov, PBKS 181/4 in 19.3 ov)",
+    key_player: "S Dhawan",
+    actual_score: "GT 178/5 (20 ov) · PBKS 181/4 (19.3 ov)",
+    potm_batting: "88* (54)",
+  },
+  "LSG vs MI — IPL 2026 Match 47, Wankhede Stadium, Mumbai": {
+    winner: "MI",
+    summary: "Mumbai Indians won by 7 wickets (LSG 154/8 in 20 ov, MI 155/3 in 17.2 ov)",
+    key_player: "T Varma",
+    actual_score: "LSG 154/8 (20 ov) · MI 155/3 (17.2 ov)",
+    potm_batting: "71* (45)",
+  },
+};
+
+/** Today's date in IST as YYYY-MM-DD. Uses Intl with the IANA zone so the
+ *  result is correct regardless of the host machine's TZ — running this
+ *  script on a UTC build host (Vercel/Render) wouldn't flip dates otherwise. */
+function todayIstStr() {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+/**
+ * Synthesize `completed: true` + `result {...}` from RESULT_TEMPLATES when:
+ *   - the row's fixture date is strictly before today (IST), AND
+ *   - the row doesn't already have `completed: true`, AND
+ *   - a template exists for the row's exact `label`.
+ *
+ * @param {{ label: string, date?: string, completed?: boolean, result?: any }} row
+ * @param {string} todayStr  YYYY-MM-DD in IST
+ * @returns {boolean} true when a result block was synthesized
+ */
+function applyResultTemplate(row, todayStr) {
+  if (!row || row.completed === true) return false;
+  const dateStr = String(row.date || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  if (dateStr >= todayStr) return false;
+  const template = RESULT_TEMPLATES[row.label];
+  if (!template) return false;
+  row.completed = true;
+  row.result = {
+    winner: template.winner,
+    summary: template.summary,
+    ...(template.key_player ? { key_player: template.key_player } : {}),
+    ...(template.actual_score ? { actual_score: template.actual_score } : {}),
+    ...(template.potm_batting ? { potm_batting: template.potm_batting } : {}),
+    ...(template.potm_bowling ? { potm_bowling: template.potm_bowling } : {}),
+  };
+  return true;
+}
 
 // ─── Per-match overrides: representative POTM performance & exact score line ─
 //
@@ -201,8 +336,17 @@ const MATCH_OVERRIDES = {
 
 // ─── Enrichment ─────────────────────────────────────────────────────────────
 
-/** @param {{ label: string, completed?: boolean, result?: any }} row */
+const TODAY_IST = todayIstStr();
+let _synthesizedCount = 0;
+
+/** @param {{ label: string, date?: string, completed?: boolean, result?: any }} row */
 function enrichRow(row) {
+  // Synthesis pass: create a result block from RESULT_TEMPLATES for past
+  // fixtures that don't have one yet. Runs first so the enrichment pass below
+  // can immediately fill in player metadata and POTM photos for synthesized
+  // rows (same code path as hand-written results).
+  if (applyResultTemplate(row, TODAY_IST)) _synthesizedCount += 1;
+
   if (!row || row.completed !== true) return row;
   const result = row.result;
   if (!result || !result.winner) return row; // abandoned / no-result rows skipped
@@ -236,8 +380,15 @@ if (!Array.isArray(rows)) throw new Error("match_suggestions.json is not an arra
 
 const updated = rows.map(enrichRow);
 const enrichedJsonText = JSON.stringify(updated, null, 2) + "\n";
+const jsonChanged = enrichedJsonText !== original;
 fs.writeFileSync(JSON_PATH, enrichedJsonText, "utf8");
-console.log(`✓ wrote ${path.relative(REPO_ROOT, JSON_PATH)}  (${updated.length} rows)`);
+const synthSuffix = _synthesizedCount > 0
+  ? `, synthesized ${_synthesizedCount} from RESULT_TEMPLATES`
+  : "";
+console.log(
+  `${jsonChanged ? "✓ wrote" : "= unchanged"} ${path.relative(REPO_ROOT, JSON_PATH)}` +
+  `  (${updated.length} rows${synthSuffix})`
+);
 
 // ─── Sync inlined fallback in ai_cricket_war_room.js ─────────────────────────
 //

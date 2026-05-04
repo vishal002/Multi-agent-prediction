@@ -194,6 +194,19 @@ Production UI (IPL example: **DC vs RCB, Delhi**). Order: **(3) home** → **(1)
 
 Edit `match_suggestions.json`. Optional `completed` + `result` (`winner`, `summary`, and optional POTM fields) skips agents/debate and drives post-match cards. Restart Node after edits. Mirror critical rows in `MATCH_SUGGESTIONS_FALLBACK_ROWS` in `ai_cricket_war_room.js` for offline `file://`.
 
+### Fixture status
+
+Each catalog row is classified by `getMatchStatus()` in `ai_cricket_war_room.js`. The status drives the dropdown badge, ordering, and whether the war-room flow runs agents or jumps straight to the result/past-match view.
+
+| Status | When it applies |
+| ------ | --------------- |
+| `COMPLETED` | `completed: true` with a recorded `result.winner`. Skips agents; renders the post-match card (verdict + POTM). |
+| `LIVE` | `date` = today **and** a live score snippet is present in `result` / live-score cache (in-flight match). |
+| `TODAY` | `date` = today, no live score yet (pre-toss / awaiting first ball). |
+| `UPCOMING` | `date` > today. |
+| `PAST` | `date` < today but **not** flagged `completed` — date-based fallback guard so missing flags still skip agents. |
+| `TBD` | No date or non-ISO date (e.g. playoff placeholders like `IPL 2026 Final — TBD`). No badge is shown. |
+
 ---
 
 ## Project layout

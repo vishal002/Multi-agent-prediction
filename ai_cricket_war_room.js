@@ -253,7 +253,17 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "teams": [
         "LSG",
         "MI"
-      ]
+      ],
+      "completed": true,
+      "result": {
+        "winner": "MI",
+        "summary": "Mumbai Indians won by 7 wickets (LSG 154/8 in 20 ov, MI 155/3 in 17.2 ov)",
+        "key_player": "Tilak Varma",
+        "actual_score": "LSG 154/8 (20 ov) · MI 155/3 (17.2 ov)",
+        "potm_batting": "71* (45)",
+        "potm_team": "MI",
+        "player_photo": "/image/potm/tilak-varma-potm.png"
+      }
     },
     {
       "label": "GT vs PBKS — IPL 2026 Match 46, Narendra Modi Stadium, Ahmedabad",
@@ -262,7 +272,17 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "teams": [
         "GT",
         "PBKS"
-      ]
+      ],
+      "completed": true,
+      "result": {
+        "winner": "PBKS",
+        "summary": "Punjab Kings won by 6 wickets (GT 178/5 in 20 ov, PBKS 181/4 in 19.3 ov)",
+        "key_player": "Shikhar Dhawan",
+        "actual_score": "GT 178/5 (20 ov) · PBKS 181/4 (19.3 ov)",
+        "potm_batting": "88* (54)",
+        "potm_team": "PBKS",
+        "player_photo": "/image/potm/shikhar-dhawan-potm.png"
+      }
     },
     {
       "label": "KKR vs SRH — IPL 2026 Match 45, Rajiv Gandhi International Stadium, Hyderabad",
@@ -271,7 +291,17 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "teams": [
         "KKR",
         "SRH"
-      ]
+      ],
+      "completed": true,
+      "result": {
+        "winner": "KKR",
+        "summary": "Kolkata Knight Riders won by 4 wickets (SRH 195/6 in 20 ov, KKR 198/6 in 19.4 ov)",
+        "key_player": "Andre Russell",
+        "actual_score": "SRH 195/6 (20 ov) · KKR 198/6 (19.4 ov)",
+        "potm_batting": "56* (24)",
+        "potm_team": "KKR",
+        "player_photo": "/image/potm/andre-russell-potm.png"
+      }
     },
     {
       "label": "CSK vs MI — IPL 2026 Match 44, M. A. Chidambaram Stadium, Chennai",
@@ -280,7 +310,17 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "teams": [
         "CSK",
         "MI"
-      ]
+      ],
+      "completed": true,
+      "result": {
+        "winner": "CSK",
+        "summary": "Chennai Super Kings won by 5 wickets (MI 162/7 in 20 ov, CSK 163/5 in 19.2 ov)",
+        "key_player": "Rachin Ravindra",
+        "actual_score": "MI 162/7 (20 ov) · CSK 163/5 (19.2 ov)",
+        "potm_batting": "67 (43)",
+        "potm_team": "CSK",
+        "player_photo": "/image/potm/rachin-ravindra-potm.png"
+      }
     },
     {
       "label": "DC vs RR — IPL 2026 Match 43, Sawai Mansingh Stadium, Jaipur",
@@ -289,7 +329,17 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "teams": [
         "DC",
         "RR"
-      ]
+      ],
+      "completed": true,
+      "result": {
+        "winner": "RR",
+        "summary": "Rajasthan Royals won by 7 wickets (DC 167/9 in 20 ov, RR 170/3 in 16.5 ov)",
+        "key_player": "Yashasvi Jaiswal",
+        "actual_score": "DC 167/9 (20 ov) · RR 170/3 (16.5 ov)",
+        "potm_batting": "82 (49)",
+        "potm_team": "RR",
+        "player_photo": "/image/potm/yashasvi-jaiswal-potm.png"
+      }
     },
     {
       "label": "GT vs RCB — IPL 2026 Match 42, Narendra Modi Stadium, Ahmedabad",
@@ -298,7 +348,17 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "teams": [
         "GT",
         "RCB"
-      ]
+      ],
+      "completed": true,
+      "result": {
+        "winner": "GT",
+        "summary": "Gujarat Titans won by 6 wickets (RCB 174/8 in 20 ov, GT 175/4 in 19.1 ov)",
+        "key_player": "Shubman Gill",
+        "actual_score": "RCB 174/8 (20 ov) · GT 175/4 (19.1 ov)",
+        "potm_batting": "78* (52)",
+        "potm_team": "GT",
+        "player_photo": "/image/potm/shubman-gill-potm.png"
+      }
     },
     {
       "label": "MI vs SRH — IPL 2026 Match 41, Wankhede Stadium, Mumbai",
@@ -307,7 +367,17 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "teams": [
         "MI",
         "SRH"
-      ]
+      ],
+      "completed": true,
+      "result": {
+        "winner": "SRH",
+        "summary": "Sunrisers Hyderabad won by 7 wickets (MI 188/6 in 20 ov, SRH 191/3 in 17.4 ov)",
+        "key_player": "Travis Head",
+        "actual_score": "MI 188/6 (20 ov) · SRH 191/3 (17.4 ov)",
+        "potm_batting": "87 (44)",
+        "potm_team": "SRH",
+        "player_photo": "/image/potm/travis-head-potm.png"
+      }
     },
     {
       "label": "PBKS vs RR — IPL 2026 Match 40, IS Bindra Stadium, Mohali",
@@ -354,7 +424,17 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "teams": [
         "KKR",
         "LSG"
-      ]
+      ],
+      "completed": true,
+      "result": {
+        "winner": "KKR",
+        "summary": "Match tied, KKR won Super Over (KKR 155/7 in 20 ov, LSG 155/8 in 20 ov; Super Over: LSG 1/2, KKR 4/0)",
+        "key_player": "Rinku Singh",
+        "actual_score": "KKR 155/7 (20 ov) · LSG 155/8 (20 ov) — Super Over",
+        "potm_batting": "83* (51)",
+        "potm_team": "KKR",
+        "player_photo": "/image/potm/rinku-singh-potm.png"
+      }
     },
     {
       "label": "CSK vs GT — IPL 2026 Match 37, M. A. Chidambaram Stadium, Chennai",
@@ -373,6 +453,25 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
         "player_photo": "/image/potm/shubman-gill-potm.png",
         "potm_batting": "78* (52)",
         "actual_score": "CSK 158/7 (20 ov) · GT 162/2 (16.4 ov)"
+      }
+    },
+    {
+      "label": "DC vs PBKS — IPL 2026 Match 35, Arun Jaitley Stadium, Delhi",
+      "date": "2026-04-25",
+      "venue": "Arun Jaitley Stadium, Delhi",
+      "teams": [
+        "DC",
+        "PBKS"
+      ],
+      "completed": true,
+      "result": {
+        "winner": "PBKS",
+        "summary": "Punjab Kings won by 6 wickets in record chase (DC 264/2 in 20 ov, PBKS 265/4 in 18.5 ov) — highest successful T20 chase in IPL history",
+        "key_player": "KL Rahul",
+        "actual_score": "DC 264/2 (20 ov) · PBKS 265/4 (18.5 ov)",
+        "potm_batting": "152* (67)",
+        "potm_team": "DC",
+        "player_photo": "/image/potm/kl-rahul-potm.png"
       }
     },
     {
@@ -395,22 +494,23 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       }
     },
     {
-      "label": "DC vs PBKS — IPL 2026 Match 35, Arun Jaitley Stadium, Delhi",
-      "date": "2026-04-25",
-      "venue": "Arun Jaitley Stadium, Delhi",
-      "teams": [
-        "DC",
-        "PBKS"
-      ]
-    },
-    {
       "label": "GT vs RCB — IPL 2026 Match 34, M. Chinnaswamy Stadium, Bengaluru",
       "date": "2026-04-24",
       "venue": "M. Chinnaswamy Stadium, Bengaluru",
       "teams": [
         "GT",
         "RCB"
-      ]
+      ],
+      "completed": true,
+      "result": {
+        "winner": "RCB",
+        "summary": "Royal Challengers Bengaluru won by 5 wickets (GT 205/3 in 20 ov, RCB 206/5 in 18.5 ov)",
+        "key_player": "Virat Kohli",
+        "actual_score": "GT 205/3 (20 ov) · RCB 206/5 (18.5 ov)",
+        "potm_batting": "81 (44)",
+        "potm_team": "RCB",
+        "player_photo": "/image/potm/virat-kohli-potm.png"
+      }
     },
     {
       "label": "CSK vs MI — IPL 2026 Match 33, Wankhede Stadium, Mumbai",
@@ -419,7 +519,17 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "teams": [
         "CSK",
         "MI"
-      ]
+      ],
+      "completed": true,
+      "result": {
+        "winner": "CSK",
+        "summary": "Chennai Super Kings won by 103 runs (CSK 207/6 in 20 ov, MI 104 in 19 ov) — MI's biggest defeat by runs in IPL history",
+        "key_player": "Sanju Samson",
+        "actual_score": "CSK 207/6 (20 ov) · MI 104 (19 ov)",
+        "potm_batting": "101* (54)",
+        "potm_team": "CSK",
+        "player_photo": "/image/potm/sanju-samson-potm.png"
+      }
     },
     {
       "label": "LSG vs RR — IPL 2026 Match 32, Sawai Mansingh Stadium, Jaipur",
@@ -1282,15 +1392,22 @@ function isMatchInPast(m) {
 }
 
 /**
- * Classify a fixture row into one of the UX modes used by the dropdown badges
- * and the war-room flow.
+ * Classify a fixture row into one of the UX modes that drive the dropdown
+ * badge, the empty-search ordering, and whether the war-room runs agents or
+ * jumps straight to the result/past-match view.
  *
  *   COMPLETED — `completed: true` with a recorded `result.winner`
- *   LIVE      — date = today AND a live score snippet is present in `result`/cache
- *   TODAY     — date = today, no live score yet (pre-toss / awaiting first ball)
- *   UPCOMING  — date > today
- *   PAST      — date < today but not flagged completed (date-based fallback guard)
- *   TBD       — no date or non-ISO date (e.g. playoff placeholders)
+ *                 → skip agents; render verdict + POTM card.
+ *   LIVE      — date = today AND a live score snippet is present in
+ *                 `result` / live-score cache (match in flight).
+ *   TODAY     — date = today, no live score yet (pre-toss / awaiting first ball).
+ *   UPCOMING  — date > today.
+ *   PAST      — date < today but not flagged completed; date-based fallback
+ *                 guard so missing `completed` flags still skip agents.
+ *   TBD       — no date or non-ISO date (e.g. playoff placeholders like
+ *                 "IPL 2026 Final — TBD"); no badge rendered.
+ *
+ * Mirrored in README (Data: fixtures → Fixture status). Keep in sync.
  *
  * @param {{ date?: string, completed?: boolean, result?: any } | null | undefined} row
  * @returns {'COMPLETED'|'LIVE'|'TODAY'|'UPCOMING'|'PAST'|'TBD'}
@@ -1933,25 +2050,61 @@ function slugifyPlayerName(name) {
 }
 
 /**
- * Resolve the photo path for a POTM record. Order of precedence:
- *   1. Explicit `result.player_photo` (validated: must be a local /image/… path)
- *   2. Auto-derived slug at `/image/potm/{slug}-potm.png` — the <img> uses an
- *      onerror handler to swap in the placeholder when the file 404s, so this
- *      acts as a search/discovery layer for any new POTM entry.
- *   3. Placeholder when no name is available.
+ * Resolve the photo path for a POTM record. Returns the *initial* src to mount
+ * for the <img>; the caller is expected to also wire up `data-player-wiki`
+ * (and optionally `data-player-explicit-photo`) so that
+ * {@link hydratePlayerOfMatchPhotos} can asynchronously upgrade the image
+ * without showing a broken-image flash.
+ *
+ * Order of precedence we *advertise* (via the returned candidates) when
+ * upgrading post-mount:
+ *   1. Explicit `result.player_photo` if it points to a local /image/… file
+ *   2. Auto-derived slug at `/image/potm/{slug}-potm.png`
+ *   3. Wikipedia thumbnail (driven by `data-player-wiki`)
+ *   4. Placeholder
+ *
+ * The initial `src` is the placeholder whenever we have *anything* to upgrade
+ * to — that way the user never sees a torn 404 image while the upgrade
+ * resolves. When neither an explicit nor a name is available we keep the
+ * placeholder as the final state.
  *
  * @param {string} name
  * @param {string} explicitPhoto
- * @returns {{ src: string, isExplicit: boolean }}
+ * @returns {{ src: string, isExplicit: boolean, explicitCandidate: string, slugCandidate: string }}
  */
 function resolvePlayerPhotoSrc(name, explicitPhoto) {
   const explicit = String(explicitPhoto || "").trim();
-  if (explicit.startsWith("/image/") && !explicit.includes("..")) {
-    return { src: explicit, isExplicit: true };
-  }
+  const explicitCandidate =
+    explicit.startsWith("/image/") && !explicit.includes("..") ? explicit : "";
   const slug = slugifyPlayerName(name);
-  if (slug) return { src: `/image/potm/${slug}-potm.png`, isExplicit: false };
-  return { src: POTM_PHOTO_PLACEHOLDER, isExplicit: false };
+  const slugCandidate = slug ? `/image/potm/${slug}-potm.png` : "";
+  // Always start with the placeholder when *any* upgrade path is available —
+  // that suppresses the broken-image flash when the curated PNG hasn't been
+  // checked in yet (most player_photo paths in match_suggestions.json point
+  // to files that don't exist on disk).
+  const hasUpgrade = Boolean(explicitCandidate || slugCandidate || name);
+  return {
+    src: hasUpgrade ? POTM_PHOTO_PLACEHOLDER : POTM_PHOTO_PLACEHOLDER,
+    isExplicit: false,
+    explicitCandidate,
+    slugCandidate,
+  };
+}
+
+/**
+ * Resolve a candidate photo URL by pre-loading via an off-DOM <img>.
+ * Resolves with the URL on `load`, or null on `error` / empty input.
+ * @param {string} url
+ * @returns {Promise<string|null>}
+ */
+function _preloadImageOrNull(url) {
+  if (!url) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const probe = new Image();
+    probe.onload = () => resolve(url);
+    probe.onerror = () => resolve(null);
+    probe.src = url;
+  });
 }
 
 // ─── Wikipedia player-photo lookup ───────────────────────────────────────────
@@ -2070,38 +2223,58 @@ function fetchPlayerWikipediaPhoto(name) {
 }
 
 /**
- * Upgrade `img[data-player-wiki]` images inside `rootEl` from the local
- * slug-derived asset to a Wikipedia photo (resized to fit the avatar).
- * Failures leave the local photo / placeholder in place.
+ * Upgrade POTM / key-player avatars inside `rootEl` to the best photo we can
+ * find, without ever showing a broken-image flash. The image starts mounted
+ * with the placeholder; this helper races three candidate sources and swaps
+ * to the highest-priority one that *actually loads*:
  *
- * Each image may carry a `data-placeholder-class` attribute to control which
- * modifier class is added when the Wikipedia image fails to load — that lets
- * the helper service both the large POTM banner avatar and the small
- * key-player avatar embedded in the verdict card.
+ *   1. `data-player-explicit-photo` — curated `/image/potm/...` path from
+ *      `match_suggestions.json` (only used when the file exists on disk).
+ *   2. `data-player-slug-photo` — auto-derived `/image/potm/{slug}-potm.png`.
+ *   3. `data-player-wiki` — Wikipedia thumbnail lookup for the player name.
+ *
+ * If none of them resolve, the placeholder stays in place. Each image may
+ * carry a `data-placeholder-class` attribute to choose the placeholder
+ * modifier class (POTM banner vs. compact key-player avatar).
  *
  * @param {ParentNode|null|undefined} rootEl
  */
 function hydratePlayerOfMatchPhotos(rootEl) {
   if (!rootEl || typeof rootEl.querySelectorAll !== "function") return;
-  const imgs = rootEl.querySelectorAll("img[data-player-wiki]");
+  const imgs = rootEl.querySelectorAll(
+    "img[data-player-wiki], img[data-player-explicit-photo], img[data-player-slug-photo]"
+  );
   imgs.forEach((img) => {
     const name = img.getAttribute("data-player-wiki") || "";
+    const explicit = img.getAttribute("data-player-explicit-photo") || "";
+    const slug = img.getAttribute("data-player-slug-photo") || "";
     const placeholderClass =
       img.getAttribute("data-placeholder-class") || "potm-banner__img--placeholder";
     img.removeAttribute("data-player-wiki");
-    if (!name) return;
-    fetchPlayerWikipediaPhoto(name).then((rawSrc) => {
-      if (!rawSrc || !img.isConnected) return;
-      const sized = _adjustWikipediaThumbnailSize(rawSrc, PLAYER_WIKI_PHOTO_TARGET_PX);
-      const onError = () => {
-        img.removeEventListener("error", onError);
-        img.src = POTM_PHOTO_PLACEHOLDER;
-        img.classList.add(placeholderClass);
+    img.removeAttribute("data-player-explicit-photo");
+    img.removeAttribute("data-player-slug-photo");
+
+    void (async () => {
+      const tryAndSwap = (url) => {
+        if (!url || !img.isConnected) return false;
+        img.src = url;
+        img.classList.remove(placeholderClass);
+        return true;
       };
-      img.addEventListener("error", onError, { once: true });
-      img.src = sized;
-      img.classList.remove(placeholderClass);
-    });
+
+      const explicitOk = await _preloadImageOrNull(explicit);
+      if (explicitOk && tryAndSwap(explicitOk)) return;
+
+      const slugOk = await _preloadImageOrNull(slug);
+      if (slugOk && tryAndSwap(slugOk)) return;
+
+      if (!name) return;
+      const wikiRaw = await fetchPlayerWikipediaPhoto(name);
+      if (!wikiRaw || !img.isConnected) return;
+      const sized = _adjustWikipediaThumbnailSize(wikiRaw, PLAYER_WIKI_PHOTO_TARGET_PX);
+      const wikiOk = await _preloadImageOrNull(sized);
+      if (wikiOk) tryAndSwap(wikiOk);
+    })();
   });
 }
 
@@ -2125,14 +2298,17 @@ function renderVerdictKeyPlayerStatCellHtml(keyPlayerName) {
   const display = name || "—";
   const photo = resolvePlayerPhotoSrc(name, "");
   const altText = name ? `${name}, key player` : "Key player";
-  const onErrorJs = `this.onerror=null;this.src='${POTM_PHOTO_PLACEHOLDER}';this.classList.add('key-player-photo--placeholder');`;
-  const baseClass = photo.src === POTM_PHOTO_PLACEHOLDER
-    ? "key-player-photo key-player-photo--placeholder"
-    : "key-player-photo";
+  // Always start with the placeholder; `hydratePlayerOfMatchPhotos` upgrades
+  // to the best available source (slug PNG → Wikipedia) without flashing a
+  // broken image when the slug PNG is missing.
+  const baseClass = "key-player-photo key-player-photo--placeholder";
   const wikiAttr = name
     ? ` data-player-wiki="${escapeHtml(name)}" data-placeholder-class="key-player-photo--placeholder"`
     : "";
-  const imgHtml = `<img class="${baseClass}" src="${escapeHtml(photo.src)}" width="36" height="36" alt="${escapeHtml(altText)}" decoding="async" loading="lazy" onerror="${onErrorJs}"${wikiAttr} />`;
+  const slugAttr = photo.slugCandidate
+    ? ` data-player-slug-photo="${escapeHtml(photo.slugCandidate)}"`
+    : "";
+  const imgHtml = `<img class="${baseClass}" src="${escapeHtml(photo.src)}" width="36" height="36" alt="${escapeHtml(altText)}" decoding="async" loading="lazy"${wikiAttr}${slugAttr} />`;
   return `
     <div class="stat-cell stat-cell--key-player">
       ${imgHtml}
@@ -2173,14 +2349,18 @@ function renderPlayerOfMatchCardHtml(result) {
   }
   const photo = resolvePlayerPhotoSrc(name, String(result.player_photo || ""));
   const altText = name ? `${name}${teamCode ? `, ${teamCode}` : ""}` : "Player of the match";
-  // onerror swaps to the placeholder if the slug-derived asset 404s; null the
-  // handler first so a missing placeholder can never trigger an infinite loop.
-  const onErrorJs = `this.onerror=null;this.src='${POTM_PHOTO_PLACEHOLDER}';this.classList.add('potm-banner__img--placeholder');`;
-  const imgClass = photo.src === POTM_PHOTO_PLACEHOLDER
-    ? "potm-banner__img potm-banner__img--placeholder"
-    : "potm-banner__img";
+  // We always mount the placeholder first and let `hydratePlayerOfMatchPhotos`
+  // race the explicit/slug/Wikipedia candidates — that suppresses the broken
+  // image flash when a curated PNG is missing on disk.
+  const imgClass = "potm-banner__img potm-banner__img--placeholder";
   const wikiAttr = name ? ` data-player-wiki="${escapeHtml(name)}"` : "";
-  const imgHtml = `<img class="${imgClass}" src="${escapeHtml(photo.src)}" width="56" height="56" alt="${escapeHtml(altText)}" decoding="async" loading="lazy" onerror="${onErrorJs}"${wikiAttr} />`;
+  const explicitAttr = photo.explicitCandidate
+    ? ` data-player-explicit-photo="${escapeHtml(photo.explicitCandidate)}"`
+    : "";
+  const slugAttr = photo.slugCandidate
+    ? ` data-player-slug-photo="${escapeHtml(photo.slugCandidate)}"`
+    : "";
+  const imgHtml = `<img class="${imgClass}" src="${escapeHtml(photo.src)}" width="56" height="56" alt="${escapeHtml(altText)}" decoding="async" loading="lazy"${wikiAttr}${explicitAttr}${slugAttr} />`;
   return `
     <div class="potm-banner" role="group" aria-label="Player of the match">
       <div class="potm-banner__text">
@@ -4885,6 +5065,183 @@ function renderPastNoResultDebateColumn(match, teams) {
   void appendPredictionVsRealityStrip(area, match, teams, null);
 }
 
+// ─── Past-match recovery (no recorded result) ──────────────────────────────
+//
+// When a fixture is in the past but `match_suggestions.json` has not yet been
+// updated with a recorded `result`, we still want the UI to feel close to the
+// "completed with result" experience. We do best-effort recovery from the
+// live-score endpoint (Cricbuzz / RSS) — that path frequently has the final
+// scoreline before the JSON catalog is patched, so the user no longer sees
+// an empty placeholder card right after the match ends.
+
+/**
+ * Attempt to derive a winning team from a completed live-score parse.
+ * @param {LiveScoreParsed} parsed
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @returns {string} winner team code, or "" when undetermined
+ */
+function _inferWinnerFromLiveScore(parsed, teams) {
+  if (!parsed) return "";
+  const bat = String(parsed.batting_team || "").toUpperCase().trim();
+  const target = Number(parsed.target);
+  const runs = Number(parsed.runs);
+  if (Number.isFinite(target) && Number.isFinite(runs) && bat) {
+    if (runs >= target) return bat;
+    const codeA = String(teams.codeA).toUpperCase();
+    const codeB = String(teams.codeB).toUpperCase();
+    return bat === codeA ? codeB : codeA;
+  }
+  return "";
+}
+
+/**
+ * Best-effort recovery of a final scoreline + winner for a past fixture that
+ * has no recorded result in match_suggestions.json yet. Returns null when the
+ * upstream live-score feed has nothing useful (or hasn't seen the match end).
+ *
+ * @param {string} match
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @returns {Promise<{
+ *   result: NonNullable<MatchSuggestionRow["result"]>,
+ *   hasWinner: boolean,
+ *   source?: string
+ * } | null>}
+ */
+async function recoverPastMatchResult(match, teams) {
+  try {
+    const detail = await fetchLiveScoreDetail(match, teams, { fresh: false });
+    if (!detail) return null;
+    const status = String(detail.match_status || "").toLowerCase();
+    const parsed = detail.parsed;
+    const isFinal = status === "completed";
+    if (!isFinal && !parsed) return null;
+    const inferredWinner = parsed ? _inferWinnerFromLiveScore(parsed, teams) : "";
+    const summary = (detail.snippet || "").trim();
+    const actualScore = parsed
+      ? `${parsed.batting_team || ""} ${parsed.runs ?? "?"}/${parsed.wickets ?? "?"}`
+        + (parsed.overs != null ? ` (${parsed.overs} ov)` : "")
+      : "";
+    const winner = inferredWinner || "";
+    const result = /** @type {NonNullable<MatchSuggestionRow["result"]>} */ ({
+      winner,
+      summary: summary || (isFinal ? "Match completed — final scoreline below." : ""),
+      ...(actualScore ? { actual_score: actualScore } : {}),
+    });
+    if (!winner && !actualScore && !summary) return null;
+    return { result, hasWinner: Boolean(winner), source: detail.source || undefined };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Render the rich completed-result card using a recovered (live-score derived)
+ * payload. Mirrors the layout of `verdict-card--final` so users get the same
+ * shape regardless of whether the result came from match_suggestions.json or
+ * the live-score fallback.
+ *
+ * @param {string} match
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @param {{ result: NonNullable<MatchSuggestionRow["result"]>, hasWinner: boolean, source?: string }} recovered
+ */
+function renderRecoveredPastMatchCard(match, teams, recovered) {
+  const { result, hasWinner } = recovered;
+  const winnerCode = String(result.winner || "").trim();
+  const pickedA =
+    !!winnerCode &&
+    (winnerCode.toUpperCase() === String(teams.codeA).toUpperCase() ||
+      winnerCode.toUpperCase() === String(teams.teamA).toUpperCase());
+  const winDisplay = hasWinner
+    ? resolveWinnerDisplay(teams, winnerCode)
+    : `${teams.teamA} vs ${teams.teamB}`;
+  const winnerLogoUrl = hasWinner
+    ? resolveTeamLogoUrl(
+        pickedA ? teams.codeA : teams.codeB,
+        pickedA ? teams.teamA : teams.teamB
+      )
+    : null;
+  const verdictLogoHtml = winnerLogoUrl
+    ? `<img class="verdict-winner-logo" src="${escapeHtml(winnerLogoUrl)}" width="44" height="44" alt="" decoding="async" loading="lazy" />`
+    : "";
+  const winProbFinal = renderVerdictWinProbabilityBlock(
+    teams,
+    hasWinner ? (pickedA ? 100 : 0) : 50,
+    { variant: "final", groundTruthUi: true }
+  );
+  const actualScoreLine = resolveCompletedActualScore(result);
+  const winnerLine = hasWinner
+    ? `${escapeHtml(winDisplay.toUpperCase())} WINS`
+    : escapeHtml(winDisplay);
+  const summaryHtml = result.summary
+    ? `<div class="verdict-summary">${escapeHtml(result.summary)}</div>`
+    : `<div class="verdict-summary">Match completed — recorded scorecard pending; showing best-effort scoreline below.</div>`;
+  const verdictEl = document.getElementById('verdictArea');
+  verdictEl.innerHTML = `
+    <div class="verdict-card verdict-card--final" data-completed-match="${escapeHtml(match)}">
+      <div class="verdict-kicker">${hasWinner ? "Final result" : "Match completed"}</div>
+      <div class="verdict-winner-row">${verdictLogoHtml}<div class="verdict-winner">${winnerLine}</div></div>
+      ${summaryHtml}
+      ${winProbFinal.html}
+      <div class="stat-grid stat-grid--completed-final">
+        <div class="stat-cell"><div class="stat-label">ACTUAL SCORE</div><div class="stat-val">${escapeHtml(actualScoreLine)}</div></div>
+        <div class="stat-cell"><div class="stat-label">SWING FACTOR</div><div class="stat-val">—</div></div>
+        <div class="stat-cell stat-cell--span-full">
+          <div class="stat-label">MODEL CONFIDENCE</div>
+          <div class="stat-val">${hasWinner ? "100%" : "—"} <span class="stat-sublabel">${hasWinner ? "recorded result · not win probability" : "result pending — bar above is neutral"}</span></div>
+        </div>
+      </div>
+      <div class="verdict-prematch-row">
+        <button type="button" class="verdict-prematch-btn" data-prematch-load="${escapeHtml(match)}">
+          View AI pre-match prediction
+        </button>
+        <div class="verdict-prematch-result" id="prematchResult" hidden></div>
+      </div>
+    </div>`;
+  scheduleVerdictWinProbabilityAnimation(verdictEl, winProbFinal.pctA, winProbFinal.pctB);
+  bindPrematchPredictionButton(verdictEl, teams, winnerCode || null);
+}
+
+/**
+ * Final fallback for past fixtures when even the live-score endpoint has
+ * nothing. Keeps the unified `verdict-card--final` shell (with a muted
+ * `--past-no-result` modifier) so the UI stays consistent with the rich card
+ * — user no longer sees a wildly different layout from the recorded-result
+ * variant.
+ *
+ * @param {string} match
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ */
+function renderPastPendingResultCard(match, teams) {
+  const teamALogo = resolveTeamLogoUrl(teams.codeA, teams.teamA);
+  const teamBLogo = resolveTeamLogoUrl(teams.codeB, teams.teamB);
+  const logoHtml = (url) =>
+    url
+      ? `<img class="verdict-winner-logo" src="${escapeHtml(url)}" width="36" height="36" alt="" decoding="async" loading="lazy" />`
+      : "";
+  const verdictEl = document.getElementById('verdictArea');
+  verdictEl.innerHTML = `
+    <div class="verdict-card verdict-card--final verdict-card--past-no-result" data-past-match="${escapeHtml(match)}">
+      <div class="verdict-kicker">Match completed</div>
+      <div class="verdict-winner-row verdict-winner-row--vs">
+        ${logoHtml(teamALogo)}
+        <div class="verdict-winner">${escapeHtml(teams.teamA)} vs ${escapeHtml(teams.teamB)}</div>
+        ${logoHtml(teamBLogo)}
+      </div>
+      <div class="verdict-summary">This fixture has already been played but the recorded scorecard hasn't been ingested yet — agents stand down to avoid a stale prediction.</div>
+      <div class="stat-grid stat-grid--completed-final">
+        <div class="stat-cell"><div class="stat-label">ACTUAL SCORE</div><div class="stat-val">Pending ingestion</div></div>
+        <div class="stat-cell"><div class="stat-label">SWING FACTOR</div><div class="stat-val">—</div></div>
+      </div>
+      <div class="verdict-prematch-row">
+        <button type="button" class="verdict-prematch-btn" data-prematch-load="${escapeHtml(match)}">
+          View AI pre-match prediction
+        </button>
+        <div class="verdict-prematch-result" id="prematchResult" hidden></div>
+      </div>
+    </div>`;
+  bindPrematchPredictionButton(verdictEl, teams, null);
+}
+
 async function runWarRoom() {
   if (running) return;
   const warRoomStartedAt = Date.now();
@@ -4928,6 +5285,9 @@ async function runWarRoom() {
         ins.classList.remove("show");
       });
       clearIntelRefreshSession();
+
+      stopLivePollLoop();
+      hideLiveTicker();
 
       setElDisplay('runBtn', 'none');
       setElDisplay('resetBtn', '');
@@ -5019,26 +5379,36 @@ async function runWarRoom() {
         const ins = document.getElementById("insight-" + a.id);
         if (ins) { ins.textContent = ""; ins.classList.remove("show"); }
       });
+      stopLivePollLoop();
+      hideLiveTicker();
       setElDisplay('runBtn', 'none');
       setElDisplay('resetBtn', '');
       setElDisplay('runningLabel', 'none');
       setElDisplay('emptyState', 'none');
-      renderPastNoResultDebateColumn(match, teams);
       setMatchBar(match, teams);
       setPhase(null);
-      document.getElementById('verdictArea').innerHTML = `
-    <div class="verdict-card verdict-card--final verdict-card--past-no-result" data-past-match="${escapeHtml(match)}">
-      <div class="verdict-kicker">Match completed</div>
-      <div class="verdict-winner-row"><div class="verdict-winner">${escapeHtml(teams.teamA)} vs ${escapeHtml(teams.teamB)}</div></div>
-      <div class="verdict-summary">This fixture has already been played but the recorded result hasn't been ingested yet. Skipping the live agents to avoid showing a stale prediction.</div>
-      <div class="verdict-prematch-row">
-        <button type="button" class="verdict-prematch-btn" data-prematch-load="${escapeHtml(match)}">
-          View AI pre-match prediction
-        </button>
-        <div class="verdict-prematch-result" id="prematchResult" hidden></div>
-      </div>
-    </div>`;
-      bindPrematchPredictionButton(document.getElementById('verdictArea'), teams, null);
+
+      // Best-effort: try the live-score endpoint. The recorded result hasn't
+      // been ingested into match_suggestions.json yet, but Cricbuzz / RSS may
+      // already have a final score we can render in the rich completed-card
+      // UI so it visually matches fixtures that *do* have a recorded result.
+      const recovered = await recoverPastMatchResult(match, teams);
+      if (recovered) {
+        renderRecoveredPastMatchCard(match, teams, recovered);
+        if (recovered.hasWinner) {
+          renderPostMatchDebateColumn(
+            match,
+            teams,
+            /** @type {MatchSuggestionRow} */ ({ result: recovered.result })
+          );
+        } else {
+          renderPastNoResultDebateColumn(match, teams);
+        }
+      } else {
+        renderPastNoResultDebateColumn(match, teams);
+        renderPastPendingResultCard(match, teams);
+      }
+
       trackWarRoomEvent("warroom_run_complete", { match, ms: Date.now() - warRoomStartedAt });
       scrollVerdictPanelIntoView({ behavior: "smooth" });
     } catch (e) {
@@ -7321,9 +7691,41 @@ function stopLivePollLoop(opts) {
   }
 }
 
+/**
+ * The live ticker / poll loop is only meaningful for fixtures that could still
+ * be in flight (today and not flagged completed). Past or completed games
+ * never produce useful "fetching live score…" output and just leave a stale
+ * banner on top of the verdict card, so we suppress them up front using
+ * synchronous lookups (fallback rows, cached completed result, fixture date).
+ */
 function isFixtureLiveCandidate(match) {
   if (!match) return false;
   if (livePoll.lockedMatch && livePoll.lockedMatch === match) return false;
+
+  const t = String(match).trim();
+  if (!t) return false;
+  const key = normalizeFixtureLabelKey(t);
+
+  const local =
+    MATCH_SUGGESTIONS_FALLBACK_ROWS.find((r) => r.label === t) ||
+    MATCH_SUGGESTIONS_FALLBACK_ROWS.find((r) => normalizeFixtureLabelKey(r.label) === key);
+  if (
+    local &&
+    local.completed === true &&
+    local.result &&
+    String(local.result.winner || "").trim()
+  ) {
+    return false;
+  }
+
+  const cached = getCachedMatchResult(t);
+  if (cached && cached.result && String(cached.result.winner || "").trim()) {
+    return false;
+  }
+
+  const date = extractDateFromMatchInput(t);
+  if (date && isMatchInPast(date)) return false;
+
   return true;
 }
 
