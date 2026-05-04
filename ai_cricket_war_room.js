@@ -4316,11 +4316,80 @@ function extractLiveStateFromCtx(ctx) {
 }
 
 /**
+ * @typedef {{
+ *   runs: number | null,
+ *   wickets: number | null,
+ *   overs: string | null,
+ *   batting_team: string | null,
+ *   bowling_team: string | null,
+ *   innings: 1 | 2 | null,
+ * }} LiveScoreParsed
+ */
+
+/**
+ * Normalize server `parsed` payload from GET /api/live-score.
+ * @param {unknown} raw
+ * @returns {LiveScoreParsed | null}
+ */
+function normalizeLiveScoreParsed(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const o = /** @type {Record<string, unknown>} */ (raw);
+  const runs = typeof o.runs === "number" && Number.isFinite(o.runs) ? o.runs : null;
+  const wickets =
+    typeof o.wickets === "number" && Number.isFinite(o.wickets) ? Math.max(0, Math.floor(o.wickets)) : null;
+  const overs = typeof o.overs === "string" && o.overs.trim() ? o.overs.trim() : null;
+  const batting_team =
+    typeof o.batting_team === "string" && o.batting_team.trim() ? o.batting_team.trim().toUpperCase() : null;
+  const bowling_team =
+    typeof o.bowling_team === "string" && o.bowling_team.trim() ? o.bowling_team.trim().toUpperCase() : null;
+  let innings = null;
+  if (o.innings === 1 || o.innings === 2) innings = o.innings;
+  else if (typeof o.innings === "number" && (o.innings === 1 || o.innings === 2)) innings = /** @type {1|2} */ (o.innings);
+  const out = { runs, wickets, overs, batting_team, bowling_team, innings };
+  if (runs == null || overs == null) return null;
+  return out;
+}
+
+/**
+ * Apply {@link LiveScoreParsed} to the Live match structured fields (best-effort).
+ * @param {LiveScoreParsed | null} parsed
+ * @param {{ codeA: string, codeB: string } | null} teams from fixture; used to infer bowling when missing.
+ */
+function applyLiveScoreParsedToForm(parsed, teams) {
+  if (!parsed) return;
+  const runsEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfRuns"));
+  const wktsEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfWickets"));
+  const oversEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfOvers"));
+  const batEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBatTeam"));
+  const bowlEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBowlTeam"));
+  const innSel = /** @type {HTMLSelectElement|null} */ (document.getElementById("lfInnings"));
+
+  if (runsEl) runsEl.value = String(parsed.runs);
+  if (oversEl) oversEl.value = String(parsed.overs);
+  if (wktsEl && parsed.wickets != null) wktsEl.value = String(parsed.wickets);
+
+  if (parsed.batting_team && batEl) batEl.value = parsed.batting_team;
+  if (parsed.bowling_team && bowlEl) bowlEl.value = parsed.bowling_team;
+  else if (parsed.batting_team && bowlEl && teams) {
+    const a = teams.codeA.trim().toUpperCase();
+    const b = teams.codeB.trim().toUpperCase();
+    const bat = parsed.batting_team.toUpperCase();
+    if (bat === a) bowlEl.value = b;
+    else if (bat === b) bowlEl.value = a;
+  }
+
+  if (parsed.innings != null && innSel) {
+    innSel.value = parsed.innings === 2 ? "2" : "1";
+    innSel.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+}
+
+/**
  * Call the server's /api/live-score endpoint.
  * @param {string} match
  * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
  * @param {{ fresh?: boolean }} [opts] fresh=true bypasses ingestion cache for a manual refresh.
- * @returns {Promise<{ snippet: string, hint?: string, unreachable?: boolean }>}
+ * @returns {Promise<{ snippet: string, hint?: string, unreachable?: boolean, parsed?: LiveScoreParsed | null }>}
  */
 async function fetchLiveScoreDetail(match, teams, opts) {
   const base = apiBase();
@@ -4346,13 +4415,14 @@ async function fetchLiveScoreDetail(match, teams, opts) {
           : typeof data.error === "string"
             ? data.error
             : "";
-      return { snippet: "", unreachable: r.status === 503, hint: msg || undefined };
+      return { snippet: "", unreachable: r.status === 503, hint: msg || undefined, parsed: null };
     }
     const sn = typeof data.snippet === "string" ? data.snippet.trim() : "";
     const hint = typeof data.hint === "string" && data.hint.trim() ? data.hint.trim() : undefined;
-    return { snippet: sn, hint };
+    const parsed = normalizeLiveScoreParsed(data.parsed);
+    return { snippet: sn, hint, parsed };
   } catch {
-    return { snippet: "" };
+    return { snippet: "", parsed: null };
   }
 }
 
@@ -4373,13 +4443,8 @@ async function fetchLiveScore(match, teams, opts) {
  * @returns {{ text: string } | null}
  */
 function readLivePanelState() {
-  // Priority 1: quick-paste text input (accepts any free-text score)
   const quickText = /** @type {HTMLInputElement|null} */ (document.getElementById("liveScoreInput"))?.value.trim() || "";
-  if (quickText) {
-    return { text: quickText };
-  }
 
-  // Priority 2: structured live panel form fields
   const runsRaw    = /** @type {HTMLInputElement|null} */ (document.getElementById("lfRuns"))?.value.trim() || "";
   const wicketsRaw = /** @type {HTMLInputElement|null} */ (document.getElementById("lfWickets"))?.value.trim() || "";
   const oversRaw   = /** @type {HTMLInputElement|null} */ (document.getElementById("lfOvers"))?.value.trim() || "";
@@ -4390,13 +4455,16 @@ function readLivePanelState() {
   const fmt        = /** @type {HTMLSelectElement|null} */ (document.getElementById("lfFormat"))?.value || "T20";
   const notes      = /** @type {HTMLInputElement|null} */ (document.getElementById("lfNotes"))?.value.trim() || "";
 
-  if (!runsRaw || !oversRaw) return null;
-
-  const runsNum  = parseInt(runsRaw, 10);
+  const runsNum  = runsRaw ? parseInt(runsRaw, 10) : NaN;
   const wktsNum  = parseInt(wicketsRaw || "0", 10);
-  const oversNum = parseFloat(oversRaw);
+  const oversNum = oversRaw ? parseFloat(oversRaw) : NaN;
+  const structuredOk =
+    Boolean(runsRaw && oversRaw) && Number.isFinite(runsNum) && Number.isFinite(oversNum);
 
-  if (!Number.isFinite(runsNum) || !Number.isFinite(oversNum)) return null;
+  if (!structuredOk) {
+    if (quickText) return { text: quickText };
+    return null;
+  }
 
   const parts = [];
   const innLabel = inn === "2" ? "2nd innings" : "1st innings";
@@ -4914,15 +4982,17 @@ async function runWarRoom() {
   // Additional fallback: hit /api/live-score (cached when match-context just warmed ingestion)
   if (!liveState) {
     try {
-      const directSnippet = await fetchLiveScore(match, teams);
-      if (directSnippet) {
-        liveState = { text: directSnippet };
+      const d = await fetchLiveScoreDetail(match, teams);
+      if (d.snippet || d.parsed) {
         const liveInput = /** @type {HTMLInputElement|null} */ (document.getElementById("liveScoreInput"));
         const liveClear = document.getElementById("liveScoreClear");
-        if (liveInput && !liveInput.value.trim()) {
-          liveInput.value = directSnippet;
+        if (d.parsed) applyLiveScoreParsedToForm(d.parsed, teams);
+        if (liveInput && !liveInput.value.trim() && d.snippet) {
+          liveInput.value = d.snippet;
           if (liveClear) liveClear.hidden = false;
         }
+        liveState = readLivePanelState();
+        if (!liveState && d.snippet) liveState = { text: d.snippet };
       }
     } catch { /* best-effort */ }
   }
@@ -6497,9 +6567,10 @@ async function autoPopulateTodayMatch() {
     const liveClear = document.getElementById("liveScoreClear");
     if (liveInput && !liveInput.value.trim()) {
       try {
-        const snippet = await fetchLiveScore(best.label, teams);
-        if (snippet) {
-          liveInput.value = snippet;
+        const d = await fetchLiveScoreDetail(best.label, teams);
+        if (d.parsed) applyLiveScoreParsedToForm(d.parsed, teams);
+        if (d.snippet) {
+          liveInput.value = d.snippet;
           if (liveClear) /** @type {HTMLElement} */ (liveClear).hidden = false;
         }
       } catch { /* best-effort */ }
@@ -6791,7 +6862,9 @@ function initLiveScoreBar() {
           input.value = d.snippet;
           syncClear();
           outcome = "snippet";
-        } else if (d.unreachable) {
+        }
+        if (d.parsed) applyLiveScoreParsedToForm(d.parsed, teams);
+        if (!d.snippet && d.unreachable) {
           input.placeholder = "Score service offline — start ingestion on :3334, or paste score";
           outcome = "unreachable";
         } else if (d.hint) {

@@ -2070,6 +2070,107 @@ function isMainServerModule() {
   }
 }
 
+/**
+ * Extract structured Live-match form fields from a chosen score snippet.
+ *
+ * Used by GET /api/live-score so the client can auto-populate
+ * Batting team / Bowling team / Innings / Runs / Wickets / Overs without
+ * forcing the user to retype anything. Conservative: returns null unless we
+ * find at least a `runs/(wickets) (overs.x ov)` token; otherwise the form
+ * stays untouched.
+ *
+ * @param {string} snippet
+ * @param {{ codeA: string, codeB: string } | null} fixtureTeams Fixture team
+ *   codes (uppercase) used to (a) trust a leading code prefix on a scoreline
+ *   and (b) derive the bowling side once batting is known.
+ * @returns {{
+ *   runs: number,
+ *   wickets: number,
+ *   overs: string,
+ *   batting_team: string | null,
+ *   bowling_team: string | null,
+ *   innings: 1 | 2 | null,
+ * } | null}
+ */
+export function parseLiveScoreSnippet(snippet, fixtureTeams) {
+  if (typeof snippet !== "string") return null;
+  const text = snippet.trim();
+  if (!text) return null;
+
+  // RSS/CricAPI scoreline forms we accept:
+  //   "LSG 82/2 (9.3 ov)"   "LSG 82/2 (9.3 overs)"   "82/2 (9.3 ov)"   "82/2 (9.3)"
+  // Team prefix is optional; overs MUST be present (we won't auto-fill the
+  // form if the source can't tell us how far the innings is).
+  const SCORE_WITH_OVERS =
+    /(?:\b([A-Z]{2,4})\s+)?\b(\d{1,3})\/(10|\d)\s*\(\s*(\d+(?:\.\d)?)(?:\s*(?:ov|overs?))?\s*\)/g;
+
+  /** @type {Array<{ team: string|null, runs: number, wickets: number, overs: string, idx: number }>} */
+  const matches = [];
+  let m;
+  while ((m = SCORE_WITH_OVERS.exec(text)) !== null) {
+    matches.push({
+      team: m[1] ? m[1].toUpperCase() : null,
+      runs: parseInt(m[2], 10),
+      wickets: parseInt(m[3], 10),
+      overs: m[4],
+      idx: m.index,
+    });
+  }
+  if (matches.length === 0) return null;
+
+  const codeA = (fixtureTeams?.codeA || "").toUpperCase();
+  const codeB = (fixtureTeams?.codeB || "").toUpperCase();
+  const fixtureCodes = new Set([codeA, codeB].filter(Boolean));
+
+  // Trust a leading 2–4 letter code only when it matches one of the fixture
+  // codes — otherwise it's likely a stray uppercase token (e.g. "LIVE").
+  const fixtureMatches = matches.filter((x) => x.team && fixtureCodes.has(x.team));
+
+  /** @type {typeof matches[number]} */
+  let chosen;
+  if (fixtureMatches.length === 1) {
+    chosen = fixtureMatches[0];
+  } else if (fixtureMatches.length >= 2) {
+    // Two team-tagged scorelines (e.g. "SRH 242/2 (20 ov) · DC 195/9 (15.4 ov)")
+    // → the *last* in text order is typically the side currently batting.
+    chosen = fixtureMatches[fixtureMatches.length - 1];
+  } else {
+    // No fixture-tagged scoreline — fall back to the last bare scoreline.
+    chosen = matches[matches.length - 1];
+  }
+
+  let batting_team = chosen.team && fixtureCodes.has(chosen.team) ? chosen.team : null;
+  /** @type {string | null} */
+  let bowling_team = null;
+  if (batting_team) {
+    bowling_team = batting_team === codeA ? codeB : batting_team === codeB ? codeA : null;
+  }
+
+  /** @type {1 | 2 | null} */
+  let innings = null;
+  if (/\b2nd\s+innings?\b/i.test(text)) innings = 2;
+  else if (/\b1st\s+innings?\b/i.test(text)) innings = 1;
+  else if (
+    /\b(chasing|target\s*[:\-]?\s*\d+|RRR|req(?:uired)?\s*(?:run\s*)?rate|need\s+\d+\s+(?:runs?|more|in\s+\d+)|DLS)\b/i.test(
+      text,
+    )
+  ) {
+    innings = 2;
+  } else if (fixtureMatches.length >= 2) {
+    // Two team-tagged scorelines → second innings is in progress (or finished).
+    innings = 2;
+  }
+
+  return {
+    runs: chosen.runs,
+    wickets: chosen.wickets,
+    overs: chosen.overs,
+    batting_team,
+    bowling_team,
+    innings,
+  };
+}
+
 export async function warRoomHttpHandler(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
   const pathname = normalizeRequestPathname(url.pathname);
@@ -2226,6 +2327,15 @@ export async function warRoomHttpHandler(req, res) {
         (bestScore >= 3 && best && SCORE_LOOSE.test(best))
           ? best.slice(0, 400)
           : "";
+
+      const fixtureCodes = teamsParam
+        .split(",")
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+      const fixtureTeams =
+        fixtureCodes.length >= 2 ? { codeA: fixtureCodes[0], codeB: fixtureCodes[1] } : null;
+      const parsed = snippet ? parseLiveScoreSnippet(snippet, fixtureTeams) : null;
+
       res.writeHead(200, {
         "Content-Type": "application/json; charset=utf-8",
         ...corsHeaders(req),
@@ -2236,6 +2346,7 @@ export async function warRoomHttpHandler(req, res) {
           snippet,
           richness: bestScore,
           fetched_at: data.fetched_at || null,
+          parsed,
           hint:
             !snippet && bestScore > 0
               ? "RSS had a weak score signal for this fixture; paste the score or set CRICAPI_KEY on the ingestion service."
