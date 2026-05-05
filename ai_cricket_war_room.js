@@ -7313,6 +7313,21 @@ function showAutoDetectToast(text) {
     toast.id = "autoDetectToast";
     toast.className = "toast toast--auto-detect";
     toast.setAttribute("role", "status");
+    toast.setAttribute("tabindex", "0");
+    toast.setAttribute("aria-label", "Notification — tap to dismiss");
+    // Tap-to-dismiss so a lingering toast can't ever cover the verdict/intel
+    // agents below it on small screens (animation usually clears it itself).
+    const dismiss = () => {
+      toast.classList.remove("toast--animate");
+      toast.classList.add("toast--dismissed");
+    };
+    toast.addEventListener("click", dismiss);
+    toast.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " " || e.key === "Escape") {
+        e.preventDefault();
+        dismiss();
+      }
+    });
     region.appendChild(toast);
   }
   toast.classList.remove("toast--dismissed", "toast--animate");

@@ -466,6 +466,9 @@ body::after {
   gap: 1.25rem;
   align-items: start;
   flex: 1 0 auto;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .war-room__col--controls {
@@ -473,12 +476,14 @@ body::after {
   flex-direction: column;
   gap: 0.65rem;
   min-width: 0;
+  box-sizing: border-box;
 }
 
 .war-room__col--intel {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
 }
 
 @media (max-width: 900px) {
@@ -5641,7 +5646,7 @@ html[data-ui="ipl"][data-theme="light"] body {
   text-underline-offset: 2px;
 }
 
-/* Mobile-first: verdict before intel/debate; sticky controls + safe area */
+/* Mobile-first: verdict before intel/debate; controls flow above the dashboard. */
 @media (max-width: 760px) {
   .dashboard:not(.dashboard--pre-war-room) {
     display: flex !important;
@@ -5657,17 +5662,56 @@ html[data-ui="ipl"][data-theme="light"] body {
     order: 3;
   }
 
+  /* Was: position:sticky bottom:0 + margin-top:auto. That pinned the bulky
+     controls panel to the bottom of the viewport during a run, covering the
+     verdict/debate/intel content and overlapping the auto-detect toast. */
   .war-room__col--controls {
-    position: sticky;
-    bottom: 0;
-    z-index: 50;
-    padding-bottom: max(0.4rem, env(safe-area-inset-bottom, 0));
-    margin-top: auto;
-    background: color-mix(in srgb, var(--color-bg-base, #070b12) 94%, transparent);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-radius: var(--radius-md, 10px) var(--radius-md, 10px) 0 0;
-    box-shadow: 0 -6px 28px rgba(0, 0, 0, 0.35);
+    position: static;
+    margin-top: 0;
+    padding-bottom: 0;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* Force every node in the war-room column chain to render at the full
+     viewport-column width. Belt-and-suspenders against any UI-mode rule
+     (classic / warroom / ipl) that might otherwise narrow the dashboard
+     side once `dashboard--pre-war-room` is removed mid-run. */
+  .war-room__grid {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    grid-template-columns: 1fr !important;
+    box-sizing: border-box;
+  }
+
+  .war-room__col--controls,
+  .war-room__col--intel {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box;
+  }
+
+  .controls-tabs,
+  .controls-tabs__panel,
+  .command-bar,
+  .dashboard,
+  .dash-col,
+  .dash-col--stage,
+  .dash-col--debate,
+  .dash-col--agents,
+  .surface,
+  .surface--stage,
+  .surface--debate,
+  .surface--agents {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
   }
 
   .command-bar__actions {
@@ -5681,6 +5725,17 @@ html[data-ui="ipl"][data-theme="light"] body {
     text-align: center;
     min-height: 44px;
     box-sizing: border-box;
+  }
+
+  /* Toast sits above the soft-keyboard / nav bar; allow tap-to-dismiss so a
+     stuck toast can never block the verdict / intel agents underneath. */
+  .toast-region {
+    width: min(calc(100vw - 1rem), 22rem);
+    pointer-events: none;
+  }
+  .toast--auto-detect {
+    pointer-events: auto;
+    cursor: pointer;
   }
 }
 
