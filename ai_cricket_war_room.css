@@ -1117,6 +1117,176 @@ html.acwr-notice-dismissed .notice-strip {
   padding-right: 0;
 }
 
+/* Fixture stack: Google-style Live + win probability (deterministic, refresh-driven) */
+.fixture-live-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  width: 100%;
+}
+
+.fixture-live-stack__match-wrap {
+  position: relative;
+}
+
+.match-live-indicator {
+  position: absolute;
+  top: 0.15rem;
+  right: 0.35rem;
+  z-index: 2;
+  font-family: var(--font-ui, "Inter", system-ui, sans-serif);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #6ee7b7;
+  pointer-events: none;
+}
+
+.match-live-indicator__label {
+  display: inline-block;
+  position: relative;
+  padding-bottom: 3px;
+}
+
+.match-live-indicator__label::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 100%;
+  max-width: 2.25rem;
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, #34d399, transparent);
+  transform: translateX(-50%);
+  animation: acwr-live-underline 1.6s ease-in-out infinite;
+}
+
+@keyframes acwr-live-underline {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: translateX(-50%) scaleX(0.55);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-50%) scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .match-live-indicator__label::after {
+    animation: none;
+    opacity: 0.85;
+    transform: translateX(-50%) scaleX(1);
+  }
+}
+
+.live-win-prob-card {
+  margin: 0 0.65rem 0.35rem;
+  padding: 0.55rem 0.6rem 0.5rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="light"] .live-win-prob-card {
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.live-win-prob-card__title {
+  margin: 0 0 0.45rem;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.live-win-prob-card__teams {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.live-win-prob-card__side {
+  flex: 1;
+  min-width: 0;
+}
+
+.live-win-prob-card__side--right {
+  text-align: right;
+}
+
+.live-win-prob-card__name {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  line-height: 1.25;
+}
+
+.live-win-prob-card__pct {
+  font-size: 1.125rem;
+  font-weight: 800;
+  line-height: 1.2;
+  margin-top: 0.12rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.live-win-prob-card__pct--bat {
+  color: #fb7185;
+}
+
+.live-win-prob-card__pct--bowl {
+  color: #7dd3fc;
+}
+
+.live-win-prob-card__bar {
+  display: flex;
+  height: 5px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="light"] .live-win-prob-card__bar {
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.live-win-prob-card__seg {
+  height: 100%;
+  transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.live-win-prob-card__seg--bat {
+  background: linear-gradient(90deg, #fb7185, #f472b6);
+  border-radius: 999px 0 0 999px;
+}
+
+.live-win-prob-card__seg--bowl {
+  background: linear-gradient(90deg, #38bdf8, #7dd3fc);
+  border-radius: 0 999px 999px 0;
+}
+
+.live-win-prob-card__placeholder {
+  margin: 0;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.live-win-prob-card__hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.5625rem;
+  line-height: 1.35;
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
 .stage-fixture-verdict .verdict-slot:not(:empty) {
   padding: 0 0.65rem 0.55rem;
 }

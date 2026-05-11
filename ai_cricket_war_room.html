@@ -285,20 +285,48 @@
         <div class="surface surface--stage surface--verdict surface--panel" id="debateCard">
           <div id="phaseBanner" class="phase-banner" style="display:none"></div>
           <div class="stage-fixture-verdict" id="stageFixtureVerdict" hidden>
-            <div class="match-bar match-bar--in-summary" id="matchBar" hidden aria-label="Fixture">
-              <div class="match-bar__league" id="matchBarLeague"></div>
-              <div class="match-bar__row">
-                <div class="match-bar__pill" id="matchBarTeamA">
-                  <img class="match-bar__logo" id="matchBarImgA" alt="" width="44" height="44" loading="lazy" decoding="async" hidden />
-                  <span class="match-bar__code" id="matchBarCodeA"></span>
+            <div class="fixture-live-stack" id="fixtureLiveStack">
+              <div class="fixture-live-stack__match-wrap">
+                <div class="match-live-indicator" id="matchLiveIndicator" hidden aria-live="polite">
+                  <span class="match-live-indicator__label">Live</span>
                 </div>
-                <span class="match-bar__vs" aria-hidden="true">vs</span>
-                <div class="match-bar__pill" id="matchBarTeamB">
-                  <img class="match-bar__logo" id="matchBarImgB" alt="" width="44" height="44" loading="lazy" decoding="async" hidden />
-                  <span class="match-bar__code" id="matchBarCodeB"></span>
+                <div class="match-bar match-bar--in-summary" id="matchBar" hidden aria-label="Fixture">
+                  <div class="match-bar__league" id="matchBarLeague"></div>
+                  <div class="match-bar__row">
+                    <div class="match-bar__pill" id="matchBarTeamA">
+                      <img class="match-bar__logo" id="matchBarImgA" alt="" width="44" height="44" loading="lazy" decoding="async" hidden />
+                      <span class="match-bar__code" id="matchBarCodeA"></span>
+                    </div>
+                    <span class="match-bar__vs" aria-hidden="true">vs</span>
+                    <div class="match-bar__pill" id="matchBarTeamB">
+                      <img class="match-bar__logo" id="matchBarImgB" alt="" width="44" height="44" loading="lazy" decoding="async" hidden />
+                      <span class="match-bar__code" id="matchBarCodeB"></span>
+                    </div>
+                  </div>
+                  <div class="match-bar__venue" id="matchBarVenue"></div>
                 </div>
               </div>
-              <div class="match-bar__venue" id="matchBarVenue"></div>
+              <section class="live-win-prob-card" id="liveWinProbCard" hidden aria-label="Live win probability">
+                <h3 class="live-win-prob-card__title">Live win probability</h3>
+                <div class="live-win-prob-card__body" id="liveWinProbBody">
+                  <div class="live-win-prob-card__teams" id="liveWinProbTeamsRow" hidden>
+                    <div class="live-win-prob-card__side">
+                      <div class="live-win-prob-card__name" id="liveWinProbNameBat"></div>
+                      <div class="live-win-prob-card__pct live-win-prob-card__pct--bat" id="liveWinProbPctBat">—</div>
+                    </div>
+                    <div class="live-win-prob-card__side live-win-prob-card__side--right">
+                      <div class="live-win-prob-card__name" id="liveWinProbNameBowl"></div>
+                      <div class="live-win-prob-card__pct live-win-prob-card__pct--bowl" id="liveWinProbPctBowl">—</div>
+                    </div>
+                  </div>
+                  <div class="live-win-prob-card__bar" id="liveWinProbBar" hidden aria-hidden="true">
+                    <div class="live-win-prob-card__seg live-win-prob-card__seg--bat" id="liveWinProbSegBat"></div>
+                    <div class="live-win-prob-card__seg live-win-prob-card__seg--bowl" id="liveWinProbSegBowl"></div>
+                  </div>
+                  <p class="live-win-prob-card__placeholder" id="liveWinProbPlaceholder"></p>
+                </div>
+                <p class="live-win-prob-card__hint" id="liveWinProbHint"></p>
+              </section>
             </div>
             <div id="verdictArea" class="verdict-slot"></div>
           </div>

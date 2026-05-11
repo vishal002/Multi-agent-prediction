@@ -1831,9 +1831,20 @@ function extractFixtureMeta(match, teams) {
   return { league, venue };
 }
 
+/** Last fixture key passed to {@link setMatchBar}; used to reset cached live-score chrome when the user picks a different match. */
+let _lastMatchBarFixtureKey = "";
+
 function setMatchBar(match, teams) {
   const bar = document.getElementById("matchBar");
   if (!bar) return;
+  const mk = normalizeFixtureLabelKey(String(match || "").trim());
+  if (mk !== _lastMatchBarFixtureKey) {
+    liveFixtureChrome.match_status = null;
+    liveFixtureChrome.parsed = null;
+    _lastMatchBarFixtureKey = mk;
+  }
+  liveFixtureChrome.matchKey = mk;
+
   const { league, venue } = extractFixtureMeta(match, teams);
   const codeA = document.getElementById("matchBarCodeA");
   const codeB = document.getElementById("matchBarCodeB");
@@ -1865,11 +1876,16 @@ function setMatchBar(match, teams) {
   bar.hidden = false;
   const summary = document.getElementById("stageFixtureVerdict");
   if (summary) summary.hidden = false;
+  syncMatchLiveChrome(match, teams);
 }
 
 function hideMatchBar() {
   const bar = document.getElementById("matchBar");
   if (bar) bar.hidden = true;
+  const ind = document.getElementById("matchLiveIndicator");
+  if (ind) ind.hidden = true;
+  const card = document.getElementById("liveWinProbCard");
+  if (card) card.hidden = true;
   const summary = document.getElementById("stageFixtureVerdict");
   if (summary) summary.hidden = true;
 }
@@ -4671,6 +4687,262 @@ function computeWinProbability(parsed) {
   return Math.max(0, Math.min(100, Math.round(p * 100)));
 }
 
+/** Latest structured live score + status for the fixture bar (from /api/live-score or the live form). */
+const liveFixtureChrome = /** @type {{ matchKey: string, match_status: string | null, parsed: LiveScoreParsed | null }} */ ({
+  matchKey: "",
+  match_status: null,
+  parsed: null,
+});
+
+function isFixtureDateStrictlyFuture(match) {
+  const d = extractDateFromMatchInput(String(match || "").trim());
+  return Boolean(d && /^\d{4}-\d{2}-\d{2}$/.test(d) && d > todayLocalDateStr());
+}
+
+/**
+ * Build a {@link LiveScoreParsed} object from the Live match tab form so win probability
+ * updates without polling whenever the user edits fields or reloads the page.
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @returns {LiveScoreParsed | null}
+ */
+function buildParsedFromLiveForm(teams) {
+  const runsRaw = /** @type {HTMLInputElement|null} */ (document.getElementById("lfRuns"))?.value.trim() || "";
+  const wicketsRaw = /** @type {HTMLInputElement|null} */ (document.getElementById("lfWickets"))?.value.trim() || "";
+  const oversRaw = /** @type {HTMLInputElement|null} */ (document.getElementById("lfOvers"))?.value.trim() || "";
+  const targetRaw = /** @type {HTMLInputElement|null} */ (document.getElementById("lfTarget"))?.value.trim() || "";
+  const bat = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBatTeam"))?.value.trim() || "";
+  const bowl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBowlTeam"))?.value.trim() || "";
+  const inn = /** @type {HTMLSelectElement|null} */ (document.getElementById("lfInnings"))?.value || "1";
+  const fmt = /** @type {HTMLSelectElement|null} */ (document.getElementById("lfFormat"))?.value || "T20";
+
+  const runs = runsRaw ? parseInt(runsRaw, 10) : NaN;
+  const wickets = wicketsRaw ? parseInt(wicketsRaw, 10) : 0;
+  const oversNum = oversRaw ? parseFloat(oversRaw) : NaN;
+  if (!Number.isFinite(runs) || !Number.isFinite(oversNum)) return null;
+
+  const innings = inn === "2" ? 2 : 1;
+  let target = null;
+  if (innings === 2 && targetRaw) {
+    const t = parseInt(targetRaw, 10);
+    if (Number.isFinite(t) && t > 0) target = t;
+  }
+
+  const raw = {
+    runs,
+    wickets: Number.isFinite(wickets) ? Math.max(0, Math.min(9, wickets)) : 0,
+    overs: String(oversNum),
+    batting_team: bat ? bat.toUpperCase() : null,
+    bowling_team: bowl ? bowl.toUpperCase() : null,
+    innings,
+    target,
+    format: fmt || "T20",
+    rrr: null,
+    crr: null,
+    balls_left: null,
+    runs_needed: null,
+  };
+  return normalizeLiveScoreParsed(raw);
+}
+
+/**
+ * Prefer server-normalized payload when it matches the current fixture; else the live form.
+ * @param {string} match
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @returns {LiveScoreParsed | null}
+ */
+function resolveParsedForLiveChrome(match, teams) {
+  const mk = normalizeFixtureLabelKey(String(match || "").trim());
+  if (liveFixtureChrome.matchKey === mk && liveFixtureChrome.parsed) return liveFixtureChrome.parsed;
+  return buildParsedFromLiveForm(teams);
+}
+
+/**
+ * @param {string} code
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ */
+function teamDisplayFromCode(code, teams) {
+  const c = String(code || "").trim().toUpperCase();
+  if (!c) return "—";
+  if (c === String(teams.codeA || "").trim().toUpperCase()) return teams.teamA || teams.codeA;
+  if (c === String(teams.codeB || "").trim().toUpperCase()) return teams.teamB || teams.codeB;
+  return c;
+}
+
+/**
+ * @param {string} match
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ */
+function hasLivePlaySignal(match, teams) {
+  const p = resolveParsedForLiveChrome(match, teams);
+  return !!(p && p.runs != null && p.overs != null);
+}
+
+/**
+ * @param {string} match
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ */
+function shouldShowLiveMatchChrome(match, teams) {
+  if (!isFixtureLiveCandidate(match)) return false;
+  if (isFixtureDateStrictlyFuture(match)) return false;
+  const st = (liveFixtureChrome.match_status || "").toLowerCase();
+  if (st === "completed") return false;
+  if (st === "scheduled" || st === "not_started" || st === "not started") return false;
+  if (st === "live" || st === "innings_break" || st === "innings break") return true;
+  if (st && st !== "unknown") return !st.includes("complete");
+  return hasLivePlaySignal(match, teams);
+}
+
+/**
+ * Merge a live-score API payload into {@link liveFixtureChrome} and refresh the fixture UI.
+ * @param {string} match
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @param {{ parsed?: LiveScoreParsed | null, match_status?: string }} detail
+ */
+function applyLiveScoreDetailToFixtureChrome(match, teams, detail) {
+  if (!match || !teams || !detail) return;
+  liveFixtureChrome.matchKey = normalizeFixtureLabelKey(String(match).trim());
+  if (detail.match_status != null && String(detail.match_status).trim()) {
+    liveFixtureChrome.match_status = String(detail.match_status).trim();
+  }
+  if (detail.parsed) liveFixtureChrome.parsed = detail.parsed;
+  syncMatchLiveChrome(match, teams);
+}
+
+/**
+ * Google-style “Live” pill + deterministic win-probability strip on the fixture card.
+ * @param {string} match
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ */
+function syncMatchLiveChrome(match, teams) {
+  const matchBar = document.getElementById("matchBar");
+  if (!matchBar || matchBar.hidden) return;
+
+  const ind = document.getElementById("matchLiveIndicator");
+  const card = document.getElementById("liveWinProbCard");
+  const teamsRow = document.getElementById("liveWinProbTeamsRow");
+  const barEl = document.getElementById("liveWinProbBar");
+  const ph = document.getElementById("liveWinProbPlaceholder");
+  const hint = document.getElementById("liveWinProbHint");
+  const nameBat = document.getElementById("liveWinProbNameBat");
+  const nameBowl = document.getElementById("liveWinProbNameBowl");
+  const pctBat = document.getElementById("liveWinProbPctBat");
+  const pctBowl = document.getElementById("liveWinProbPctBowl");
+  const segBat = document.getElementById("liveWinProbSegBat");
+  const segBowl = document.getElementById("liveWinProbSegBowl");
+  if (!ind || !card) return;
+
+  const show = shouldShowLiveMatchChrome(match, teams);
+  ind.hidden = !show;
+  if (!show) {
+    card.hidden = true;
+    return;
+  }
+
+  card.hidden = false;
+  if (hint) {
+    hint.textContent =
+      "Refreshes when you reload the page or fetch the latest score again — not a live ball-by-ball feed.";
+  }
+
+  const parsed = resolveParsedForLiveChrome(match, teams);
+  const wp = computeWinProbability(parsed);
+
+  if (wp == null) {
+    if (teamsRow) teamsRow.hidden = true;
+    if (barEl) barEl.hidden = true;
+    if (ph) {
+      ph.hidden = false;
+      ph.textContent =
+        "Win probability is shown once a target exists (2nd innings chase). Enter innings, target, and score on the Live match tab, then refresh.";
+    }
+    if (pctBat) pctBat.textContent = "—";
+    if (pctBowl) pctBowl.textContent = "—";
+    return;
+  }
+
+  const batCode = String(parsed?.batting_team || "").trim().toUpperCase();
+  const bowlCode = String(parsed?.bowling_team || "").trim().toUpperCase();
+  const batName = teamDisplayFromCode(batCode, teams);
+  const bowlName = teamDisplayFromCode(bowlCode, teams);
+  const pctA = wp;
+  const pctB = 100 - wp;
+
+  if (ph) ph.hidden = true;
+  if (teamsRow) teamsRow.hidden = false;
+  if (nameBat) nameBat.textContent = batName;
+  if (nameBowl) nameBowl.textContent = bowlName;
+  if (pctBat) pctBat.textContent = `${pctA}%`;
+  if (pctBowl) pctBowl.textContent = `${pctB}%`;
+
+  if (barEl && segBat && segBowl) {
+    barEl.hidden = false;
+    segBat.style.width = "0%";
+    segBowl.style.width = "0%";
+    requestAnimationFrame(() => {
+      segBat.style.width = `${pctA}%`;
+      segBowl.style.width = `${pctB}%`;
+    });
+  }
+
+  card.setAttribute(
+    "aria-label",
+    `Live win probability: ${batName} ${pctA} percent, ${bowlName} ${pctB} percent. Fan estimate from required run rate and wickets; not betting advice.`,
+  );
+}
+
+let _fixtureLiveFormSyncTimer = 0;
+/**
+ * When the user edits the Live match form, refresh the probability strip if the fixture bar is up.
+ */
+function scheduleSyncLiveChromeFromForm() {
+  const bar = document.getElementById("matchBar");
+  if (!bar || bar.hidden) return;
+  const matchEl = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+  const match = matchEl?.value.trim() || "";
+  if (!match) return;
+  let teams;
+  try {
+    teams = parseTeamsFromMatch(match);
+  } catch {
+    return;
+  }
+  if (_fixtureLiveFormSyncTimer) window.clearTimeout(_fixtureLiveFormSyncTimer);
+  _fixtureLiveFormSyncTimer = window.setTimeout(() => {
+    _fixtureLiveFormSyncTimer = 0;
+    syncMatchLiveChrome(match, teams);
+  }, 350);
+}
+
+function initFixtureLiveChromeListeners() {
+  if (typeof document === "undefined" || document.body.dataset.fixtureLiveChromeInit === "1") return;
+  document.body.dataset.fixtureLiveChromeInit = "1";
+
+  document.addEventListener("livescore:update", (ev) => {
+    const d = /** @type {CustomEvent} */ (ev).detail;
+    const matchEl = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+    const match = matchEl?.value.trim() || "";
+    if (!match || !d) return;
+    let teams;
+    try {
+      teams = parseTeamsFromMatch(match);
+    } catch {
+      return;
+    }
+    const mk = normalizeFixtureLabelKey(match);
+    if (liveFixtureChrome.matchKey && liveFixtureChrome.matchKey !== mk) return;
+    liveFixtureChrome.matchKey = mk;
+    if (d.match_status != null) liveFixtureChrome.match_status = String(d.match_status);
+    if (d.parsed) liveFixtureChrome.parsed = d.parsed;
+    syncMatchLiveChrome(match, teams);
+  });
+
+  const liveBody = document.getElementById("livePanelBody");
+  if (liveBody) {
+    liveBody.addEventListener("input", scheduleSyncLiveChromeFromForm);
+    liveBody.addEventListener("change", scheduleSyncLiveChromeFromForm);
+  }
+}
+
 /**
  * Apply {@link LiveScoreParsed} to the Live match structured fields (best-effort).
  * @param {LiveScoreParsed | null} parsed
@@ -5516,6 +5788,7 @@ async function runWarRoom() {
         liveState = readLivePanelState();
         if (!liveState && d.snippet) liveState = { text: d.snippet };
       }
+      applyLiveScoreDetailToFixtureChrome(match, teams, d);
     } catch { /* best-effort */ }
   }
 
@@ -6681,6 +6954,7 @@ initLivePanel();
 initControlsTabs();
 initLiveScoreBar();
 initLivePollLoop();
+initFixtureLiveChromeListeners();
 initUmamiButtonTracking();
 void refreshJudgeAccuracyFooter();
 void (async () => {
@@ -7121,6 +7395,7 @@ async function autoPopulateTodayMatch() {
           liveInput.value = d.snippet;
           if (liveClear) /** @type {HTMLElement} */ (liveClear).hidden = false;
         }
+        applyLiveScoreDetailToFixtureChrome(best.label, teams, d);
       } catch { /* best-effort */ }
     }
   }
@@ -7437,6 +7712,7 @@ function initLiveScoreBar() {
           input.placeholder = "No live score found in RSS — paste manually";
           outcome = "empty";
         }
+        applyLiveScoreDetailToFixtureChrome(match, teams, d);
       } catch {
         input.placeholder = "Fetch failed — paste score manually";
         outcome = "error";
@@ -7669,6 +7945,10 @@ async function pollLiveScoreOnce() {
       setLiveTickerText("liveTickerWp", "Win% —");
       setLiveTickerText("liveTickerSource", `source: ${detail.source || "—"}`);
       livePoll.lastUpdateAt = Date.now();
+    }
+
+    if (livePoll.match && livePoll.teams) {
+      applyLiveScoreDetailToFixtureChrome(livePoll.match, livePoll.teams, detail);
     }
 
     const status = (detail.match_status || "").toLowerCase();
