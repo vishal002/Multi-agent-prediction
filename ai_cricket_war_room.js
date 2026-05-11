@@ -1778,6 +1778,13 @@ function resolveTeamLogoUrl(code, teamName) {
   return null;
 }
 
+/** Wikimedia / Wikipedia CDNs often block or throttle when a cross-site Referer is sent. */
+function externalHostReferrerPolicyAttr(url) {
+  const u = String(url || "");
+  if (/^https:\/\/([^/]+\.)?wikimedia\.org\//i.test(u)) return ' referrerpolicy="no-referrer"';
+  return "";
+}
+
 function setMatchBarTeamImage(imgEl, pillEl, code, teamName) {
   if (!imgEl) return;
   const url = resolveTeamLogoUrl(code, teamName);
@@ -1794,6 +1801,8 @@ function setMatchBarTeamImage(imgEl, pillEl, code, teamName) {
     imgEl.hidden = true;
     pillEl?.classList.add("match-bar__pill--nologo");
   };
+  if (/^https:\/\/([^/]+\.)?wikimedia\.org\//i.test(url)) imgEl.referrerPolicy = "no-referrer";
+  else imgEl.removeAttribute("referrerpolicy");
   imgEl.src = url;
   imgEl.hidden = false;
 }
@@ -2027,6 +2036,33 @@ function resolveCompletedActualScore(result) {
 
 const POTM_PHOTO_PLACEHOLDER = "/image/potm/placeholder.svg";
 
+/** Judge / LLM hedges — not real player names; must not derive `/image/potm/unknown-potm.png` etc. */
+const _PLACEHOLDER_PLAYER_DISPLAY_NAMES = new Set([
+  "unknown",
+  "uncertain",
+  "n/a",
+  "na",
+  "tbd",
+  "tbc",
+  "none",
+  "unspecified",
+  "undetermined",
+  "not specified",
+  "unclear",
+]);
+
+/**
+ * @param {string} name
+ * @returns {boolean}
+ */
+function isPlaceholderPlayerDisplayName(name) {
+  const raw = String(name || "").trim();
+  if (!raw) return true;
+  const n = raw.toLowerCase().replace(/\u2013|\u2014/g, "-").trim();
+  if (!n || n === "-") return true;
+  return _PLACEHOLDER_PLAYER_DISPLAY_NAMES.has(n);
+}
+
 /**
  * Convert a player's display name into a filesystem-safe slug used to look up
  * a local photo at `/image/potm/{slug}-potm.png`.
@@ -2056,11 +2092,11 @@ function slugifyPlayerName(name) {
  * {@link hydratePlayerOfMatchPhotos} can asynchronously upgrade the image
  * without showing a broken-image flash.
  *
- * Order of precedence we *advertise* (via the returned candidates) when
- * upgrading post-mount:
- *   1. Explicit `result.player_photo` if it points to a local /image/… file
- *   2. Auto-derived slug at `/image/potm/{slug}-potm.png`
- *   3. Wikipedia thumbnail (driven by `data-player-wiki`)
+ * Order of precedence when upgrading post-mount (see
+ * {@link hydratePlayerOfMatchPhotos}):
+ *   1. Wikipedia thumbnail when `name` is set (avoids 404s on missing `/image/potm/*.png`)
+ *   2. Explicit `result.player_photo` under `/image/…`
+ *   3. Auto-derived slug `/image/potm/{slug}-potm.png` only when there is no name
  *   4. Placeholder
  *
  * The initial `src` is the placeholder whenever we have *anything* to upgrade
@@ -2074,9 +2110,16 @@ function slugifyPlayerName(name) {
  */
 function resolvePlayerPhotoSrc(name, explicitPhoto) {
   const explicit = String(explicitPhoto || "").trim();
-  const explicitCandidate =
+  let explicitCandidate =
     explicit.startsWith("/image/") && !explicit.includes("..") ? explicit : "";
-  const slug = slugifyPlayerName(name);
+  const nm = String(name || "").trim();
+  const skipSlug = isPlaceholderPlayerDisplayName(name) || nm.length > 0;
+  if (skipSlug && /unknown-potm\.png$/i.test(explicitCandidate)) {
+    explicitCandidate = "";
+  }
+  // With a real display name we use Wikipedia — do not derive `/image/potm/{slug}-potm.png`
+  // (those files are rarely shipped; probing them spams 404 in DevTools).
+  const slug = skipSlug ? "" : slugifyPlayerName(name);
   const slugCandidate = slug ? `/image/potm/${slug}-potm.png` : "";
   // Always start with the placeholder when *any* upgrade path is available —
   // that suppresses the broken-image flash when the curated PNG hasn't been
@@ -2109,16 +2152,12 @@ function _preloadImageOrNull(url) {
 
 // ─── Wikipedia player-photo lookup ───────────────────────────────────────────
 //
-// The Wikipedia REST `summary` endpoint returns a 320px thumbnail at
-// `data.thumbnail.source`, e.g.
-//   https://upload.wikimedia.org/wikipedia/commons/thumb/X/XX/Foo.jpg/320px-Foo.jpg
-//
-// We rewrite the trailing `<N>px-` segment to request a size that matches the
-// banner avatar at ~3x DPR (56px CSS × 3 ≈ 168 → round to 200 for headroom).
+// The Wikipedia REST `summary` endpoint returns `data.thumbnail.source`
+// (Commons thumb URL; width varies). Load it unchanged — rewriting the
+// trailing `…/Npx-…` segment often yields HTTP 400 from upload.wikimedia.org.
 // Results are cached in-memory (Promise dedupe across renders) and in
 // localStorage so the same player is never re-fetched on page reloads.
 
-const PLAYER_WIKI_PHOTO_TARGET_PX = 200;
 const PLAYER_WIKI_PHOTO_LS_KEY = "war_room.player_wiki_photo.v1";
 const PLAYER_WIKI_PHOTO_LS_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -2163,20 +2202,6 @@ function _wikiTitleForPlayer(name) {
 }
 
 /**
- * Rewrite a Wikipedia thumbnail URL to request a different rendered size.
- * Wikipedia thumbnail URLs end in `/<N>px-Filename.ext`; replacing `<N>` asks
- * the thumbnailer to serve that size (cached server-side).
- *
- * @param {string} url
- * @param {number} sizePx
- */
-function _adjustWikipediaThumbnailSize(url, sizePx) {
-  if (!url) return url;
-  const n = Math.max(32, Math.round(Number(sizePx) || 0));
-  return url.replace(/\/(\d+)px-([^/]+)$/i, `/${n}px-$2`);
-}
-
-/**
  * Fetch (or read from cache) the Wikipedia thumbnail URL for a player.
  * Resolves to `null` when the article is missing or has no lead image.
  *
@@ -2197,19 +2222,22 @@ function fetchPlayerWikipediaPhoto(name) {
       }
     }
     try {
-      const res = await fetch(
-        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
-        { headers: { Accept: "application/json" } }
-      );
-      if (!res.ok) {
-        cache[title] = { src: null, t: Date.now() };
-        _writePlayerWikiPhotoCache(cache);
-        return null;
+      async function summaryThumb(t) {
+        const res = await fetch(
+          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(t)}`,
+          { headers: { Accept: "application/json" } }
+        );
+        if (!res.ok) return null;
+        const data = await res.json();
+        return data && data.thumbnail && typeof data.thumbnail.source === "string"
+          ? data.thumbnail.source
+          : null;
       }
-      const data = await res.json();
-      const src = data && data.thumbnail && typeof data.thumbnail.source === "string"
-        ? data.thumbnail.source
-        : null;
+
+      let src = await summaryThumb(title);
+      if (!src && !title.endsWith("_(cricketer)")) {
+        src = await summaryThumb(`${title}_(cricketer)`);
+      }
       cache[title] = { src, t: Date.now() };
       _writePlayerWikiPhotoCache(cache);
       return src;
@@ -2225,13 +2253,13 @@ function fetchPlayerWikipediaPhoto(name) {
 /**
  * Upgrade POTM / key-player avatars inside `rootEl` to the best photo we can
  * find, without ever showing a broken-image flash. The image starts mounted
- * with the placeholder; this helper races three candidate sources and swaps
- * to the highest-priority one that *actually loads*:
+ * with the placeholder; this helper resolves candidates and swaps to the
+ * first that *actually loads*:
  *
- *   1. `data-player-explicit-photo` — curated `/image/potm/...` path from
- *      `match_suggestions.json` (only used when the file exists on disk).
- *   2. `data-player-slug-photo` — auto-derived `/image/potm/{slug}-potm.png`.
- *   3. `data-player-wiki` — Wikipedia thumbnail lookup for the player name.
+ *   1. Wikipedia (`data-player-wiki`) when a name is present — tried first so
+ *      missing catalog PNGs do not produce 404 noise.
+ *   2. `data-player-explicit-photo` — curated `/image/…` when Wikipedia fails.
+ *   3. `data-player-slug-photo` — only when there is no wiki name (rare).
  *
  * If none of them resolve, the placeholder stays in place. Each image may
  * carry a `data-placeholder-class` attribute to choose the placeholder
@@ -2255,25 +2283,32 @@ function hydratePlayerOfMatchPhotos(rootEl) {
     img.removeAttribute("data-player-slug-photo");
 
     void (async () => {
-      const tryAndSwap = (url) => {
+      /**
+       * @param {string} url
+       * @param {{ wikimedia?: boolean }} [swapOpts]
+       */
+      const tryAndSwap = (url, swapOpts) => {
         if (!url || !img.isConnected) return false;
+        if (swapOpts?.wikimedia) img.referrerPolicy = "no-referrer";
+        else img.removeAttribute("referrerpolicy");
         img.src = url;
         img.classList.remove(placeholderClass);
         return true;
       };
+
+      if (name) {
+        const wikiRaw = await fetchPlayerWikipediaPhoto(name);
+        if (wikiRaw && img.isConnected) {
+          const wikiOk = await _preloadImageOrNull(wikiRaw);
+          if (wikiOk && tryAndSwap(wikiOk, { wikimedia: true })) return;
+        }
+      }
 
       const explicitOk = await _preloadImageOrNull(explicit);
       if (explicitOk && tryAndSwap(explicitOk)) return;
 
       const slugOk = await _preloadImageOrNull(slug);
       if (slugOk && tryAndSwap(slugOk)) return;
-
-      if (!name) return;
-      const wikiRaw = await fetchPlayerWikipediaPhoto(name);
-      if (!wikiRaw || !img.isConnected) return;
-      const sized = _adjustWikipediaThumbnailSize(wikiRaw, PLAYER_WIKI_PHOTO_TARGET_PX);
-      const wikiOk = await _preloadImageOrNull(sized);
-      if (wikiOk) tryAndSwap(wikiOk);
     })();
   });
 }
@@ -2283,12 +2318,9 @@ function hydratePlayerOfMatchPhotos(rootEl) {
  * shared-prediction preview cards. Pairs the player's name with a small
  * circular photo. Resolution mirrors {@link renderPlayerOfMatchCardHtml}:
  *
- *   1. Local `/image/potm/{slug}-potm.png` (auto-derived from the name).
- *   2. Wikipedia thumbnail via {@link hydratePlayerOfMatchPhotos} after mount.
+ *   1. Wikipedia thumbnail when the name is known (see hydration order).
+ *   2. Local `/image/potm/…` when catalog paths exist.
  *   3. {@link POTM_PHOTO_PLACEHOLDER} when nothing else loads.
- *
- * The inline `onerror` swap keeps the placeholder reachable even if the
- * slug-derived asset 404s before the Wikipedia upgrade lands.
  *
  * @param {string} keyPlayerName
  * @returns {string}
@@ -2299,12 +2331,12 @@ function renderVerdictKeyPlayerStatCellHtml(keyPlayerName) {
   const photo = resolvePlayerPhotoSrc(name, "");
   const altText = name ? `${name}, key player` : "Key player";
   // Always start with the placeholder; `hydratePlayerOfMatchPhotos` upgrades
-  // to the best available source (slug PNG → Wikipedia) without flashing a
-  // broken image when the slug PNG is missing.
+  // (Wikipedia first when the name is known) without flashing a broken image.
   const baseClass = "key-player-photo key-player-photo--placeholder";
-  const wikiAttr = name
-    ? ` data-player-wiki="${escapeHtml(name)}" data-placeholder-class="key-player-photo--placeholder"`
-    : "";
+  const wikiAttr =
+    name && !isPlaceholderPlayerDisplayName(name)
+      ? ` data-player-wiki="${escapeHtml(name)}" data-placeholder-class="key-player-photo--placeholder"`
+      : "";
   const slugAttr = photo.slugCandidate
     ? ` data-player-slug-photo="${escapeHtml(photo.slugCandidate)}"`
     : "";
@@ -2350,10 +2382,11 @@ function renderPlayerOfMatchCardHtml(result) {
   const photo = resolvePlayerPhotoSrc(name, String(result.player_photo || ""));
   const altText = name ? `${name}${teamCode ? `, ${teamCode}` : ""}` : "Player of the match";
   // We always mount the placeholder first and let `hydratePlayerOfMatchPhotos`
-  // race the explicit/slug/Wikipedia candidates — that suppresses the broken
-  // image flash when a curated PNG is missing on disk.
+  // resolve Wikipedia / explicit / slug — suppresses broken-image flash when
+  // catalog PNGs are missing on disk.
   const imgClass = "potm-banner__img potm-banner__img--placeholder";
-  const wikiAttr = name ? ` data-player-wiki="${escapeHtml(name)}"` : "";
+  const wikiAttr =
+    name && !isPlaceholderPlayerDisplayName(name) ? ` data-player-wiki="${escapeHtml(name)}"` : "";
   const explicitAttr = photo.explicitCandidate
     ? ` data-player-explicit-photo="${escapeHtml(photo.explicitCandidate)}"`
     : "";
@@ -2401,7 +2434,11 @@ function normalizeVerdictPartial(raw, teams) {
     winner: String(w.winner ?? fallbackWinner).trim() || fallbackWinner,
     confidence,
     score_range: String(w.score_range ?? "").trim() || "—",
-    key_player: String(w.key_player ?? "").trim() || "—",
+    key_player: (() => {
+      const kp = String(w.key_player ?? "").trim();
+      if (isPlaceholderPlayerDisplayName(kp)) return "—";
+      return kp || "—";
+    })(),
     swing_factor: String(w.swing_factor ?? "").trim() || "—",
     summary:
       String(w.summary ?? "").trim() ||
@@ -2631,7 +2668,7 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
     pickedA ? teams.teamA : teams.teamB
   );
   const verdictLogoHtml = winnerLogoUrl
-    ? `<img class="verdict-winner-logo" src="${escapeHtml(winnerLogoUrl)}" width="44" height="44" alt="" decoding="async" loading="lazy" />`
+    ? `<img class="verdict-winner-logo" src="${escapeHtml(winnerLogoUrl)}" width="44" height="44" alt="" decoding="async" loading="lazy"${externalHostReferrerPolicyAttr(winnerLogoUrl)} />`
     : "";
   const confRaw = Number(v.confidence);
   const conf = Number.isFinite(confRaw) ? Math.min(100, Math.max(0, confRaw)) : 55;
@@ -2938,7 +2975,7 @@ function mountSharedPredictionPreviewCard(verdictRootEl, v, teams, opts) {
     pickedA ? teams.teamA : teams.teamB
   );
   const verdictLogoHtml = winnerLogoUrl
-    ? `<img class="verdict-winner-logo" src="${escapeHtml(winnerLogoUrl)}" width="44" height="44" alt="" decoding="async" loading="lazy" />`
+    ? `<img class="verdict-winner-logo" src="${escapeHtml(winnerLogoUrl)}" width="44" height="44" alt="" decoding="async" loading="lazy"${externalHostReferrerPolicyAttr(winnerLogoUrl)} />`
     : "";
   const confRaw = Number(v.confidence);
   const conf = Number.isFinite(confRaw) ? Math.min(100, Math.max(0, confRaw)) : 55;
@@ -3859,7 +3896,7 @@ function addBubble(side, who, text, meta = {}) {
     : '';
   const logoUrl = resolveTeamLogoUrl(teamCode, teamName);
   const mark = logoUrl
-    ? `<img class="bubble-logo" src="${escapeHtml(logoUrl)}" width="26" height="26" alt="" decoding="async" loading="lazy" />`
+    ? `<img class="bubble-logo" src="${escapeHtml(logoUrl)}" width="26" height="26" alt="" decoding="async" loading="lazy"${externalHostReferrerPolicyAttr(logoUrl)} />`
     : teamCode
       ? `<span class="team-chip">${escapeHtml(teamCode)}</span>`
       : "";
@@ -4879,7 +4916,7 @@ function appendPostMatchBubble(area, side, team, kicker, body, scoreLine) {
   div.setAttribute("data-team", team.code);
   const logoUrl = resolveTeamLogoUrl(team.code, team.name);
   const mark = logoUrl
-    ? `<img class="bubble-logo" src="${escapeHtml(logoUrl)}" width="26" height="26" alt="" decoding="async" loading="lazy" />`
+    ? `<img class="bubble-logo" src="${escapeHtml(logoUrl)}" width="26" height="26" alt="" decoding="async" loading="lazy"${externalHostReferrerPolicyAttr(logoUrl)} />`
     : team.code
       ? `<span class="team-chip">${escapeHtml(team.code)}</span>`
       : "";
@@ -5161,7 +5198,7 @@ function renderRecoveredPastMatchCard(match, teams, recovered) {
       )
     : null;
   const verdictLogoHtml = winnerLogoUrl
-    ? `<img class="verdict-winner-logo" src="${escapeHtml(winnerLogoUrl)}" width="44" height="44" alt="" decoding="async" loading="lazy" />`
+    ? `<img class="verdict-winner-logo" src="${escapeHtml(winnerLogoUrl)}" width="44" height="44" alt="" decoding="async" loading="lazy"${externalHostReferrerPolicyAttr(winnerLogoUrl)} />`
     : "";
   const winProbFinal = renderVerdictWinProbabilityBlock(
     teams,
@@ -5216,7 +5253,7 @@ function renderPastPendingResultCard(match, teams) {
   const teamBLogo = resolveTeamLogoUrl(teams.codeB, teams.teamB);
   const logoHtml = (url) =>
     url
-      ? `<img class="verdict-winner-logo" src="${escapeHtml(url)}" width="36" height="36" alt="" decoding="async" loading="lazy" />`
+      ? `<img class="verdict-winner-logo" src="${escapeHtml(url)}" width="36" height="36" alt="" decoding="async" loading="lazy"${externalHostReferrerPolicyAttr(url)} />`
       : "";
   const verdictEl = document.getElementById('verdictArea');
   verdictEl.innerHTML = `
@@ -5308,7 +5345,7 @@ async function runWarRoom() {
         pickedA ? teams.teamA : teams.teamB
       );
       const verdictLogoHtml = winnerLogoUrl
-        ? `<img class="verdict-winner-logo" src="${escapeHtml(winnerLogoUrl)}" width="44" height="44" alt="" decoding="async" loading="lazy" />`
+        ? `<img class="verdict-winner-logo" src="${escapeHtml(winnerLogoUrl)}" width="44" height="44" alt="" decoding="async" loading="lazy"${externalHostReferrerPolicyAttr(winnerLogoUrl)} />`
         : "";
       const res = /** @type {NonNullable<MatchSuggestionRow["result"]>} */ (completedRow.result);
       const winProbFinal = renderVerdictWinProbabilityBlock(teams, pickedA ? 100 : 0, {

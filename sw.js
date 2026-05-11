@@ -6,7 +6,7 @@
  * precache bucket is deleted on activate (avoids stale large bundles).
  * Changing this file also triggers a service-worker update check in browsers.
  */
-const STATIC_ASSET_VERSION = "20260505-1";
+const STATIC_ASSET_VERSION = "20260511-1";
 const STATIC_CACHE = `acwr-static-${STATIC_ASSET_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -21,6 +21,7 @@ const PRECACHE_URLS = [
   "/icons/icon-512.png",
   "/icons/icon-maskable-512.png",
   "/icons/apple-touch-icon.png",
+  "/image/potm/placeholder.svg",
 ];
 
 self.addEventListener("install", (event) => {
