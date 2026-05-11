@@ -1287,6 +1287,175 @@ html.acwr-notice-dismissed .notice-strip {
   text-align: center;
 }
 
+/* Live scoreboard (dual innings + chase context; refreshes with /api/live-score) */
+.live-scoreboard {
+  margin: 0 0.65rem;
+  padding: 0.6rem 0.55rem 0.55rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: rgba(0, 0, 0, 0.22);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="light"] .live-scoreboard {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.live-scoreboard__grid {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: start;
+  gap: 0.25rem 0.45rem;
+}
+
+.live-scoreboard__team {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.live-scoreboard__team--right {
+  align-items: center;
+}
+
+.live-scoreboard__runs {
+  font-size: 1.05rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+  text-align: center;
+}
+
+.live-scoreboard__team-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.live-scoreboard__logo {
+  width: 2.25rem;
+  height: 2.25rem;
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px;
+}
+
+.live-scoreboard__code {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--color-text-secondary);
+}
+
+.live-scoreboard__vs {
+  align-self: center;
+  padding-top: 1.35rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  letter-spacing: 0.08em;
+}
+
+.live-scoreboard__status {
+  margin: 0.5rem 0 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: center;
+  color: var(--color-text-primary);
+}
+
+.live-scoreboard__over-pos {
+  margin: 0.25rem 0 0;
+  font-size: 0.625rem;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+.live-scoreboard__meta {
+  margin: 0.35rem 0 0;
+  font-size: 0.5625rem;
+  line-height: 1.35;
+  text-align: center;
+  color: var(--color-text-tertiary);
+}
+
+.live-scoreboard__players {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem 0.65rem;
+  margin-top: 0.55rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.live-scoreboard__player-col {
+  font-size: 0.625rem;
+  line-height: 1.35;
+  color: var(--color-text-secondary);
+  min-width: 0;
+}
+
+.live-scoreboard__player-head {
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  margin-bottom: 0.25rem;
+}
+
+.live-scoreboard__player {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+  margin-bottom: 0.35rem;
+}
+
+.live-scoreboard__player--active.live-scoreboard__player--bowl .live-scoreboard__player-name::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 0.28rem;
+  border-radius: 50%;
+  background: #f87171;
+  vertical-align: 0.05em;
+}
+
+.live-scoreboard__player--active.live-scoreboard__player--bat .live-scoreboard__player-fig::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 0.28rem;
+  border-radius: 50%;
+  background: #38bdf8;
+  vertical-align: 0.05em;
+}
+
+.live-scoreboard__player-name {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.live-scoreboard__player-fig {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+.live-scoreboard__player-empty {
+  opacity: 0.5;
+}
+
 .stage-fixture-verdict .verdict-slot:not(:empty) {
   padding: 0 0.65rem 0.55rem;
 }

@@ -165,7 +165,16 @@
     "teams": [
       "DC",
       "PBKS"
-    ]
+    ],
+    "completed": true,
+    "result": {
+      "winner": "DC",
+      "summary": "Delhi Capitals won by 3 wickets (6 balls left) — PBKS 210/5 (20 ov), DC 211/7 (19.4 ov).",
+      "key_player": "Tristan Stubbs",
+      "actual_score": "PBKS 210/5 (20 ov) · DC 211/7 (19.4 ov)",
+      "potm_batting": "47* (21)",
+      "potm_team": "DC"
+    }
   },
   {
     "label": "MI vs RCB — IPL 2026 Match 54, M. Chinnaswamy Stadium, Bengaluru",

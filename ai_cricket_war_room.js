@@ -181,7 +181,16 @@ const MATCH_SUGGESTIONS_FALLBACK_ROWS = /** @type {MatchSuggestionRow[]} */ ([
       "teams": [
         "DC",
         "PBKS"
-      ]
+      ],
+      "completed": true,
+      "result": {
+        "winner": "DC",
+        "summary": "Delhi Capitals won by 3 wickets (6 balls left) — PBKS 210/5 (20 ov), DC 211/7 (19.4 ov).",
+        "key_player": "Tristan Stubbs",
+        "actual_score": "PBKS 210/5 (20 ov) · DC 211/7 (19.4 ov)",
+        "potm_batting": "47* (21)",
+        "potm_team": "DC"
+      }
     },
     {
       "label": "MI vs RCB — IPL 2026 Match 54, M. Chinnaswamy Stadium, Bengaluru",
@@ -1841,6 +1850,7 @@ function setMatchBar(match, teams) {
   if (mk !== _lastMatchBarFixtureKey) {
     liveFixtureChrome.match_status = null;
     liveFixtureChrome.parsed = null;
+    liveFixtureChrome.snippet = "";
     _lastMatchBarFixtureKey = mk;
   }
   liveFixtureChrome.matchKey = mk;
@@ -1886,6 +1896,8 @@ function hideMatchBar() {
   if (ind) ind.hidden = true;
   const card = document.getElementById("liveWinProbCard");
   if (card) card.hidden = true;
+  const board = document.getElementById("liveScoreboard");
+  if (board) board.hidden = true;
   const summary = document.getElementById("stageFixtureVerdict");
   if (summary) summary.hidden = true;
 }
@@ -4562,6 +4574,10 @@ function extractLiveStateFromCtx(ctx) {
  *   crr: number | null,
  *   balls_left: number | null,
  *   runs_needed: number | null,
+ *   inn1_team?: string | null,
+ *   inn1_runs?: number | null,
+ *   inn1_wickets?: number | null,
+ *   inn1_overs?: string | number | null,
  * }} LiveScoreParsed
  */
 
@@ -4602,6 +4618,15 @@ function normalizeLiveScoreParsed(raw) {
   const runs_needed =
     typeof o.runs_needed === "number" && Number.isFinite(o.runs_needed) ? Math.max(0, Math.floor(o.runs_needed)) : null;
 
+  const inn1_team =
+    typeof o.inn1_team === "string" && o.inn1_team.trim() ? o.inn1_team.trim().toUpperCase() : null;
+  const inn1_runs = typeof o.inn1_runs === "number" && Number.isFinite(o.inn1_runs) ? Math.floor(o.inn1_runs) : null;
+  const inn1_wickets =
+    typeof o.inn1_wickets === "number" && Number.isFinite(o.inn1_wickets) ? Math.max(0, Math.floor(o.inn1_wickets)) : null;
+  let inn1_overs = null;
+  if (typeof o.inn1_overs === "string" && o.inn1_overs.trim()) inn1_overs = o.inn1_overs.trim();
+  else if (typeof o.inn1_overs === "number" && Number.isFinite(o.inn1_overs)) inn1_overs = String(o.inn1_overs);
+
   const out = {
     runs,
     wickets,
@@ -4615,6 +4640,13 @@ function normalizeLiveScoreParsed(raw) {
     crr,
     balls_left,
     runs_needed,
+    ...(inn1_team &&
+    inn1_runs != null &&
+    inn1_wickets != null &&
+    inn1_overs != null &&
+    String(inn1_overs).trim() !== ""
+      ? { inn1_team, inn1_runs, inn1_wickets, inn1_overs }
+      : {}),
   };
   if (runs == null || overs == null) return null;
   return out;
@@ -4688,10 +4720,11 @@ function computeWinProbability(parsed) {
 }
 
 /** Latest structured live score + status for the fixture bar (from /api/live-score or the live form). */
-const liveFixtureChrome = /** @type {{ matchKey: string, match_status: string | null, parsed: LiveScoreParsed | null }} */ ({
+const liveFixtureChrome = /** @type {{ matchKey: string, match_status: string | null, parsed: LiveScoreParsed | null, snippet: string }} */ ({
   matchKey: "",
   match_status: null,
   parsed: null,
+  snippet: "",
 });
 
 function isFixtureDateStrictlyFuture(match) {
@@ -4796,7 +4829,7 @@ function shouldShowLiveMatchChrome(match, teams) {
  * Merge a live-score API payload into {@link liveFixtureChrome} and refresh the fixture UI.
  * @param {string} match
  * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
- * @param {{ parsed?: LiveScoreParsed | null, match_status?: string }} detail
+ * @param {{ parsed?: LiveScoreParsed | null, match_status?: string, snippet?: string }} detail
  */
 function applyLiveScoreDetailToFixtureChrome(match, teams, detail) {
   if (!match || !teams || !detail) return;
@@ -4805,6 +4838,9 @@ function applyLiveScoreDetailToFixtureChrome(match, teams, detail) {
     liveFixtureChrome.match_status = String(detail.match_status).trim();
   }
   if (detail.parsed) liveFixtureChrome.parsed = detail.parsed;
+  if (detail.snippet != null && String(detail.snippet).trim()) {
+    liveFixtureChrome.snippet = String(detail.snippet).trim();
+  }
   syncMatchLiveChrome(match, teams);
 }
 
@@ -4831,8 +4867,11 @@ function syncMatchLiveChrome(match, teams) {
   const segBowl = document.getElementById("liveWinProbSegBowl");
   if (!ind || !card) return;
 
+  const parsed = resolveParsedForLiveChrome(match, teams);
   const show = shouldShowLiveMatchChrome(match, teams);
   ind.hidden = !show;
+  syncLiveScoreboard(match, teams, show, parsed);
+
   if (!show) {
     card.hidden = true;
     return;
@@ -4844,7 +4883,6 @@ function syncMatchLiveChrome(match, teams) {
       "Refreshes when you reload the page or fetch the latest score again — not a live ball-by-ball feed.";
   }
 
-  const parsed = resolveParsedForLiveChrome(match, teams);
   const wp = computeWinProbability(parsed);
 
   if (wp == null) {
@@ -4890,6 +4928,226 @@ function syncMatchLiveChrome(match, teams) {
   );
 }
 
+/**
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ */
+function extractDualScoresFromSnippet(snippet, teams) {
+  const text = String(snippet || "").trim();
+  if (!text) return null;
+  const a = String(teams.codeA || "").toUpperCase();
+  const b = String(teams.codeB || "").toUpperCase();
+  const rx = /\b([A-Z]{2,4})\s+(\d{1,3})\/(10|\d)\s*\(\s*(\d+(?:\.\d)?)\s*(?:ov|overs?)?\s*\)/gi;
+  /** @type {{ code: string, runs: number, wkts: number, overs: string }[]} */
+  const hits = [];
+  let m;
+  while ((m = rx.exec(text)) !== null) {
+    const code = m[1].toUpperCase();
+    if (code !== a && code !== b) continue;
+    hits.push({ code, runs: parseInt(m[2], 10), wkts: parseInt(m[3], 10), overs: m[4] });
+  }
+  const byCode = new Map();
+  for (const h of hits) {
+    byCode.set(h.code, h);
+  }
+  const ha = byCode.get(a);
+  const hb = byCode.get(b);
+  if (!ha || !hb) return null;
+  return [ha, hb];
+}
+
+/**
+ * @param {number | string | null | undefined} oversVal
+ */
+function formatOversForDisplay(oversVal) {
+  if (oversVal == null || oversVal === "") return "";
+  const s = typeof oversVal === "number" ? String(oversVal) : String(oversVal).trim();
+  return s;
+}
+
+/**
+ * Cricket decimal overs → balls completed in the current over (0–5).
+ * @param {string | null} oversStr
+ */
+function legalBallsCompletedInCurrentOver(oversStr) {
+  const v = parseFloat(String(oversStr || ""));
+  if (!Number.isFinite(v)) return null;
+  const frac = v - Math.floor(v + 1e-9);
+  const balls = Math.round(frac * 10 + 1e-9);
+  return Math.min(6, Math.max(0, balls));
+}
+
+/**
+ * Best-effort bowler / batter lines from RSS or Cricbuzz snippet text.
+ * @param {string} snippet
+ * @returns {{ bowlers: { name: string, line: string, active: boolean }[], batters: { name: string, line: string, active: boolean }[] }}
+ */
+function extractPlayerLinesFromSnippet(snippet) {
+  const text = String(snippet || "");
+  const bowlers = [];
+  const batters = [];
+  const bowlRx = /([A-Z][A-Za-z]*\.?\s+[A-Za-z][A-Za-z.-]+)\s*:\s*(\d+)\/(\d+)\s*\(([\d.]+)\)/g;
+  let bm;
+  while ((bm = bowlRx.exec(text)) !== null) {
+    bowlers.push({
+      name: bm[1].trim(),
+      line: `${bm[2]}/${bm[3]} (${bm[4]})`,
+      active: false,
+    });
+  }
+  const batRx = /([A-Z][A-Za-z]*\.?\s+[A-Za-z][A-Za-z.-]+)\s*:\s*(\d+)\s*(\*|)\s*\((\d+)\)/g;
+  let am;
+  while ((am = batRx.exec(text)) !== null) {
+    const notOut = am[3] === "*";
+    batters.push({
+      name: am[1].trim(),
+      line: `${am[2]}${notOut ? "*" : ""} (${am[4]})`,
+      active: notOut,
+    });
+  }
+  if (bowlers.length && !bowlers.some((b) => b.active)) {
+    bowlers[bowlers.length - 1].active = true;
+  }
+  if (batters.length && !batters.some((b) => b.active)) {
+    const withStar = batters.find((b) => b.line.includes("*"));
+    if (withStar) withStar.active = true;
+    else batters[0].active = true;
+  }
+  return { bowlers, batters };
+}
+
+/**
+ * Google-style dual-team score row + chase context + optional player lines.
+ * @param {string} match
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string }} teams
+ * @param {boolean} show
+ * @param {LiveScoreParsed | null} parsed
+ */
+function syncLiveScoreboard(_match, teams, show, parsed) {
+  const board = document.getElementById("liveScoreboard");
+  if (!board) return;
+  if (!show) {
+    board.hidden = true;
+    return;
+  }
+
+  const snippet = liveFixtureChrome.snippet || "";
+  const dualSnip = extractDualScoresFromSnippet(snippet, teams);
+
+  const codeA = String(teams.codeA || "").toUpperCase();
+  const codeB = String(teams.codeB || "").toUpperCase();
+
+  /**
+   * @param {string} code
+   */
+  const scoreLineForTeam = (code) => {
+    const c = code.toUpperCase();
+    const inn1 = parsed?.inn1_team?.toUpperCase();
+    if (inn1 === c && parsed.inn1_runs != null && parsed.inn1_wickets != null && parsed.inn1_overs != null) {
+      return `${parsed.inn1_runs}/${parsed.inn1_wickets} (${formatOversForDisplay(parsed.inn1_overs)})`;
+    }
+    if (parsed?.batting_team?.toUpperCase() === c && parsed.runs != null && parsed.wickets != null && parsed.overs) {
+      return `${parsed.runs}/${parsed.wickets} (${formatOversForDisplay(parsed.overs)})`;
+    }
+    if (dualSnip) {
+      const hit = dualSnip.find((h) => h.code === c);
+      if (hit) return `${hit.runs}/${hit.wkts} (${hit.overs})`;
+    }
+    return "";
+  };
+
+  const leftScore = scoreLineForTeam(codeA);
+  const rightScore = scoreLineForTeam(codeB);
+  const hasDual = Boolean(leftScore && rightScore);
+
+  const elLeftRuns = document.getElementById("liveSbRunsLeft");
+  const elRightRuns = document.getElementById("liveSbRunsRight");
+  const elLeftCode = document.getElementById("liveSbCodeLeft");
+  const elRightCode = document.getElementById("liveSbCodeRight");
+  const elStatus = document.getElementById("liveSbStatus");
+  const elOverPos = document.getElementById("liveSbOverPos");
+  const elMeta = document.getElementById("liveSbMeta");
+  const elPlayers = document.getElementById("liveSbPlayers");
+  const elBowlCol = document.getElementById("liveSbBowlCol");
+  const elBatCol = document.getElementById("liveSbBatCol");
+  const imgA = /** @type {HTMLImageElement|null} */ (document.getElementById("matchBarImgA"));
+  const imgB = /** @type {HTMLImageElement|null} */ (document.getElementById("matchBarImgB"));
+  const sbImgA = /** @type {HTMLImageElement|null} */ (document.getElementById("liveSbImgA"));
+  const sbImgB = /** @type {HTMLImageElement|null} */ (document.getElementById("liveSbImgB"));
+
+  if (!elLeftRuns || !elRightRuns || !elStatus) return;
+
+  board.hidden = false;
+
+  if (elLeftCode) elLeftCode.textContent = teams.codeA;
+  if (elRightCode) elRightCode.textContent = teams.codeB;
+  elLeftRuns.textContent = leftScore || "—";
+  elRightRuns.textContent = rightScore || "—";
+
+  if (sbImgA && imgA?.src && !imgA.hidden) {
+    sbImgA.src = imgA.src;
+    sbImgA.hidden = false;
+  } else if (sbImgA) sbImgA.hidden = true;
+  if (sbImgB && imgB?.src && !imgB.hidden) {
+    sbImgB.src = imgB.src;
+    sbImgB.hidden = false;
+  } else if (sbImgB) sbImgB.hidden = true;
+
+  const statusParts = [];
+  const bat = parsed?.batting_team?.toUpperCase();
+  const bowl = parsed?.bowling_team?.toUpperCase();
+  if (bat && bowl && parsed?.runs_needed != null && parsed?.balls_left != null) {
+    statusParts.push(`${teamDisplayFromCode(bat, teams)} need ${parsed.runs_needed} runs in ${parsed.balls_left} balls to win`);
+  } else if (bat && parsed?.runs_needed != null && parsed?.balls_left != null) {
+    statusParts.push(`${bat} need ${parsed.runs_needed} runs in ${parsed.balls_left} balls`);
+  }
+  if (parsed?.crr != null) statusParts.push(`CRR: ${parsed.crr.toFixed(2)}`);
+  if (parsed?.rrr != null) statusParts.push(`RRR: ${parsed.rrr.toFixed(2)}`);
+  elStatus.textContent = statusParts.length ? statusParts.join(" · ") : "";
+
+  const ballsIn = legalBallsCompletedInCurrentOver(parsed?.overs ?? null);
+  const ovStr = formatOversForDisplay(parsed?.overs ?? null);
+  if (elOverPos) {
+    if (ovStr && ballsIn != null && ballsIn > 0) {
+      elOverPos.textContent = `Current over position: ${ovStr} overs (${ballsIn} legal ball${ballsIn === 1 ? "" : "s"} completed in this over — updates when you refresh).`;
+    } else if (ovStr) {
+      elOverPos.textContent = `Overs: ${ovStr} (fractional overs show how deep the innings is; refresh for the latest).`;
+    } else {
+      elOverPos.textContent = "";
+    }
+  }
+
+  if (elMeta) {
+    const fmt = parsed?.format || "T20";
+    const league = document.getElementById("matchBarLeague")?.textContent?.trim() || "";
+    elMeta.textContent = [fmt, league].filter(Boolean).join(" · ");
+  }
+
+  const { bowlers, batters } = extractPlayerLinesFromSnippet(snippet);
+  if (elPlayers && elBowlCol && elBatCol) {
+    const usable = bowlers.length > 0 || batters.length > 0;
+    elPlayers.hidden = !usable;
+    if (usable) {
+      const renderCol = (items, kind) => {
+        if (!items.length) return `<span class="live-scoreboard__player-empty">—</span>`;
+        return items
+          .slice(0, 4)
+          .map(
+            (p) =>
+              `<div class="live-scoreboard__player${p.active ? ` live-scoreboard__player--active live-scoreboard__player--${kind}` : ""}"><span class="live-scoreboard__player-name">${escapeHtml(p.name)}</span><span class="live-scoreboard__player-fig">${escapeHtml(p.line)}</span></div>`,
+          )
+          .join("");
+      };
+      elBowlCol.innerHTML = `<div class="live-scoreboard__player-head">Bowling</div>${renderCol(bowlers, "bowl")}`;
+      elBatCol.innerHTML = `<div class="live-scoreboard__player-head">Batting</div>${renderCol(batters, "bat")}`;
+    } else {
+      elBowlCol.innerHTML = "";
+      elBatCol.innerHTML = "";
+    }
+  }
+
+  board.classList.toggle("live-scoreboard--single", !hasDual);
+}
+
 let _fixtureLiveFormSyncTimer = 0;
 /**
  * When the user edits the Live match form, refresh the probability strip if the fixture bar is up.
@@ -4933,6 +5191,9 @@ function initFixtureLiveChromeListeners() {
     liveFixtureChrome.matchKey = mk;
     if (d.match_status != null) liveFixtureChrome.match_status = String(d.match_status);
     if (d.parsed) liveFixtureChrome.parsed = d.parsed;
+    if (d.snippet != null && String(d.snippet).trim()) {
+      liveFixtureChrome.snippet = String(d.snippet).trim();
+    }
     syncMatchLiveChrome(match, teams);
   });
 
@@ -6156,6 +6417,7 @@ function initMatchAutocomplete() {
         input.value = hit.label;
         closeList();
         updateClearBtn();
+        _syncControlsLiveTabVisibility();
         // Completed OR past matches go straight to the result/past-match view —
         // skip the war-room agents entirely (date-based guard catches missing
         // `completed` flags so we never run agents on a finished fixture).
@@ -6237,6 +6499,7 @@ function initMatchAutocomplete() {
       input.value = "";
       updateClearBtn();
       refreshSuggestions(true);
+      _syncControlsLiveTabVisibility();
       input.focus();
     });
   }
@@ -6283,6 +6546,7 @@ function initMatchAutocomplete() {
       input.value = selectedHit.label;
       closeList();
       updateClearBtn();
+      _syncControlsLiveTabVisibility();
       if (selectedHit.completed && selectedHit.result) runWarRoom();
       return;
     }
@@ -6832,6 +7096,9 @@ function populateLiveFormFromMatchInput() {
   }
 }
 
+/** Re-run after the fixture input changes programmatically (e.g. auto-detect). Set in {@link initControlsTabs}. */
+let _syncControlsLiveTabVisibility = () => {};
+
 /**
  * War room vs Live match tab panels (controls column). Primary tab stays the hero path.
  */
@@ -6850,14 +7117,15 @@ function initControlsTabs() {
    * @param {{ user?: boolean }} [opts]
    */
   function selectTab(index, opts = {}) {
-    const i = Math.max(0, Math.min(index, tabs.length - 1));
+    const maxIdx = liveTab.hidden ? 0 : tabs.length - 1;
+    const i = Math.max(0, Math.min(index, maxIdx));
     tabs.forEach((tab, j) => {
       const on = j === i;
       tab.setAttribute("aria-selected", on ? "true" : "false");
       tab.tabIndex = on ? 0 : -1;
       panels[j].hidden = !on;
     });
-    if (opts.user && i === 1) {
+    if (opts.user && i === 1 && !liveTab.hidden) {
       try {
         populateLiveFormFromMatchInput();
       } catch (_e) {
@@ -6869,13 +7137,34 @@ function initControlsTabs() {
     }
   }
 
+  function updateLiveTabVisibility() {
+    const matchEl = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+    const match = matchEl ? String(matchEl.value || "").trim() : "";
+    const showLive = Boolean(match && isFixtureLiveCandidate(match));
+    liveTab.hidden = !showLive;
+    if (!showLive) {
+      livePanel.hidden = true;
+      if (liveTab.getAttribute("aria-selected") === "true") {
+        warTab.click();
+      }
+    }
+  }
+
+  _syncControlsLiveTabVisibility = updateLiveTabVisibility;
+
   tabs.forEach((tab, i) => {
-    tab.addEventListener("click", () => selectTab(i, { user: true }));
+    tab.addEventListener("click", () => {
+      if (liveTab.hidden && i === 1) return;
+      selectTab(i, { user: true });
+    });
     tab.addEventListener("keydown", (e) => {
+      const maxIdx = liveTab.hidden ? 0 : tabs.length - 1;
       if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
         e.preventDefault();
         const delta = e.key === "ArrowRight" ? 1 : -1;
-        const next = (i + delta + tabs.length) % tabs.length;
+        let next = i + delta;
+        if (next < 0) next = maxIdx;
+        else if (next > maxIdx) next = 0;
         selectTab(next, { user: true });
         tabs[next].focus();
       } else if (e.key === "Home") {
@@ -6884,13 +7173,20 @@ function initControlsTabs() {
         tabs[0].focus();
       } else if (e.key === "End") {
         e.preventDefault();
-        selectTab(tabs.length - 1, { user: true });
-        tabs[tabs.length - 1].focus();
+        selectTab(maxIdx, { user: true });
+        tabs[maxIdx].focus();
       }
     });
   });
 
+  const matchInput = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+  if (matchInput) {
+    matchInput.addEventListener("input", updateLiveTabVisibility);
+    matchInput.addEventListener("change", updateLiveTabVisibility);
+  }
+
   selectTab(0, {});
+  queueMicrotask(() => updateLiveTabVisibility());
 }
 
 function initLivePanel() {
@@ -6979,6 +7275,7 @@ void (async () => {
     await tryLoadDemoWarRoom();
   }
   const didAutoFillMatch = await autoPopulateTodayMatch();
+  _syncControlsLiveTabVisibility();
   void refreshFreemiumPill();
   void loadRecentVerdictsPanel();
   if (didAutoFillMatch) await maybeAutoRunWarRoomAfterPopulate();
@@ -7602,6 +7899,7 @@ function applyDemoWarRoomPayload(data) {
   };
   input.addEventListener("input", onFirstSearchInput);
 
+  _syncControlsLiveTabVisibility();
   scrollVerdictPanelIntoView({ behavior: "auto" });
 }
 

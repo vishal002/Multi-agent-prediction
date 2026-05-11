@@ -159,6 +159,15 @@ def _detect_status(block: str) -> str:
     return "live"
 
 
+def _last_team_code_before_index(block: str, end_idx: int) -> str:
+    """Best-effort team code (2–4 letters) immediately preceding a score token."""
+    prefix = block[max(0, end_idx - 120) : end_idx]
+    last = ""
+    for code_match in re.finditer(r"\b([A-Z]{2,4})\b", prefix):
+        last = code_match.group(1)
+    return last
+
+
 def _extract_team_codes(block: str) -> list[str]:
     """Pull leading 2-4 letter team abbreviations adjacent to scoreline patterns."""
     codes: list[str] = []
@@ -189,6 +198,19 @@ def _build_struct(block: str, tokens: list[str]) -> dict[str, Any] | None:
 
     innings_count = len(scores)
     second_innings_present = innings_count >= 2 or target is not None
+
+    inn1_team: str | None = None
+    inn1_runs: int | None = None
+    inn1_wickets: int | None = None
+    inn1_overs: int | float | None = None
+    if len(scores) >= 2:
+        s0 = scores[0]
+        inn1_runs = _safe_int(s0.group("runs"))
+        inn1_wickets = _safe_int(s0.group("wkts"))
+        fo0 = _safe_float(s0.group("overs"))
+        if fo0 is not None:
+            inn1_overs = fo0 if (fo0 % 1) else int(fo0)
+        inn1_team = _last_team_code_before_index(block, s0.start()) or None
 
     last = scores[-1]
     runs = _safe_int(last.group("runs"))
@@ -246,7 +268,7 @@ def _build_struct(block: str, tokens: list[str]) -> dict[str, Any] | None:
         parts.append(f"RRR {rrr}")
     snippet = ", ".join(parts)
 
-    return {
+    out: dict[str, Any] = {
         "runs": runs,
         "wickets": wkts,
         "overs": overs,
@@ -264,6 +286,17 @@ def _build_struct(block: str, tokens: list[str]) -> dict[str, Any] | None:
         "_relevance": _score_relevance(block, tokens),
         "_raw_block": block[:600],
     }
+    if (
+        inn1_runs is not None
+        and inn1_wickets is not None
+        and inn1_overs is not None
+        and (inn1_team or "").strip()
+    ):
+        out["inn1_team"] = str(inn1_team).strip().upper()
+        out["inn1_runs"] = inn1_runs
+        out["inn1_wickets"] = inn1_wickets
+        out["inn1_overs"] = inn1_overs
+    return out
 
 
 async def _fetch_html(client: httpx.AsyncClient) -> str | None:

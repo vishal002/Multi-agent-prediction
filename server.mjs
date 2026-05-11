@@ -2939,6 +2939,10 @@ export async function warRoomHttpHandler(req, res) {
             crr: struct.crr ?? null,
             balls_left: struct.balls_left ?? null,
             runs_needed: struct.runs_needed ?? null,
+            inn1_team: struct.inn1_team ? String(struct.inn1_team).trim().toUpperCase() : null,
+            inn1_runs: struct.inn1_runs ?? null,
+            inn1_wickets: struct.inn1_wickets ?? null,
+            inn1_overs: struct.inn1_overs ?? null,
           }
         : regexParsed;
 

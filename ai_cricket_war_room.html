@@ -306,6 +306,32 @@
                   <div class="match-bar__venue" id="matchBarVenue"></div>
                 </div>
               </div>
+              <div class="live-scoreboard" id="liveScoreboard" hidden aria-label="Live score summary">
+                <div class="live-scoreboard__grid">
+                  <div class="live-scoreboard__team live-scoreboard__team--left">
+                    <div class="live-scoreboard__runs" id="liveSbRunsLeft">—</div>
+                    <div class="live-scoreboard__team-foot">
+                      <img class="live-scoreboard__logo" id="liveSbImgA" alt="" width="36" height="36" decoding="async" loading="lazy" hidden />
+                      <span class="live-scoreboard__code" id="liveSbCodeLeft"></span>
+                    </div>
+                  </div>
+                  <div class="live-scoreboard__vs" aria-hidden="true">vs</div>
+                  <div class="live-scoreboard__team live-scoreboard__team--right">
+                    <div class="live-scoreboard__runs" id="liveSbRunsRight">—</div>
+                    <div class="live-scoreboard__team-foot">
+                      <img class="live-scoreboard__logo" id="liveSbImgB" alt="" width="36" height="36" decoding="async" loading="lazy" hidden />
+                      <span class="live-scoreboard__code" id="liveSbCodeRight"></span>
+                    </div>
+                  </div>
+                </div>
+                <p class="live-scoreboard__status" id="liveSbStatus"></p>
+                <p class="live-scoreboard__over-pos" id="liveSbOverPos"></p>
+                <p class="live-scoreboard__meta" id="liveSbMeta"></p>
+                <div class="live-scoreboard__players" id="liveSbPlayers" hidden>
+                  <div class="live-scoreboard__player-col" id="liveSbBowlCol"></div>
+                  <div class="live-scoreboard__player-col live-scoreboard__player-col--bat" id="liveSbBatCol"></div>
+                </div>
+              </div>
               <section class="live-win-prob-card" id="liveWinProbCard" hidden aria-label="Live win probability">
                 <h3 class="live-win-prob-card__title">Live win probability</h3>
                 <div class="live-win-prob-card__body" id="liveWinProbBody">
