@@ -1,5 +1,6 @@
 {
   "lang": "en",
+  "id": "https://cricket-war-room.vercel.app/",
   "name": "AI Cricket War Room",
   "short_name": "War Room",
   "description": "Five intel feeds, Bull vs Bear debate rounds, and a Judge verdict — fan discussion, not betting advice.",
@@ -9,6 +10,16 @@
   "background_color": "#070b12",
   "theme_color": "#070b12",
   "orientation": "any",
+  "categories": ["sports", "entertainment"],
+  "screenshots": [
+    {
+      "src": "/og-homepage.png?v=6",
+      "type": "image/png",
+      "sizes": "1200x630",
+      "form_factor": "wide",
+      "label": "Cricket War Room — home"
+    }
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.png",

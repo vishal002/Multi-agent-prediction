@@ -3,13 +3,16 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#070b12" />
   <meta name="color-scheme" content="dark light" />
   <meta name="robots" content="index,follow" />
   <title>Disclaimer — Cricket War Room</title>
   <meta name="description" content="Terms of use, limitations, and risk notice for the Cricket War Room AI demo." />
   <link rel="canonical" href="https://cricket-war-room.vercel.app/disclaimer.html" />
+  <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" type="image/png" href="/icons/favicon.png" sizes="32x32" />
   <link rel="icon" type="image/png" href="/icons/icon-192.png" sizes="192x192" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -190,5 +193,24 @@
       </p>
     </section>
   </article>
+  <script>
+    (function () {
+      if (!("serviceWorker" in navigator)) return;
+      var h = location.hostname || "";
+      var localHost =
+        h === "localhost" ||
+        h === "127.0.0.1" ||
+        h === "[::1]" ||
+        (h.length > 10 && h.slice(-10) === ".localhost");
+      var needsHttps = location.protocol === "http:" && !localHost;
+      var insecure = needsHttps || ("isSecureContext" in window && window.isSecureContext === false);
+      if (insecure) return;
+      navigator.serviceWorker
+        .register("/sw.js", { scope: "/", updateViaCache: "none" })
+        .catch(function (err) {
+          console.warn("Service worker registration failed:", err);
+        });
+    })();
+  </script>
 </body>
 </html>
