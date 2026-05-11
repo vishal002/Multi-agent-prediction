@@ -45,6 +45,11 @@ def _timeout_sec() -> float:
     return DEFAULT_FETCH_TIMEOUT
 
 
+_IPL_CONTEXT_STOPWORDS = frozenset(
+    {"ipl", "the", "and", "for", "match", "live", "odi", "t20", "t20i", "test"}
+)
+
+
 def _tokenize_context(label: str, teams_csv: str, venue: str) -> list[str]:
     parts: list[str] = []
     if label.strip():
@@ -55,9 +60,23 @@ def _tokenize_context(label: str, teams_csv: str, venue: str) -> list[str]:
         parts.append(venue)
     blob = " ".join(parts)
     tokens = re.findall(r"[A-Za-z][A-Za-z0-9]{2,}", blob)
+
+    # Short franchise codes (DC, GT, RR) are excluded by the 3+ char word regex
+    # above; Cricbuzz live text uses these heavily, so add them explicitly.
+    extra: list[str] = []
+    for seg in re.split(r"\s*,\s*", teams_csv):
+        s = seg.strip()
+        if 2 <= len(s) <= 6 and s.isalpha() and s.lower() not in _IPL_CONTEXT_STOPWORDS:
+            extra.append(s)
+    if re.search(r"\bvs\.?\b", label, flags=re.I):
+        for side in re.split(r"\s+vs\.?\s+", label, maxsplit=1, flags=re.I):
+            w = side.strip()
+            if 2 <= len(w) <= 6 and w.isalpha() and w.lower() not in _IPL_CONTEXT_STOPWORDS:
+                extra.append(w)
+
     seen: set[str] = set()
     out: list[str] = []
-    for t in tokens:
+    for t in extra + tokens:
         low = t.lower()
         if low in seen:
             continue

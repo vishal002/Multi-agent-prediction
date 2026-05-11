@@ -6,9 +6,9 @@ to CricAPI (structured but rate-limited) and RSS (slow), which lag Google's
 live card by anywhere from 30 seconds to several minutes. When this module is
 enabled it returns a structured live state much closer to ball-by-ball.
 
-OFF BY DEFAULT IN PRODUCTION. Set ``INGESTION_LIVE_SCRAPE_ENABLED=1`` to opt in.
-Detection of "production" is best-effort (Vercel/Render env vars). This keeps
-the legal posture conservative — the operator opts in explicitly per host.
+Enabled by default on all hosts unless ``INGESTION_LIVE_SCRAPE_ENABLED=0`` (or
+``false`` / ``off``). Operators who do not want HTML scraping on a deployment
+should set that env var explicitly.
 
 The parser is deliberately regex-based (no soup/lxml dep) and returns ``None``
 on any parse failure rather than guessing. Callers MUST treat it as best-effort.
@@ -40,16 +40,11 @@ _response_cache: dict[str, tuple[float, str]] = {}
 def is_enabled() -> bool:
     """Return True when the scraper should be invoked.
 
-    Defaults to enabled locally and disabled on Vercel/Render so production
-    deployments stay on the official APIs. Operators can override either way
-    via ``INGESTION_LIVE_SCRAPE_ENABLED``.
+    Default is on so live scores work on Vercel/Render without extra config.
+    Set ``INGESTION_LIVE_SCRAPE_ENABLED=0`` (or ``false`` / ``off``) to disable.
     """
     raw = (os.environ.get("INGESTION_LIVE_SCRAPE_ENABLED") or "").strip().lower()
     if raw in ("0", "false", "no", "off"):
-        return False
-    if raw in ("1", "true", "yes", "on"):
-        return True
-    if os.environ.get("VERCEL") or os.environ.get("RENDER"):
         return False
     return True
 
@@ -283,8 +278,10 @@ async def _fetch_html(client: httpx.AsyncClient) -> str | None:
             timeout=_REQUEST_TIMEOUT_SEC,
             headers={
                 "User-Agent": ua,
-                "Accept": "text/html,application/xhtml+xml",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                 "Accept-Language": "en-IN,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Referer": "https://www.cricbuzz.com/",
             },
         )
     except (httpx.HTTPError, httpx.TimeoutException):
