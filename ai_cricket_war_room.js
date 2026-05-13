@@ -7253,7 +7253,14 @@ initLivePollLoop();
 initFixtureLiveChromeListeners();
 initUmamiButtonTracking();
 void refreshJudgeAccuracyFooter();
-void (async () => {
+
+/** Same breakpoint as mobile layout / `.acwr-app-loader` CSS. */
+const ACWR_MOBILE_BOOT_MQ = window.matchMedia("(max-width: 760px)");
+function acwrIsNarrowMobileLayout() {
+  return ACWR_MOBILE_BOOT_MQ.matches;
+}
+
+async function runInitialBootAfterDom() {
   await applyShareQueryParam();
   await applySharedPredictionPreviewFromUrl();
 
@@ -7279,7 +7286,114 @@ void (async () => {
   void refreshFreemiumPill();
   void loadRecentVerdictsPanel();
   if (didAutoFillMatch) await maybeAutoRunWarRoomAfterPopulate();
-})();
+}
+
+/** Pull-to-refresh (full reload) when scrolled to top on narrow viewports. */
+function initPullToRefreshIfMobile() {
+  if (!acwrIsNarrowMobileLayout()) return;
+
+  const hint = document.getElementById("acwrPtrHint");
+  const PTR_THRESHOLD_PX = 72;
+
+  let startY = 0;
+  let armed = false;
+  let lastDy = 0;
+
+  function scrollTopY() {
+    return window.scrollY || document.documentElement.scrollTop || 0;
+  }
+
+  /** @param {Element} el */
+  function isPtrIgnoredTarget(el) {
+    const tag = el.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+    if (el.isContentEditable) return true;
+    return Boolean(el.closest("input, textarea, select, [contenteditable=\"true\"]"));
+  }
+
+  function clearPullUi() {
+    document.documentElement.classList.remove("acwr-ptr-pulling");
+    if (hint) {
+      hint.textContent = "";
+      hint.style.transform = "";
+      hint.setAttribute("aria-hidden", "true");
+    }
+    lastDy = 0;
+  }
+
+  window.addEventListener(
+    "touchstart",
+    (ev) => {
+      if (!document.documentElement.classList.contains("acwr-mobile-ready")) return;
+      if (scrollTopY() > 0) return;
+      const t = ev.target;
+      if (!(t instanceof Element) || isPtrIgnoredTarget(t)) return;
+      startY = ev.touches[0].clientY;
+      armed = true;
+      lastDy = 0;
+    },
+    { passive: true }
+  );
+
+  window.addEventListener(
+    "touchmove",
+    (ev) => {
+      if (!armed) return;
+      if (scrollTopY() > 0) {
+        armed = false;
+        clearPullUi();
+        return;
+      }
+      const y = ev.touches[0].clientY;
+      const dy = y - startY;
+      if (dy <= 0) {
+        clearPullUi();
+        return;
+      }
+      lastDy = dy;
+      document.documentElement.classList.add("acwr-ptr-pulling");
+      const offset = Math.min(52, Math.round(dy * 0.38));
+      if (hint) {
+        hint.textContent = dy >= PTR_THRESHOLD_PX ? "Release to refresh" : "Pull to refresh";
+        hint.style.transform = `translate3d(-50%, ${offset}px, 0)`;
+        hint.setAttribute("aria-hidden", "false");
+      }
+    },
+    { passive: true }
+  );
+
+  function endTouch() {
+    if (!armed) return;
+    armed = false;
+    const shouldReload = lastDy >= PTR_THRESHOLD_PX;
+    clearPullUi();
+    if (shouldReload) {
+      location.reload();
+    }
+  }
+
+  window.addEventListener("touchend", endTouch, { passive: true });
+  window.addEventListener("touchcancel", endTouch, { passive: true });
+}
+
+if (!acwrIsNarrowMobileLayout()) {
+  document.documentElement.classList.add("acwr-mobile-ready");
+}
+
+const ACWR_BOOT_LOADER_MAX_MS = 12_000;
+const bootAfterDomPromise = runInitialBootAfterDom();
+void Promise.race([
+  bootAfterDomPromise.catch(() => {}),
+  new Promise((r) => setTimeout(r, acwrIsNarrowMobileLayout() ? ACWR_BOOT_LOADER_MAX_MS : 0)),
+]).finally(() => {
+  document.documentElement.classList.add("acwr-mobile-ready");
+  const loader = document.getElementById("acwrAppLoader");
+  if (loader) {
+    loader.setAttribute("aria-busy", "false");
+    loader.setAttribute("aria-hidden", "true");
+  }
+  initPullToRefreshIfMobile();
+});
 
 /**
  * @returns {Promise<MatchSuggestionRow[]>}

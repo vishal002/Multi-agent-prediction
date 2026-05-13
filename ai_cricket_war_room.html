@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark" data-ui="classic">
+<html lang="en" data-theme="light" data-ui="classic">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#070b12" id="metaThemeColor" />
+  <meta name="theme-color" content="#f4f6f8" id="metaThemeColor" />
   <meta name="color-scheme" content="dark light" />
   <meta name="description" content="Enter a live cricket match. AI agents debate what happens next. Get a verdict — fan discussion only, not betting advice." />
   <link rel="canonical" href="https://cricket-war-room.vercel.app/" />
@@ -50,7 +50,7 @@
   <script>
     (function () {
       var saved = localStorage.getItem('acwr-theme');
-      var theme = saved === 'light' || saved === 'dark' ? saved : 'dark';
+      var theme = saved === 'light' || saved === 'dark' ? saved : 'light';
       document.documentElement.setAttribute('data-theme', theme);
       var uiSaved = localStorage.getItem('acwr-ui');
       var uiInit =
@@ -61,6 +61,11 @@
   <script defer src="https://cloud.umami.is/script.js" data-website-id="256a7586-1d61-4adc-b10f-9b1a322e3cac"></script>
 </head>
 <body>
+  <div id="acwrAppLoader" class="acwr-app-loader" role="status" aria-live="polite" aria-busy="true">
+    <div class="acwr-app-loader__spinner" aria-hidden="true"></div>
+    <span class="acwr-app-loader__label">Loading match room…</span>
+  </div>
+  <div id="acwrPtrHint" class="acwr-ptr-hint" aria-hidden="true"></div>
   <div class="app">
     <header class="app-header" role="banner">
       <div class="app-header__top">
@@ -428,15 +433,15 @@
     var uiBtn = document.getElementById('uiToggle');
     var metaTheme = document.getElementById('metaThemeColor');
     var PAGE = {
-      warroom: { dark: '#070b12', light: '#f1f5f9' },
-      classic: { dark: '#202124', light: '#f1f5f9' },
+      warroom: { dark: '#070b12', light: '#f4f6f8' },
+      classic: { dark: '#202124', light: '#f4f6f8' },
       ipl: { dark: '#002d62', light: '#e8eef6' }
     };
     function syncMetaThemeColor() {
-      var theme = document.documentElement.getAttribute('data-theme') || 'dark';
+      var theme = document.documentElement.getAttribute('data-theme') || 'light';
       var ui = document.documentElement.getAttribute('data-ui') || 'classic';
       var map = PAGE[ui] || PAGE.classic;
-      if (metaTheme) metaTheme.setAttribute('content', map[theme] || map.dark);
+      if (metaTheme) metaTheme.setAttribute('content', map[theme] || map.light);
     }
     function applyTheme(theme) {
       document.documentElement.setAttribute('data-theme', theme);
@@ -464,7 +469,7 @@
     }
     if (btn) {
       btn.addEventListener('click', function () {
-        var cur = document.documentElement.getAttribute('data-theme') || 'dark';
+        var cur = document.documentElement.getAttribute('data-theme') || 'light';
         applyTheme(cur === 'dark' ? 'light' : 'dark');
       });
     }
@@ -475,7 +480,7 @@
         applyUi(next);
       });
     }
-    applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+    applyTheme(document.documentElement.getAttribute('data-theme') || 'light');
     applyUi(document.documentElement.getAttribute('data-ui') || 'classic');
   })();
 </script>
