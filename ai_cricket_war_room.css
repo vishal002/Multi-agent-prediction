@@ -232,13 +232,13 @@ body::after {
 }
 
 .brand__logo-icon {
-  --brand-logo-ring: color-mix(in srgb, var(--color-accent) 42%, transparent);
+  /* --brand-logo-ring: color-mix(in srgb, var(--color-accent) 42%, transparent);
   --brand-logo-glow: color-mix(in srgb, var(--color-accent) 28%, transparent);
   width: 2.85rem;
-  height: 2.85rem;
+  height: 2.85rem; */
   border-radius: 12px;
   padding: 0;
-  background: linear-gradient(
+  /* background: linear-gradient(
     145deg,
     color-mix(in srgb, var(--color-accent) 42%, rgba(18, 27, 48, 0.86)),
     color-mix(in srgb, var(--color-accent) 12%, rgba(10, 16, 30, 0.94))
@@ -247,7 +247,7 @@ body::after {
     0 0 0 1px var(--brand-logo-ring),
     0 0 0 2px color-mix(in srgb, var(--color-bg-page) 70%, transparent),
     0 6px 22px var(--brand-logo-glow),
-    0 0 36px color-mix(in srgb, var(--color-accent) 14%, transparent);
+    0 0 36px color-mix(in srgb, var(--color-accent) 14%, transparent); */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -258,18 +258,18 @@ body::after {
 }
 
 .brand__logo-img {
-  width: 86%;
-  height: 86%;
+  /* width: 86%;
+  height: 86%; */
   border-radius: 9px;
   display: block;
   pointer-events: none;
-  background: radial-gradient(circle at 35% 30%, rgba(150, 195, 255, 0.28), rgba(33, 50, 84, 0.72) 60%, rgba(13, 22, 38, 0.9));
+  /* background: radial-gradient(circle at 35% 30%, rgba(150, 195, 255, 0.28), rgba(33, 50, 84, 0.72) 60%, rgba(13, 22, 38, 0.9)); */
   box-shadow:
     0 0 0 1px rgba(145, 188, 255, 0.3) inset,
     0 6px 12px rgba(0, 0, 0, 0.35);
   object-fit: contain;
   object-position: center;
-  transform: scale(1.5);
+  transform: scale(2.5);
   transform-origin: center;
 }
 
