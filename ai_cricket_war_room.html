@@ -1,609 +1,1387 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en" data-theme="light" data-ui="classic">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#f4f6f8" id="metaThemeColor" />
-  <meta name="color-scheme" content="dark light" />
-  <meta name="description" content="Enter a live cricket match. AI agents debate what happens next. Get a verdict — fan discussion only, not betting advice." />
-  <link rel="canonical" href="https://cricket-war-room.vercel.app/" />
-  <meta name="war-room-share-origin" content="https://cricket-war-room.vercel.app" />
-  <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="Cricket War Room" />
-  <meta property="og:title" content="Cricket War Room — 5 intel agents debate your match" />
-  <meta property="og:description" content="Bull vs Bear multi-round AI debate. One judge verdict. Free. Try your IPL match now." />
-  <meta property="og:url" content="https://cricket-war-room.vercel.app/" />
-  <!-- ?v= bumps when OG art/copy changes so Meta/WhatsApp treat it as a new image URL (cache bust). -->
-  <meta property="og:image" content="https://cricket-war-room.vercel.app/og-homepage.png?v=6" />
-  <meta property="og:image:type" content="image/png" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="Cricket War Room — five intel agents debate your match" />
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Cricket War Room — 5 intel agents debate your match" />
-  <meta name="twitter:description" content="Bull vs Bear multi-round AI debate. One judge verdict. Free. Try your IPL match now." />
-  <meta name="twitter:image" content="https://cricket-war-room.vercel.app/og-homepage.png?v=6" />
-  <meta name="application-name" content="AI Cricket War Room" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="War Room" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Cricket War Room — AI debate &amp; judge</title>
-  <script>
-    (function () {
-      try {
-        if (localStorage.getItem("acwr-notice-dismissed") === "1")
-          document.documentElement.classList.add("acwr-notice-dismissed");
-      } catch (e) { /* private mode */ }
-    })();
-  </script>
-  <link rel="manifest" href="/manifest.webmanifest" />
-  <!-- Same artwork as manifest `icons` so tab favicon, “Open in app”, and install tile match -->
-  <link rel="icon" type="image/png" href="/icons/icon-192.png" sizes="192x192" />
-  <link rel="icon" type="image/png" href="/icons/favicon.png" sizes="32x32" />
-  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" sizes="180x180" />
-  <!-- UI tokens & patterns: DESIGN.md -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;800&family=Rajdhani:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=Oswald:wght@300;400;500;600;700&family=Roboto+Condensed:wght@300;400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/ai_cricket_war_room.css" />
-  <script>
-    (function () {
-      var saved = localStorage.getItem('acwr-theme');
-      var theme = saved === 'light' || saved === 'dark' ? saved : 'light';
-      document.documentElement.setAttribute('data-theme', theme);
-      var uiSaved = localStorage.getItem('acwr-ui');
-      var uiInit =
-        uiSaved === 'warroom' || uiSaved === 'classic' || uiSaved === 'ipl' ? uiSaved : 'classic';
-      document.documentElement.setAttribute('data-ui', uiInit);
-    })();
-  </script>
-  <script defer src="https://cloud.umami.is/script.js" data-website-id="256a7586-1d61-4adc-b10f-9b1a322e3cac"></script>
-</head>
-<body>
-  <div id="acwrAppLoader" class="acwr-app-loader" role="status" aria-live="polite" aria-busy="true">
-    <span class="visually-hidden">Loading match room…</span>
-    <div class="acwr-app-loader__inner" aria-hidden="true">
-      <div class="acwr-skel-header">
-        <div class="acwr-skel-block acwr-skel-block--logo"></div>
-        <div class="acwr-skel-header__text">
-          <div class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-35"></div>
-          <div class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-85"></div>
-        </div>
-        <div class="acwr-skel-header__actions">
-          <div class="acwr-skel-block acwr-skel-block--icon"></div>
-          <div class="acwr-skel-block acwr-skel-block--icon"></div>
-        </div>
-      </div>
-      <div class="acwr-skel-block acwr-skel-block--notice"></div>
-      <div class="acwr-skel-pipeline">
-        <div class="acwr-skel-block acwr-skel-block--chip"></div>
-        <div class="acwr-skel-block acwr-skel-block--chip"></div>
-        <div class="acwr-skel-block acwr-skel-block--chip"></div>
-        <div class="acwr-skel-block acwr-skel-block--chip"></div>
-      </div>
-      <div class="acwr-skel-card">
-        <div class="acwr-skel-block acwr-skel-block--search"></div>
-        <div class="acwr-skel-actions">
-          <div class="acwr-skel-block acwr-skel-block--btn"></div>
-          <div class="acwr-skel-block acwr-skel-block--btn acwr-skel-block--btn-narrow"></div>
-        </div>
-      </div>
-      <div class="acwr-skel-card acwr-skel-card--stage">
-        <div class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-40"></div>
-        <div class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-95"></div>
-        <div class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-70"></div>
-        <div class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-55"></div>
-      </div>
-      <div class="acwr-skel-card acwr-skel-card--debate">
-        <div class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-30"></div>
-        <div class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-100"></div>
-        <div class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-90"></div>
-      </div>
-      <div class="acwr-skel-agents">
-        <div class="acwr-skel-agent">
-          <div class="acwr-skel-block acwr-skel-block--avatar"></div>
-          <div class="acwr-skel-agent__lines">
-            <div class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-55"></div>
-            <div class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-80"></div>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f4f6f8" id="metaThemeColor" />
+    <meta name="color-scheme" content="dark light" />
+    <meta
+      name="description"
+      content="Enter a live cricket match. AI agents debate what happens next. Get a verdict — fan discussion only, not betting advice."
+    />
+    <link rel="canonical" href="https://cricket-war-room.vercel.app/" />
+    <meta
+      name="war-room-share-origin"
+      content="https://cricket-war-room.vercel.app"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Cricket War Room" />
+    <meta
+      property="og:title"
+      content="Cricket War Room — 5 intel agents debate your match"
+    />
+    <meta
+      property="og:description"
+      content="Bull vs Bear multi-round AI debate. One judge verdict. Free. Try your IPL match now."
+    />
+    <meta property="og:url" content="https://cricket-war-room.vercel.app/" />
+    <!-- ?v= bumps when OG art/copy changes so Meta/WhatsApp treat it as a new image URL (cache bust). -->
+    <meta
+      property="og:image"
+      content="https://cricket-war-room.vercel.app/og-homepage.png?v=6"
+    />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Cricket War Room — five intel agents debate your match"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Cricket War Room — 5 intel agents debate your match"
+    />
+    <meta
+      name="twitter:description"
+      content="Bull vs Bear multi-round AI debate. One judge verdict. Free. Try your IPL match now."
+    />
+    <meta
+      name="twitter:image"
+      content="https://cricket-war-room.vercel.app/og-homepage.png?v=6"
+    />
+    <meta name="application-name" content="AI Cricket War Room" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="War Room" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <title>Cricket War Room — AI debate &amp; judge</title>
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem("acwr-notice-dismissed") === "1")
+            document.documentElement.classList.add("acwr-notice-dismissed");
+        } catch (e) {
+          /* private mode */
+        }
+      })();
+    </script>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- Same artwork as manifest `icons` so tab favicon, “Open in app”, and install tile match -->
+    <link
+      rel="icon"
+      type="image/png"
+      href="/icons/icon-192.png"
+      sizes="192x192"
+    />
+    <link rel="icon" type="image/png" href="/icons/favicon.png" sizes="32x32" />
+    <link
+      rel="apple-touch-icon"
+      href="/icons/apple-touch-icon.png"
+      sizes="180x180"
+    />
+    <!-- UI tokens & patterns: DESIGN.md -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@300;400;500;600;700;800&family=Rajdhani:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&family=Oswald:wght@300;400;500;600;700&family=Roboto+Condensed:wght@300;400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/ai_cricket_war_room.css" />
+    <script>
+      (function () {
+        var saved = localStorage.getItem("acwr-theme");
+        var theme = saved === "light" || saved === "dark" ? saved : "light";
+        document.documentElement.setAttribute("data-theme", theme);
+        var uiSaved = localStorage.getItem("acwr-ui");
+        var uiInit =
+          uiSaved === "warroom" || uiSaved === "classic" || uiSaved === "ipl"
+            ? uiSaved
+            : "classic";
+        document.documentElement.setAttribute("data-ui", uiInit);
+      })();
+    </script>
+    <script
+      defer
+      src="https://cloud.umami.is/script.js"
+      data-website-id="256a7586-1d61-4adc-b10f-9b1a322e3cac"
+    ></script>
+  </head>
+  <body>
+    <div
+      id="acwrAppLoader"
+      class="acwr-app-loader"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <span class="visually-hidden">Loading match room…</span>
+      <div class="acwr-app-loader__inner" aria-hidden="true">
+        <div class="acwr-skel-header">
+          <div class="acwr-skel-block acwr-skel-block--logo"></div>
+          <div class="acwr-skel-header__text">
+            <div
+              class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-35"
+            ></div>
+            <div
+              class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-85"
+            ></div>
+          </div>
+          <div class="acwr-skel-header__actions">
+            <div class="acwr-skel-block acwr-skel-block--icon"></div>
+            <div class="acwr-skel-block acwr-skel-block--icon"></div>
           </div>
         </div>
-        <div class="acwr-skel-agent">
-          <div class="acwr-skel-block acwr-skel-block--avatar"></div>
-          <div class="acwr-skel-agent__lines">
-            <div class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-50"></div>
-            <div class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-92"></div>
+        <div class="acwr-skel-block acwr-skel-block--notice"></div>
+        <div class="acwr-skel-pipeline">
+          <div class="acwr-skel-block acwr-skel-block--chip"></div>
+          <div class="acwr-skel-block acwr-skel-block--chip"></div>
+          <div class="acwr-skel-block acwr-skel-block--chip"></div>
+          <div class="acwr-skel-block acwr-skel-block--chip"></div>
+        </div>
+        <div class="acwr-skel-card">
+          <div class="acwr-skel-block acwr-skel-block--search"></div>
+          <div class="acwr-skel-actions">
+            <div class="acwr-skel-block acwr-skel-block--btn"></div>
+            <div
+              class="acwr-skel-block acwr-skel-block--btn acwr-skel-block--btn-narrow"
+            ></div>
           </div>
         </div>
-        <div class="acwr-skel-agent">
-          <div class="acwr-skel-block acwr-skel-block--avatar"></div>
-          <div class="acwr-skel-agent__lines">
-            <div class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-62"></div>
-            <div class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-75"></div>
+        <div class="acwr-skel-card acwr-skel-card--stage">
+          <div
+            class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-40"
+          ></div>
+          <div
+            class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-95"
+          ></div>
+          <div
+            class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-70"
+          ></div>
+          <div
+            class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-55"
+          ></div>
+        </div>
+        <div class="acwr-skel-card acwr-skel-card--debate">
+          <div
+            class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-30"
+          ></div>
+          <div
+            class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-100"
+          ></div>
+          <div
+            class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-90"
+          ></div>
+        </div>
+        <div class="acwr-skel-agents">
+          <div class="acwr-skel-agent">
+            <div class="acwr-skel-block acwr-skel-block--avatar"></div>
+            <div class="acwr-skel-agent__lines">
+              <div
+                class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-55"
+              ></div>
+              <div
+                class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-80"
+              ></div>
+            </div>
+          </div>
+          <div class="acwr-skel-agent">
+            <div class="acwr-skel-block acwr-skel-block--avatar"></div>
+            <div class="acwr-skel-agent__lines">
+              <div
+                class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-50"
+              ></div>
+              <div
+                class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-92"
+              ></div>
+            </div>
+          </div>
+          <div class="acwr-skel-agent">
+            <div class="acwr-skel-block acwr-skel-block--avatar"></div>
+            <div class="acwr-skel-agent__lines">
+              <div
+                class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-62"
+              ></div>
+              <div
+                class="acwr-skel-block acwr-skel-block--line acwr-skel-block--w-75"
+              ></div>
+            </div>
           </div>
         </div>
       </div>
     </div>
-  </div>
-  <div id="acwrPtrHint" class="acwr-ptr-hint" aria-hidden="true"></div>
-  <div class="app">
-    <header class="app-header" role="banner">
-      <div class="app-header__top">
-        <div class="app-header__main">
+    <div id="acwrPtrHint" class="acwr-ptr-hint" aria-hidden="true"></div>
+    <div class="app">
+      <header class="app-header" role="banner">
+        <div class="app-header__top">
+          <div class="app-header__main">
             <div class="brand brand--war-room">
-            <div class="brand__logo-icon" aria-hidden="true">
-              <img class="brand__logo-img" src="/image/ai-cricket-war-room-logo.svg" alt="" width="44" height="44" decoding="async" />
+              <div class="brand__logo-icon" aria-hidden="true">
+                <img
+                  class="brand__logo-img"
+                  src="/image/ai-cricket-war-room-logo.svg"
+                  alt=""
+                  width="44"
+                  height="44"
+                  decoding="async"
+                />
+              </div>
+              <div class="brand__text-block">
+                <span class="brand__eyebrow">Multi-agent AI</span>
+                <h1 class="brand__title">
+                  <span class="brand__title-line">Cricket</span>
+                  <span class="brand__title-accent">War Room</span>
+                </h1>
+              </div>
             </div>
-            <div class="brand__text-block">
-              <span class="brand__eyebrow">Multi-agent AI</span>
-              <h1 class="brand__title"><span class="brand__title-line">Cricket</span> <span class="brand__title-accent">War Room</span></h1>
+            <p class="brand__tagline">
+              Enter a live match. AI agents debate what happens next. Get a
+              verdict.
+            </p>
+          </div>
+          <div class="app-header__actions">
+            <div class="header-badge" aria-hidden="true">
+              <span class="header-badge__dot"></span>
+              <span class="header-badge__text">Live ops</span>
             </div>
+            <button
+              type="button"
+              class="ui-toggle"
+              id="uiToggle"
+              aria-label="UI: Classic. Next: IPL broadcast look."
+              title="Cycle UI: Classic → IPL → War room"
+            >
+              <svg
+                class="ui-toggle__icon"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <rect x="3" y="3" width="7" height="9" rx="1" />
+                <rect x="14" y="3" width="7" height="5" rx="1" />
+                <rect x="14" y="11" width="7" height="10" rx="1" />
+                <rect x="3" y="15" width="7" height="6" rx="1" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="theme-toggle"
+              id="themeToggle"
+              aria-label="Toggle light/dark theme"
+              title="Toggle theme"
+            >
+              <svg
+                class="theme-toggle__moon"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+              </svg>
+              <svg
+                class="theme-toggle__sun"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="23" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                <line x1="1" y1="12" x2="3" y2="12" />
+                <line x1="21" y1="12" x2="23" y2="12" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+              </svg>
+            </button>
           </div>
-          <p class="brand__tagline">Enter a live match. AI agents debate what happens next. Get a verdict.</p>
         </div>
-        <div class="app-header__actions">
-          <div class="header-badge" aria-hidden="true">
-            <span class="header-badge__dot"></span>
-            <span class="header-badge__text">Live ops</span>
-          </div>
-          <button type="button" class="ui-toggle" id="uiToggle" aria-label="UI: Classic. Next: IPL broadcast look." title="Cycle UI: Classic → IPL → War room">
-            <svg class="ui-toggle__icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="11" width="7" height="10" rx="1"/><rect x="3" y="15" width="7" height="6" rx="1"/></svg>
-          </button>
-          <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark theme" title="Toggle theme">
-            <svg class="theme-toggle__moon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-            <svg class="theme-toggle__sun" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-          </button>
-        </div>
-      </div>
-      <nav class="app-header__nav" aria-label="Reference">
-      </nav>
-    </header>
+        <nav class="app-header__nav" aria-label="Reference"></nav>
+      </header>
 
-    <div class="notice-strip" id="acwrNoticeStrip" role="region" aria-label="Notice">
-      <p class="notice-strip__text">
-        Not betting or financial advice. AI content is for entertainment and fan discussion; it may be wrong.
-        <a class="notice-strip__link" href="/disclaimer.html">Disclaimer</a>
-      </p>
-      <button type="button" class="notice-strip__close" id="acwrNoticeClose" aria-label="Dismiss notice" title="Dismiss">
-        <span aria-hidden="true">×</span>
-      </button>
-    </div>
-
-    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
-
-    <div class="pipeline pipeline--flow" role="list" aria-label="Pipeline">
-      <span class="pipeline__step">Data</span>
-      <span class="pipeline__arrow" aria-hidden="true">→</span>
-      <span class="pipeline__step">5 agents</span>
-      <span class="pipeline__arrow" aria-hidden="true">→</span>
-      <span class="pipeline__step">Debate</span>
-      <span class="pipeline__arrow" aria-hidden="true">→</span>
-      <span class="pipeline__step">Judge</span>
-    </div>
-
-    <div class="war-room__grid">
-      <div class="war-room__col war-room__col--controls">
-    <div class="controls-tabs" id="controlsTabs">
-      <div class="controls-tabs__tablist" role="tablist" aria-label="War room controls">
-        <button type="button" class="controls-tabs__tab" id="controlsTabWarRoom" role="tab" aria-selected="true" aria-controls="controlsPanelWarRoom" tabindex="0">War room</button>
-        <button type="button" class="controls-tabs__tab" id="controlsTabLive" role="tab" aria-selected="false" aria-controls="controlsPanelLive" tabindex="-1">Live match</button>
-      </div>
-      <div class="controls-tabs__panel" id="controlsPanelWarRoom" role="tabpanel" aria-labelledby="controlsTabWarRoom">
-    <section class="command-bar" aria-label="Match and run">
-      <!-- ── Live score first (ground truth) then fixture search + run ── -->
-      <!-- <div class="live-score-bar" id="liveScoreBar">
-        <label class="live-score-bar__label" for="liveScoreInput">
-          <span class="live-dot" aria-hidden="true"></span>
-          Live score
-        </label>
-        <input class="live-score-bar__input" id="liveScoreInput" type="text" autocomplete="off" spellcheck="false"
-          placeholder="e.g. LSG 109/2 (11.1 ov), chasing 255, RRR 16.5" />
-        <button type="button" class="live-score-bar__fetch" id="liveScoreFetch" title="Fetch latest live score from RSS feeds">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.56"/></svg>
-          <span>Fetch live</span>
+      <div
+        class="notice-strip"
+        id="acwrNoticeStrip"
+        role="region"
+        aria-label="Notice"
+      >
+        <p class="notice-strip__text">
+          Not betting or financial advice. AI content is for entertainment and
+          fan discussion; it may be wrong.
+          <a class="notice-strip__link" href="/disclaimer.html">Disclaimer</a>
+        </p>
+        <button
+          type="button"
+          class="notice-strip__close"
+          id="acwrNoticeClose"
+          aria-label="Dismiss notice"
+          title="Dismiss"
+        >
+          <span aria-hidden="true">×</span>
         </button>
-        <button type="button" class="live-score-bar__clear" id="liveScoreClear" aria-label="Clear live score" hidden>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
-        </button>
-      </div> -->
-      <div class="command-bar__match match-field g-search">
-        <div class="g-search__shell">
-          <svg class="g-search__mag" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-          <label class="visually-hidden" for="matchInput">Search fixtures</label>
-          <input class="match-input g-search__input" id="matchInput" type="search" autocomplete="off" spellcheck="false" enterkeyhint="search"
-            placeholder="Search teams, venues, fixtures…"
-            role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="matchAutocompletePanel" />
-          <button type="button" class="g-search__clear" id="matchSearchClear" aria-label="Clear search" hidden>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
-          </button>
-        </div>
-        <div class="g-search__dropdown" id="matchAutocompletePanel" hidden>
-          <ul class="match-autocomplete g-search__results" id="matchAutocompleteList" role="listbox"></ul>
-          <div class="g-search__empty" id="matchAutocompleteEmpty" hidden role="status">No catalog match — press <strong>Enter</strong> or <strong>Run war room</strong> to use what you typed.</div>
-          <div class="g-search__footer"><span class="g-search__kbd">↑</span><span class="g-search__kbd">↓</span> navigate · <span class="g-search__kbd">Enter</span> select · <span class="g-search__kbd">Esc</span> close</div>
-        </div>
-      </div>
-      <div class="command-bar__actions" id="ctaRow">
-        <button type="button" class="btn btn--primary" id="runBtn" onclick="runWarRoom()">Run war room</button>
-        <button type="button" class="btn btn--ghost" id="resetBtn" onclick="resetWarRoom()" style="display:none">Reset</button>
-        <span class="status-pill" id="runningLabel" style="display:none" aria-live="polite"></span>
-        <span class="freemium-pill" id="freemiumStatusPill" hidden></span>
-      </div>
-    </section>
       </div>
 
-      <div class="controls-tabs__panel controls-tabs__panel--live" id="controlsPanelLive" role="tabpanel" aria-labelledby="controlsTabLive" hidden>
-    <!-- ── Live match over-by-over prediction panel ──────────────────── -->
-    <section class="live-panel" id="livePanel" aria-label="Live match — over-by-over prediction">
-      <div class="live-panel__head live-panel__head--static">
-        <div class="live-panel__title-row">
-          <span class="live-dot" aria-hidden="true"></span>
-          <span class="live-panel__title">Live match · Current score · Prediction</span>
-        </div>
-      </div>
-      <p class="live-panel__hint">You can <strong>Run war room</strong> anytime; paste or <strong>Fetch live</strong> when you have a score so the debate uses that <strong>ground truth</strong>.</p>
+      <div
+        class="toast-region"
+        id="toastRegion"
+        aria-live="polite"
+        aria-atomic="true"
+      ></div>
 
-      <div class="live-panel__body" id="livePanelBody">
-        <div class="live-form">
-          <div class="live-form__row">
-            <div class="live-form__teams">
-              <div class="live-form__field">
-                <label class="live-form__label" for="lfBatTeam">Batting team</label>
-                <input class="live-form__input" id="lfBatTeam" type="text" placeholder="e.g. PBKS" autocomplete="off" />
-              </div>
-              <div class="live-form__team-swap">
-                <button type="button" class="live-form__swap-btn" id="lfSwapTeamsBtn" aria-label="Swap batting and bowling teams" title="Swap teams" onclick="swapLiveFormTeams()">
-                  <span class="live-form__swap-icon" aria-hidden="true">⇄</span>
-                </button>
-              </div>
-              <div class="live-form__field">
-                <label class="live-form__label" for="lfBowlTeam">Bowling team</label>
-                <input class="live-form__input" id="lfBowlTeam" type="text" placeholder="e.g. LSG" autocomplete="off" />
-              </div>
-            </div>
-            <div class="live-form__field live-form__field--sm">
-              <label class="live-form__label" for="lfFormat">Format</label>
-              <select class="live-form__input" id="lfFormat">
-                <option value="T20">T20</option>
-                <option value="ODI">ODI</option>
-                <option value="Test">Test</option>
-              </select>
-            </div>
-            <div class="live-form__field live-form__field--sm">
-              <label class="live-form__label" for="lfInnings">Innings</label>
-              <select class="live-form__input" id="lfInnings">
-                <option value="1">1st innings</option>
-                <option value="2">2nd innings</option>
-              </select>
-            </div>
-          </div>
-          <div class="live-form__row">
-            <div class="live-form__field live-form__field--sm">
-              <label class="live-form__label" for="lfRuns">Current runs</label>
-              <input class="live-form__input" id="lfRuns" type="number" min="0" placeholder="e.g. 82" />
-            </div>
-            <div class="live-form__field live-form__field--sm">
-              <label class="live-form__label" for="lfWickets">Wickets lost</label>
-              <input class="live-form__input" id="lfWickets" type="number" min="0" max="9" placeholder="e.g. 2" />
-            </div>
-            <div class="live-form__field live-form__field--sm">
-              <label class="live-form__label" for="lfOvers">Overs completed</label>
-              <input class="live-form__input" id="lfOvers" type="number" min="0" step="0.1" placeholder="e.g. 9.3" />
-            </div>
-            <div class="live-form__field live-form__field--sm" id="lfTargetWrap">
-              <label class="live-form__label" for="lfTarget">Target (2nd inn.)</label>
-              <input class="live-form__input" id="lfTarget" type="number" min="0" placeholder="e.g. 175" />
-            </div>
-            <div class="live-form__field live-form__field--sm">
-              <label class="live-form__label" for="lfVenue">Venue (optional)</label>
-              <input class="live-form__input" id="lfVenue" type="text" placeholder="e.g. IS Bindra" autocomplete="off" />
-            </div>
-            <div class="live-form__field">
-              <label class="live-form__label" for="lfNotes">Situation notes (optional)</label>
-              <input class="live-form__input" id="lfNotes" type="text" placeholder="e.g. Batters set, last 5 power-hitting overs" autocomplete="off" />
-            </div>
-          </div>
-          <div class="live-form__actions">
-            <button type="button" class="btn btn--primary" id="overPredictBtn" onclick="runOverPrediction()">Predict remaining overs</button>
-            <span class="status-pill" id="overPredictLabel" style="display:none" aria-live="polite"></span>
-          </div>
-        </div>
-
-        <div id="overPredictResult" class="over-predict-result" hidden></div>
-      </div>
-    </section>
-      </div>
-    </div>
+      <div class="pipeline pipeline--flow" role="list" aria-label="Pipeline">
+        <span class="pipeline__step">Data</span>
+        <span class="pipeline__arrow" aria-hidden="true">→</span>
+        <span class="pipeline__step">5 agents</span>
+        <span class="pipeline__arrow" aria-hidden="true">→</span>
+        <span class="pipeline__step">Debate</span>
+        <span class="pipeline__arrow" aria-hidden="true">→</span>
+        <span class="pipeline__step">Judge</span>
       </div>
 
-      <div class="war-room__col war-room__col--intel">
-    <main class="dashboard dashboard--pre-war-room" id="main-content">
-      <section class="dash-col dash-col--stage" aria-labelledby="stage-heading">
-        <div class="dash-col__head">
-          <div class="stage-head-row">
-            <h2 class="dash-col__label" id="stage-heading">Verdict</h2>
-            <div class="phase-stepper" id="phaseStepper" aria-hidden="true">
-              <span class="phase-step" id="stepIntel">Intel</span>
-              <span class="phase-stepper__sep">›</span>
-              <span class="phase-step" id="stepDebate">Debate</span>
-              <span class="phase-stepper__sep">›</span>
-              <span class="phase-step" id="stepJudge">Judge</span>
+      <div class="war-room__grid">
+        <div class="war-room__col war-room__col--controls">
+          <!-- ── Live score first (ground truth) then fixture search + run ── -->
+          <div class="live-score-bar" id="liveScoreBar">
+            <label class="live-score-bar__label" for="liveScoreInput">
+              <span class="live-dot" aria-hidden="true"></span>
+              Live score
+            </label>
+            <input
+              class="live-score-bar__input"
+              id="liveScoreInput"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="e.g. LSG 109/2 (11.1 ov), chasing 255, RRR 16.5"
+            />
+            <button
+              type="button"
+              class="live-score-bar__fetch"
+              id="liveScoreFetch"
+              title="Fetch latest live score from RSS feeds"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.2"
+                aria-hidden="true"
+              >
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 1 0 .49-3.56" />
+              </svg>
+              <span>Fetch live</span>
+            </button>
+            <button
+              type="button"
+              class="live-score-bar__clear"
+              id="liveScoreClear"
+              aria-label="Clear live score"
+              hidden
+            >
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div class="controls-tabs" id="controlsTabs">
+            <div
+              class="controls-tabs__tablist"
+              role="tablist"
+              aria-label="War room controls"
+            >
+              <button
+                type="button"
+                class="controls-tabs__tab"
+                id="controlsTabWarRoom"
+                role="tab"
+                aria-selected="true"
+                aria-controls="controlsPanelWarRoom"
+                tabindex="0"
+              >
+                War room
+              </button>
+              <button
+                type="button"
+                class="controls-tabs__tab"
+                id="controlsTabLive"
+                role="tab"
+                aria-selected="false"
+                aria-controls="controlsPanelLive"
+                tabindex="-1"
+              >
+                Live match
+              </button>
             </div>
-          </div>
-        </div>
-        <!-- <div class="live-ticker" id="liveTicker" hidden aria-live="polite" aria-label="Live match ticker">
-          <div class="live-ticker__row">
-            <span class="live-ticker__dot live-dot" aria-hidden="true"></span>
-            <span class="live-ticker__score" id="liveTickerScore">—</span>
-            <span class="live-ticker__sep" aria-hidden="true">·</span>
-            <span class="live-ticker__rrr" id="liveTickerRrr">RRR —</span>
-            <span class="live-ticker__sep" aria-hidden="true">·</span>
-            <span class="live-ticker__wp" id="liveTickerWp" title="Deterministic win-probability based on RRR + wickets in hand">Win% —</span>
-          </div>
-          <div class="live-ticker__meta">
-            <span class="live-ticker__source" id="liveTickerSource">source: —</span>
-            <span class="live-ticker__sep" aria-hidden="true">·</span>
-            <span class="live-ticker__updated" id="liveTickerUpdated">updated just now</span>
-            <button type="button" class="live-ticker__pause" id="liveTickerPause" aria-pressed="false" title="Pause auto-refresh">Pause</button>
-          </div>
-        </div> -->
-        <div class="surface surface--stage surface--verdict surface--panel" id="debateCard">
-          <div id="phaseBanner" class="phase-banner" style="display:none"></div>
-          <div class="stage-fixture-verdict" id="stageFixtureVerdict" hidden>
-            <div class="fixture-live-stack" id="fixtureLiveStack">
-              <div class="fixture-live-stack__match-wrap">
-                <div class="match-live-indicator" id="matchLiveIndicator" hidden aria-live="polite">
-                  <span class="match-live-indicator__label">Live</span>
-                </div>
-                <div class="match-bar match-bar--in-summary" id="matchBar" hidden aria-label="Fixture">
-                  <div class="match-bar__league" id="matchBarLeague"></div>
-                  <div class="match-bar__row">
-                    <div class="match-bar__pill" id="matchBarTeamA">
-                      <img class="match-bar__logo" id="matchBarImgA" alt="" width="44" height="44" loading="lazy" decoding="async" hidden />
-                      <span class="match-bar__code" id="matchBarCodeA"></span>
+            <div
+              class="controls-tabs__panel"
+              id="controlsPanelWarRoom"
+              role="tabpanel"
+              aria-labelledby="controlsTabWarRoom"
+            >
+              <section class="command-bar" aria-label="Match and run">
+                <div class="command-bar__match match-field g-search">
+                  <div class="g-search__shell">
+                    <svg
+                      class="g-search__mag"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      aria-hidden="true"
+                    >
+                      <circle cx="11" cy="11" r="8" />
+                      <path d="m21 21-4.35-4.35" />
+                    </svg>
+                    <label class="visually-hidden" for="matchInput"
+                      >Search fixtures</label
+                    >
+                    <input
+                      class="match-input g-search__input"
+                      id="matchInput"
+                      type="search"
+                      autocomplete="off"
+                      spellcheck="false"
+                      enterkeyhint="search"
+                      placeholder="Search teams, venues, fixtures…"
+                      role="combobox"
+                      aria-autocomplete="list"
+                      aria-expanded="false"
+                      aria-controls="matchAutocompletePanel"
+                    />
+                    <button
+                      type="button"
+                      class="g-search__clear"
+                      id="matchSearchClear"
+                      aria-label="Clear search"
+                      hidden
+                    >
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        aria-hidden="true"
+                      >
+                        <path d="M18 6L6 18M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                  <div
+                    class="g-search__dropdown"
+                    id="matchAutocompletePanel"
+                    hidden
+                  >
+                    <ul
+                      class="match-autocomplete g-search__results"
+                      id="matchAutocompleteList"
+                      role="listbox"
+                    ></ul>
+                    <div
+                      class="g-search__empty"
+                      id="matchAutocompleteEmpty"
+                      hidden
+                      role="status"
+                    >
+                      No catalog match — press <strong>Enter</strong> or
+                      <strong>Run war room</strong> to use what you typed.
                     </div>
-                    <span class="match-bar__vs" aria-hidden="true">vs</span>
-                    <div class="match-bar__pill" id="matchBarTeamB">
-                      <img class="match-bar__logo" id="matchBarImgB" alt="" width="44" height="44" loading="lazy" decoding="async" hidden />
-                      <span class="match-bar__code" id="matchBarCodeB"></span>
+                    <div class="g-search__footer">
+                      <span class="g-search__kbd">↑</span
+                      ><span class="g-search__kbd">↓</span> navigate ·
+                      <span class="g-search__kbd">Enter</span> select ·
+                      <span class="g-search__kbd">Esc</span> close
                     </div>
                   </div>
-                  <div class="match-bar__venue" id="matchBarVenue"></div>
                 </div>
-              </div>
-              <div class="live-scoreboard" id="liveScoreboard" hidden aria-label="Live score summary">
-                <div class="live-scoreboard__grid">
-                  <div class="live-scoreboard__team live-scoreboard__team--left">
-                    <div class="live-scoreboard__runs" id="liveSbRunsLeft">—</div>
-                    <div class="live-scoreboard__team-foot">
-                      <img class="live-scoreboard__logo" id="liveSbImgA" alt="" width="36" height="36" decoding="async" loading="lazy" hidden />
-                      <span class="live-scoreboard__code" id="liveSbCodeLeft"></span>
-                    </div>
-                  </div>
-                  <div class="live-scoreboard__vs" aria-hidden="true">vs</div>
-                  <div class="live-scoreboard__team live-scoreboard__team--right">
-                    <div class="live-scoreboard__runs" id="liveSbRunsRight">—</div>
-                    <div class="live-scoreboard__team-foot">
-                      <img class="live-scoreboard__logo" id="liveSbImgB" alt="" width="36" height="36" decoding="async" loading="lazy" hidden />
-                      <span class="live-scoreboard__code" id="liveSbCodeRight"></span>
-                    </div>
-                  </div>
+                <div class="command-bar__actions" id="ctaRow">
+                  <button
+                    type="button"
+                    class="btn btn--primary"
+                    id="runBtn"
+                    onclick="runWarRoom()"
+                  >
+                    Run war room
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn--ghost"
+                    id="resetBtn"
+                    onclick="resetWarRoom()"
+                    style="display: none"
+                  >
+                    Reset
+                  </button>
+                  <span
+                    class="status-pill"
+                    id="runningLabel"
+                    style="display: none"
+                    aria-live="polite"
+                  ></span>
+                  <span
+                    class="freemium-pill"
+                    id="freemiumStatusPill"
+                    hidden
+                  ></span>
                 </div>
-                <p class="live-scoreboard__status" id="liveSbStatus"></p>
-                <p class="live-scoreboard__over-pos" id="liveSbOverPos"></p>
-                <p class="live-scoreboard__meta" id="liveSbMeta"></p>
-                <div class="live-scoreboard__players" id="liveSbPlayers" hidden>
-                  <div class="live-scoreboard__player-col" id="liveSbBowlCol"></div>
-                  <div class="live-scoreboard__player-col live-scoreboard__player-col--bat" id="liveSbBatCol"></div>
-                </div>
-              </div>
-              <section class="live-win-prob-card" id="liveWinProbCard" hidden aria-label="Live win probability">
-                <h3 class="live-win-prob-card__title">Live win probability</h3>
-                <div class="live-win-prob-card__body" id="liveWinProbBody">
-                  <div class="live-win-prob-card__teams" id="liveWinProbTeamsRow" hidden>
-                    <div class="live-win-prob-card__side">
-                      <div class="live-win-prob-card__name" id="liveWinProbNameBat"></div>
-                      <div class="live-win-prob-card__pct live-win-prob-card__pct--bat" id="liveWinProbPctBat">—</div>
-                    </div>
-                    <div class="live-win-prob-card__side live-win-prob-card__side--right">
-                      <div class="live-win-prob-card__name" id="liveWinProbNameBowl"></div>
-                      <div class="live-win-prob-card__pct live-win-prob-card__pct--bowl" id="liveWinProbPctBowl">—</div>
-                    </div>
-                  </div>
-                  <div class="live-win-prob-card__bar" id="liveWinProbBar" hidden aria-hidden="true">
-                    <div class="live-win-prob-card__seg live-win-prob-card__seg--bat" id="liveWinProbSegBat"></div>
-                    <div class="live-win-prob-card__seg live-win-prob-card__seg--bowl" id="liveWinProbSegBowl"></div>
-                  </div>
-                  <p class="live-win-prob-card__placeholder" id="liveWinProbPlaceholder"></p>
-                </div>
-                <p class="live-win-prob-card__hint" id="liveWinProbHint"></p>
               </section>
             </div>
-            <div id="verdictArea" class="verdict-slot"></div>
+
+            <div
+              class="controls-tabs__panel controls-tabs__panel--live"
+              id="controlsPanelLive"
+              role="tabpanel"
+              aria-labelledby="controlsTabLive"
+              hidden
+            >
+              <!-- ── Live match over-by-over prediction panel ──────────────────── -->
+              <section
+                class="live-panel"
+                id="livePanel"
+                aria-label="Live match — over-by-over prediction"
+              >
+                <div class="live-panel__head live-panel__head--static">
+                  <div class="live-panel__title-row">
+                    <span class="live-dot" aria-hidden="true"></span>
+                    <span class="live-panel__title"
+                      >Live match · Current score · Prediction</span
+                    >
+                  </div>
+                </div>
+                <p class="live-panel__hint">
+                  You can <strong>Run war room</strong> anytime; paste or
+                  <strong>Fetch live</strong> when you have a score so the
+                  debate uses that <strong>ground truth</strong>.
+                </p>
+
+                <div class="live-panel__body" id="livePanelBody">
+                  <div class="live-form">
+                    <div class="live-form__row">
+                      <div class="live-form__teams">
+                        <div class="live-form__field">
+                          <label class="live-form__label" for="lfBatTeam"
+                            >Batting team</label
+                          >
+                          <input
+                            class="live-form__input"
+                            id="lfBatTeam"
+                            type="text"
+                            placeholder="e.g. PBKS"
+                            autocomplete="off"
+                          />
+                        </div>
+                        <div class="live-form__team-swap">
+                          <button
+                            type="button"
+                            class="live-form__swap-btn"
+                            id="lfSwapTeamsBtn"
+                            aria-label="Swap batting and bowling teams"
+                            title="Swap teams"
+                            onclick="swapLiveFormTeams()"
+                          >
+                            <span
+                              class="live-form__swap-icon"
+                              aria-hidden="true"
+                              >⇄</span
+                            >
+                          </button>
+                        </div>
+                        <div class="live-form__field">
+                          <label class="live-form__label" for="lfBowlTeam"
+                            >Bowling team</label
+                          >
+                          <input
+                            class="live-form__input"
+                            id="lfBowlTeam"
+                            type="text"
+                            placeholder="e.g. LSG"
+                            autocomplete="off"
+                          />
+                        </div>
+                      </div>
+                      <div class="live-form__field live-form__field--sm">
+                        <label class="live-form__label" for="lfFormat"
+                          >Format</label
+                        >
+                        <select class="live-form__input" id="lfFormat">
+                          <option value="T20">T20</option>
+                          <option value="ODI">ODI</option>
+                          <option value="Test">Test</option>
+                        </select>
+                      </div>
+                      <div class="live-form__field live-form__field--sm">
+                        <label class="live-form__label" for="lfInnings"
+                          >Innings</label
+                        >
+                        <select class="live-form__input" id="lfInnings">
+                          <option value="1">1st innings</option>
+                          <option value="2">2nd innings</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div class="live-form__row">
+                      <div class="live-form__field live-form__field--sm">
+                        <label class="live-form__label" for="lfRuns"
+                          >Current runs</label
+                        >
+                        <input
+                          class="live-form__input"
+                          id="lfRuns"
+                          type="number"
+                          min="0"
+                          placeholder="e.g. 82"
+                        />
+                      </div>
+                      <div class="live-form__field live-form__field--sm">
+                        <label class="live-form__label" for="lfWickets"
+                          >Wickets lost</label
+                        >
+                        <input
+                          class="live-form__input"
+                          id="lfWickets"
+                          type="number"
+                          min="0"
+                          max="9"
+                          placeholder="e.g. 2"
+                        />
+                      </div>
+                      <div class="live-form__field live-form__field--sm">
+                        <label class="live-form__label" for="lfOvers"
+                          >Overs completed</label
+                        >
+                        <input
+                          class="live-form__input"
+                          id="lfOvers"
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          placeholder="e.g. 9.3"
+                        />
+                      </div>
+                      <div
+                        class="live-form__field live-form__field--sm"
+                        id="lfTargetWrap"
+                      >
+                        <label class="live-form__label" for="lfTarget"
+                          >Runs to win (target)</label
+                        >
+                        <input
+                          class="live-form__input"
+                          id="lfTarget"
+                          type="number"
+                          min="0"
+                          placeholder="e.g. 248"
+                          title="Total runs needed to win (e.g. if KKR made 247, enter 248)"
+                        />
+                      </div>
+                      <div
+                        class="live-form__field live-form__field--sm lf-def-field"
+                        hidden
+                      >
+                        <label class="live-form__label" for="lfDefRuns"
+                          >1st inn. runs</label
+                        >
+                        <input
+                          class="live-form__input"
+                          id="lfDefRuns"
+                          type="number"
+                          min="0"
+                          placeholder="e.g. 247"
+                        />
+                      </div>
+                      <div
+                        class="live-form__field live-form__field--sm lf-def-field"
+                        hidden
+                      >
+                        <label class="live-form__label" for="lfDefWickets"
+                          >1st inn. wkts</label
+                        >
+                        <input
+                          class="live-form__input"
+                          id="lfDefWickets"
+                          type="number"
+                          min="0"
+                          max="10"
+                          placeholder="e.g. 2"
+                        />
+                      </div>
+                      <div
+                        class="live-form__field live-form__field--sm lf-def-field"
+                        hidden
+                      >
+                        <label class="live-form__label" for="lfDefOvers"
+                          >1st inn. overs</label
+                        >
+                        <input
+                          class="live-form__input"
+                          id="lfDefOvers"
+                          type="number"
+                          min="0"
+                          step="0.1"
+                          placeholder="e.g. 20"
+                        />
+                      </div>
+                      <div class="live-form__field live-form__field--sm">
+                        <label class="live-form__label" for="lfVenue"
+                          >Venue (optional)</label
+                        >
+                        <input
+                          class="live-form__input"
+                          id="lfVenue"
+                          type="text"
+                          placeholder="e.g. IS Bindra"
+                          autocomplete="off"
+                        />
+                      </div>
+                      <div class="live-form__field">
+                        <label class="live-form__label" for="lfNotes"
+                          >Situation notes (optional)</label
+                        >
+                        <input
+                          class="live-form__input"
+                          id="lfNotes"
+                          type="text"
+                          placeholder="e.g. Batters set, last 5 power-hitting overs"
+                          autocomplete="off"
+                        />
+                      </div>
+                    </div>
+                    <div class="live-form__actions">
+                      <button
+                        type="button"
+                        class="btn btn--primary"
+                        id="overPredictBtn"
+                        onclick="runOverPrediction()"
+                      >
+                        Predict remaining overs
+                      </button>
+                      <span
+                        class="status-pill"
+                        id="overPredictLabel"
+                        style="display: none"
+                        aria-live="polite"
+                      ></span>
+                    </div>
+                  </div>
+
+                  <div
+                    id="overPredictResult"
+                    class="over-predict-result"
+                    hidden
+                  ></div>
+                </div>
+              </section>
+            </div>
           </div>
         </div>
-      </section>
 
-      <aside class="dash-col dash-col--agents" aria-labelledby="agents-heading">
-        <div class="agents-col-head">
-          <h2 class="dash-col__label" id="agents-heading">Intel agents</h2>
-          <button type="button" class="agents-toggle" id="agentsToggle" aria-expanded="true" aria-controls="agentsCard" aria-label="Toggle agents panel">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M18 15l-6-6-6 6"/></svg>
-          </button>
-        </div>
-        <div class="surface surface--agents surface--panel" id="agentsCard">
-          <div class="panel-like panel-like--agents">
-            <div id="agentsList"></div>
-          </div>
-        </div>
-        <div class="pipeline pipeline--agents-only" role="list" aria-label="Pipeline">
-          <span class="pipeline__step">Data</span>
-          <span class="pipeline__arrow" aria-hidden="true">→</span>
-          <span class="pipeline__step">5 agents</span>
-          <span class="pipeline__arrow" aria-hidden="true">→</span>
-          <span class="pipeline__step">Debate</span>
-          <span class="pipeline__arrow" aria-hidden="true">→</span>
-          <span class="pipeline__step">Judge</span>
-        </div>
-      </aside>
-
-      <aside class="dash-col dash-col--debate" aria-labelledby="debate-heading" tabindex="-1" id="debatePanel">
-        <h2 class="dash-col__label" id="debate-heading">Debate</h2>
-        <div class="surface surface--debate surface--panel">
-          <div class="debate-scroller" id="debateScroller">
-            <div class="debate-area" id="debateArea">
-              <div class="empty-state" id="emptyState">
-                <div class="empty-state__icon" aria-hidden="true"></div>
-                <p class="empty-state__title">Ready</p>
-                <p class="empty-state__desc">Pick a fixture above, then <strong>Run war room</strong> for live intel, Bull vs Bear, and a judge verdict.</p>
+        <div class="war-room__col war-room__col--intel">
+          <main class="dashboard dashboard--pre-war-room" id="main-content">
+            <section
+              class="dash-col dash-col--stage"
+              aria-labelledby="stage-heading"
+            >
+              <div class="dash-col__head">
+                <div class="stage-head-row">
+                  <h2 class="dash-col__label" id="stage-heading">Verdict</h2>
+                  <div
+                    class="phase-stepper"
+                    id="phaseStepper"
+                    aria-hidden="true"
+                  >
+                    <span class="phase-step" id="stepIntel">Intel</span>
+                    <span class="phase-stepper__sep">›</span>
+                    <span class="phase-step" id="stepDebate">Debate</span>
+                    <span class="phase-stepper__sep">›</span>
+                    <span class="phase-step" id="stepJudge">Judge</span>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="bubble bull typing-bubble" id="typingBubble" style="display:none">
-              <div class="typing-row"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-            </div>
-          </div>
+              <div
+                class="live-ticker"
+                id="liveTicker"
+                hidden
+                aria-live="polite"
+                aria-label="Live match ticker"
+              >
+                <div class="live-ticker__row">
+                  <span
+                    class="live-ticker__dot live-dot"
+                    aria-hidden="true"
+                  ></span>
+                  <span class="live-ticker__score" id="liveTickerScore">—</span>
+                  <span class="live-ticker__sep" aria-hidden="true">·</span>
+                  <span class="live-ticker__rrr" id="liveTickerRrr">RRR —</span>
+                  <span class="live-ticker__sep" aria-hidden="true">·</span>
+                  <span
+                    class="live-ticker__wp"
+                    id="liveTickerWp"
+                    title="Deterministic win-probability based on RRR + wickets in hand"
+                    >Win% —</span
+                  >
+                </div>
+                <div class="live-ticker__meta">
+                  <span class="live-ticker__source" id="liveTickerSource"
+                    >source: —</span
+                  >
+                  <span class="live-ticker__sep" aria-hidden="true">·</span>
+                  <span class="live-ticker__updated" id="liveTickerUpdated"
+                    >updated just now</span
+                  >
+                  <button
+                    type="button"
+                    class="live-ticker__pause"
+                    id="liveTickerPause"
+                    aria-pressed="false"
+                    title="Pause auto-refresh"
+                  >
+                    Pause
+                  </button>
+                </div>
+              </div>
+              <div
+                class="surface surface--stage surface--verdict surface--panel"
+                id="debateCard"
+              >
+                <div
+                  id="phaseBanner"
+                  class="phase-banner"
+                  style="display: none"
+                ></div>
+                <div
+                  class="stage-fixture-verdict"
+                  id="stageFixtureVerdict"
+                  hidden
+                >
+                  <div class="fixture-live-stack" id="fixtureLiveStack">
+                    <div class="fixture-live-stack__match-wrap">
+                      <div
+                        class="match-live-indicator"
+                        id="matchLiveIndicator"
+                        hidden
+                        aria-live="polite"
+                      >
+                        <span class="match-live-indicator__label">Live</span>
+                      </div>
+                      <div
+                        class="match-bar match-bar--in-summary"
+                        id="matchBar"
+                        hidden
+                        aria-label="Fixture"
+                      >
+                        <div
+                          class="match-bar__league"
+                          id="matchBarLeague"
+                        ></div>
+                        <div class="match-bar__row">
+                          <div class="match-bar__pill" id="matchBarTeamA">
+                            <img
+                              class="match-bar__logo"
+                              id="matchBarImgA"
+                              alt=""
+                              width="44"
+                              height="44"
+                              loading="lazy"
+                              decoding="async"
+                              hidden
+                            />
+                            <span
+                              class="match-bar__code"
+                              id="matchBarCodeA"
+                            ></span>
+                          </div>
+                          <span class="match-bar__vs" aria-hidden="true"
+                            >vs</span
+                          >
+                          <div class="match-bar__pill" id="matchBarTeamB">
+                            <img
+                              class="match-bar__logo"
+                              id="matchBarImgB"
+                              alt=""
+                              width="44"
+                              height="44"
+                              loading="lazy"
+                              decoding="async"
+                              hidden
+                            />
+                            <span
+                              class="match-bar__code"
+                              id="matchBarCodeB"
+                            ></span>
+                          </div>
+                        </div>
+                        <div class="match-bar__venue" id="matchBarVenue"></div>
+                      </div>
+                    </div>
+                    <div
+                      class="live-scoreboard"
+                      id="liveScoreboard"
+                      hidden
+                      aria-label="Live score summary"
+                    >
+                      <div class="live-scoreboard__grid">
+                        <div
+                          class="live-scoreboard__team live-scoreboard__team--left"
+                        >
+                          <div
+                            class="live-scoreboard__runs"
+                            id="liveSbRunsLeft"
+                          >
+                            —
+                          </div>
+                          <div class="live-scoreboard__team-foot">
+                            <img
+                              class="live-scoreboard__logo"
+                              id="liveSbImgA"
+                              alt=""
+                              width="36"
+                              height="36"
+                              decoding="async"
+                              loading="lazy"
+                              hidden
+                            />
+                            <span
+                              class="live-scoreboard__code"
+                              id="liveSbCodeLeft"
+                            ></span>
+                          </div>
+                        </div>
+                        <div class="live-scoreboard__vs" aria-hidden="true">
+                          vs
+                        </div>
+                        <div
+                          class="live-scoreboard__team live-scoreboard__team--right"
+                        >
+                          <div
+                            class="live-scoreboard__runs"
+                            id="liveSbRunsRight"
+                          >
+                            —
+                          </div>
+                          <div class="live-scoreboard__team-foot">
+                            <img
+                              class="live-scoreboard__logo"
+                              id="liveSbImgB"
+                              alt=""
+                              width="36"
+                              height="36"
+                              decoding="async"
+                              loading="lazy"
+                              hidden
+                            />
+                            <span
+                              class="live-scoreboard__code"
+                              id="liveSbCodeRight"
+                            ></span>
+                          </div>
+                        </div>
+                      </div>
+                      <p class="live-scoreboard__status" id="liveSbStatus"></p>
+                      <p
+                        class="live-scoreboard__over-pos"
+                        id="liveSbOverPos"
+                      ></p>
+                      <p class="live-scoreboard__meta" id="liveSbMeta"></p>
+                      <div
+                        class="live-scoreboard__players"
+                        id="liveSbPlayers"
+                        hidden
+                      >
+                        <div
+                          class="live-scoreboard__player-col"
+                          id="liveSbBowlCol"
+                        ></div>
+                        <div
+                          class="live-scoreboard__player-col live-scoreboard__player-col--bat"
+                          id="liveSbBatCol"
+                        ></div>
+                      </div>
+                    </div>
+                    <section
+                      class="live-win-prob-card"
+                      id="liveWinProbCard"
+                      hidden
+                      aria-label="Live win probability"
+                    >
+                      <h3 class="live-win-prob-card__title">
+                        Live win probability
+                      </h3>
+                      <div
+                        class="live-win-prob-card__body"
+                        id="liveWinProbBody"
+                      >
+                        <div
+                          class="live-win-prob-card__teams"
+                          id="liveWinProbTeamsRow"
+                          hidden
+                        >
+                          <div class="live-win-prob-card__side">
+                            <div
+                              class="live-win-prob-card__name"
+                              id="liveWinProbNameBat"
+                            ></div>
+                            <div
+                              class="live-win-prob-card__pct live-win-prob-card__pct--bat"
+                              id="liveWinProbPctBat"
+                            >
+                              —
+                            </div>
+                          </div>
+                          <div
+                            class="live-win-prob-card__side live-win-prob-card__side--right"
+                          >
+                            <div
+                              class="live-win-prob-card__name"
+                              id="liveWinProbNameBowl"
+                            ></div>
+                            <div
+                              class="live-win-prob-card__pct live-win-prob-card__pct--bowl"
+                              id="liveWinProbPctBowl"
+                            >
+                              —
+                            </div>
+                          </div>
+                        </div>
+                        <div
+                          class="live-win-prob-card__bar"
+                          id="liveWinProbBar"
+                          hidden
+                          aria-hidden="true"
+                        >
+                          <div
+                            class="live-win-prob-card__seg live-win-prob-card__seg--bat"
+                            id="liveWinProbSegBat"
+                          ></div>
+                          <div
+                            class="live-win-prob-card__seg live-win-prob-card__seg--bowl"
+                            id="liveWinProbSegBowl"
+                          ></div>
+                        </div>
+                        <p
+                          class="live-win-prob-card__placeholder"
+                          id="liveWinProbPlaceholder"
+                        ></p>
+                      </div>
+                      <p
+                        class="live-win-prob-card__hint"
+                        id="liveWinProbHint"
+                      ></p>
+                    </section>
+                  </div>
+                  <div id="verdictArea" class="verdict-slot"></div>
+                </div>
+              </div>
+            </section>
+
+            <aside
+              class="dash-col dash-col--agents"
+              aria-labelledby="agents-heading"
+            >
+              <div class="agents-col-head">
+                <h2 class="dash-col__label" id="agents-heading">
+                  Intel agents
+                </h2>
+                <button
+                  type="button"
+                  class="agents-toggle"
+                  id="agentsToggle"
+                  aria-expanded="true"
+                  aria-controls="agentsCard"
+                  aria-label="Toggle agents panel"
+                >
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    aria-hidden="true"
+                  >
+                    <path d="M18 15l-6-6-6 6" />
+                  </svg>
+                </button>
+              </div>
+              <div
+                class="surface surface--agents surface--panel"
+                id="agentsCard"
+              >
+                <div class="panel-like panel-like--agents">
+                  <div id="agentsList"></div>
+                </div>
+              </div>
+              <div
+                class="pipeline pipeline--agents-only"
+                role="list"
+                aria-label="Pipeline"
+              >
+                <span class="pipeline__step">Data</span>
+                <span class="pipeline__arrow" aria-hidden="true">→</span>
+                <span class="pipeline__step">5 agents</span>
+                <span class="pipeline__arrow" aria-hidden="true">→</span>
+                <span class="pipeline__step">Debate</span>
+                <span class="pipeline__arrow" aria-hidden="true">→</span>
+                <span class="pipeline__step">Judge</span>
+              </div>
+            </aside>
+
+            <aside
+              class="dash-col dash-col--debate"
+              aria-labelledby="debate-heading"
+              tabindex="-1"
+              id="debatePanel"
+            >
+              <h2 class="dash-col__label" id="debate-heading">Debate</h2>
+              <div class="surface surface--debate surface--panel">
+                <div class="debate-scroller" id="debateScroller">
+                  <div class="debate-area" id="debateArea">
+                    <div class="empty-state" id="emptyState">
+                      <div class="empty-state__icon" aria-hidden="true"></div>
+                      <p class="empty-state__title">Ready</p>
+                      <p class="empty-state__desc">
+                        Pick a fixture above, then
+                        <strong>Run war room</strong> for live intel, Bull vs
+                        Bear, and a judge verdict.
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    class="bubble bull typing-bubble"
+                    id="typingBubble"
+                    style="display: none"
+                  >
+                    <div class="typing-row">
+                      <div class="dot"></div>
+                      <div class="dot"></div>
+                      <div class="dot"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </main>
         </div>
-      </aside>
-    </main>
       </div>
+
+      <footer class="app-footer" aria-label="Prediction stats and disclaimer">
+        <details class="recent-verdicts" id="recentVerdictsPanel">
+          <summary class="recent-verdicts__summary">
+            Recent verdicts vs results
+          </summary>
+          <div class="recent-verdicts__body" id="recentVerdictsBody">
+            <p class="recent-verdicts__empty">Loading…</p>
+          </div>
+        </details>
+        <p class="app-footer__line" id="judgeAccuracyFooter"></p>
+        <p class="app-footer__disclaimer">
+          For entertainment and fan discussion only. AI outputs are not advice,
+          may be inaccurate, and must not be used for betting, trading, or other
+          financial decisions.
+          <a class="app-footer__legal" href="/disclaimer.html"
+            >Full disclaimer</a
+          >
+        </p>
+        <p
+          class="app-footer__version"
+          id="appVersionLine"
+          aria-label="Build version"
+        >
+          <span class="app-footer__version-label">version</span>
+          <code class="app-footer__version-tag" id="appVersionTag">…</code>
+        </p>
+      </footer>
     </div>
 
-    <footer class="app-footer" aria-label="Prediction stats and disclaimer">
-      <details class="recent-verdicts" id="recentVerdictsPanel">
-        <summary class="recent-verdicts__summary">Recent verdicts vs results</summary>
-        <div class="recent-verdicts__body" id="recentVerdictsBody">
-          <p class="recent-verdicts__empty">Loading…</p>
-        </div>
-      </details>
-      <p class="app-footer__line" id="judgeAccuracyFooter"></p>
-      <p class="app-footer__disclaimer">
-        For entertainment and fan discussion only. AI outputs are not advice, may be inaccurate, and must not be used for betting, trading, or other financial decisions.
-        <a class="app-footer__legal" href="/disclaimer.html">Full disclaimer</a>
-      </p>
-      <p class="app-footer__version" id="appVersionLine" aria-label="Build version">
-        <span class="app-footer__version-label">version</span>
-        <code class="app-footer__version-tag" id="appVersionTag">…</code>
-      </p>
-    </footer>
-  </div>
-
-<script>
-  (function () {
-    var btn = document.getElementById('themeToggle');
-    var uiBtn = document.getElementById('uiToggle');
-    var metaTheme = document.getElementById('metaThemeColor');
-    var PAGE = {
-      warroom: { dark: '#070b12', light: '#f4f6f8' },
-      classic: { dark: '#202124', light: '#f4f6f8' },
-      ipl: { dark: '#002d62', light: '#e8eef6' }
-    };
-    function syncMetaThemeColor() {
-      var theme = document.documentElement.getAttribute('data-theme') || 'light';
-      var ui = document.documentElement.getAttribute('data-ui') || 'classic';
-      var map = PAGE[ui] || PAGE.classic;
-      if (metaTheme) metaTheme.setAttribute('content', map[theme] || map.light);
-    }
-    function applyTheme(theme) {
-      document.documentElement.setAttribute('data-theme', theme);
-      localStorage.setItem('acwr-theme', theme);
-      syncMetaThemeColor();
-    }
-    function applyUi(ui) {
-      document.documentElement.setAttribute('data-ui', ui);
-      localStorage.setItem('acwr-ui', ui);
-      syncMetaThemeColor();
-      if (uiBtn) {
-        uiBtn.setAttribute('aria-pressed', ui === 'warroom' ? 'false' : 'true');
-        uiBtn.setAttribute('data-ui-mode', ui);
-        if (ui === 'warroom') {
-          uiBtn.setAttribute('aria-label', 'UI: War room. Next: Classic layout.');
-          uiBtn.title = 'Next: Classic (Google-style)';
-        } else if (ui === 'classic') {
-          uiBtn.setAttribute('aria-label', 'UI: Classic. Next: IPL broadcast look.');
-          uiBtn.title = 'Next: IPL (blue & gold)';
-        } else {
-          uiBtn.setAttribute('aria-label', 'UI: IPL broadcast. Next: War room.');
-          uiBtn.title = 'Next: War room';
+    <script>
+      (function () {
+        var btn = document.getElementById("themeToggle");
+        var uiBtn = document.getElementById("uiToggle");
+        var metaTheme = document.getElementById("metaThemeColor");
+        var PAGE = {
+          warroom: { dark: "#070b12", light: "#f4f6f8" },
+          classic: { dark: "#202124", light: "#f4f6f8" },
+          ipl: { dark: "#002d62", light: "#e8eef6" },
+        };
+        function syncMetaThemeColor() {
+          var theme =
+            document.documentElement.getAttribute("data-theme") || "light";
+          var ui =
+            document.documentElement.getAttribute("data-ui") || "classic";
+          var map = PAGE[ui] || PAGE.classic;
+          if (metaTheme)
+            metaTheme.setAttribute("content", map[theme] || map.light);
         }
-      }
-    }
-    if (btn) {
-      btn.addEventListener('click', function () {
-        var cur = document.documentElement.getAttribute('data-theme') || 'light';
-        applyTheme(cur === 'dark' ? 'light' : 'dark');
-      });
-    }
-    if (uiBtn) {
-      uiBtn.addEventListener('click', function () {
-        var cur = document.documentElement.getAttribute('data-ui') || 'classic';
-        var next = cur === 'warroom' ? 'classic' : cur === 'classic' ? 'ipl' : 'warroom';
-        applyUi(next);
-      });
-    }
-    applyTheme(document.documentElement.getAttribute('data-theme') || 'light');
-    applyUi(document.documentElement.getAttribute('data-ui') || 'classic');
-  })();
-</script>
-<script>
-  (function () {
-    if (!('serviceWorker' in navigator)) return;
-    var h = location.hostname || '';
-    var localHost =
-      h === 'localhost' ||
-      h === '127.0.0.1' ||
-      h === '[::1]' ||
-      (h.length > 10 && h.slice(-10) === '.localhost');
-    var needsHttps = location.protocol === 'http:' && !localHost;
-    var insecure =
-      needsHttps || ('isSecureContext' in window && window.isSecureContext === false);
-    if (insecure) {
-      var region = document.getElementById('toastRegion');
-      if (region) {
-        var n = document.createElement('div');
-        n.className = 'pwa-secure-hint';
-        n.setAttribute('role', 'status');
-        n.innerHTML =
-          '<strong>Limited install on this URL.</strong> Open the site over <strong>HTTPS</strong> (or use ' +
-          '<code>localhost</code> on this device) for the full app install and offline support. ' +
-          'Plain <code>http://</code> to a phone or LAN IP cannot register a service worker.';
-        region.appendChild(n);
-      }
-      return;
-    }
-    navigator.serviceWorker
-      .register('/sw.js', { scope: '/', updateViaCache: 'none' })
-      .catch(function (err) {
-        console.warn('Service worker registration failed:', err);
-      });
-  })();
-</script>
-<script>
-  // Footer version badge — populated from /api/version (resolved server-side
-  // from dist/build-manifest.json in prod, or git + package.json in dev).
-  (function () {
-    var tag = document.getElementById('appVersionTag');
-    var line = document.getElementById('appVersionLine');
-    if (!tag || !line) return;
-    fetch('/api/version', { headers: { Accept: 'application/json' }, cache: 'no-store' })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (v) {
-        if (!v) { line.hidden = true; return; }
-        var label = 'v' + (v.appVersion || '0.0.0');
-        var suffix = v.commitShort || (v.buildHash ? v.buildHash.slice(0, 7) : '');
-        if (suffix) label += ' · ' + suffix;
-        if (v.dirty) label += '*';
-        tag.textContent = label;
-        var tipParts = [];
-        if (v.appVersion) tipParts.push('App: v' + v.appVersion);
-        if (v.buildHash) tipParts.push('Build: ' + v.buildHash);
-        if (v.commit) tipParts.push('Commit: ' + v.commit + (v.branch ? ' (' + v.branch + ')' : '') + (v.dirty ? ' [dirty]' : ''));
-        if (v.builtAt) tipParts.push('Built: ' + new Date(v.builtAt).toLocaleString());
-        if (v.mode) tipParts.push('Mode: ' + v.mode);
-        if (tipParts.length) line.title = tipParts.join('\n');
-      })
-      .catch(function () { line.hidden = true; });
-  })();
-</script>
-<script src="/ai_cricket_war_room.js"></script>
-</body>
+        function applyTheme(theme) {
+          document.documentElement.setAttribute("data-theme", theme);
+          localStorage.setItem("acwr-theme", theme);
+          syncMetaThemeColor();
+        }
+        function applyUi(ui) {
+          document.documentElement.setAttribute("data-ui", ui);
+          localStorage.setItem("acwr-ui", ui);
+          syncMetaThemeColor();
+          if (uiBtn) {
+            uiBtn.setAttribute(
+              "aria-pressed",
+              ui === "warroom" ? "false" : "true",
+            );
+            uiBtn.setAttribute("data-ui-mode", ui);
+            if (ui === "warroom") {
+              uiBtn.setAttribute(
+                "aria-label",
+                "UI: War room. Next: Classic layout.",
+              );
+              uiBtn.title = "Next: Classic (Google-style)";
+            } else if (ui === "classic") {
+              uiBtn.setAttribute(
+                "aria-label",
+                "UI: Classic. Next: IPL broadcast look.",
+              );
+              uiBtn.title = "Next: IPL (blue & gold)";
+            } else {
+              uiBtn.setAttribute(
+                "aria-label",
+                "UI: IPL broadcast. Next: War room.",
+              );
+              uiBtn.title = "Next: War room";
+            }
+          }
+        }
+        if (btn) {
+          btn.addEventListener("click", function () {
+            var cur =
+              document.documentElement.getAttribute("data-theme") || "light";
+            applyTheme(cur === "dark" ? "light" : "dark");
+          });
+        }
+        if (uiBtn) {
+          uiBtn.addEventListener("click", function () {
+            var cur =
+              document.documentElement.getAttribute("data-ui") || "classic";
+            var next =
+              cur === "warroom"
+                ? "classic"
+                : cur === "classic"
+                  ? "ipl"
+                  : "warroom";
+            applyUi(next);
+          });
+        }
+        applyTheme(
+          document.documentElement.getAttribute("data-theme") || "light",
+        );
+        applyUi(document.documentElement.getAttribute("data-ui") || "classic");
+      })();
+    </script>
+    <script>
+      (function () {
+        if (!("serviceWorker" in navigator)) return;
+        var h = location.hostname || "";
+        var localHost =
+          h === "localhost" ||
+          h === "127.0.0.1" ||
+          h === "[::1]" ||
+          (h.length > 10 && h.slice(-10) === ".localhost");
+        var needsHttps = location.protocol === "http:" && !localHost;
+        var insecure =
+          needsHttps ||
+          ("isSecureContext" in window && window.isSecureContext === false);
+        if (insecure) {
+          var region = document.getElementById("toastRegion");
+          if (region) {
+            var n = document.createElement("div");
+            n.className = "pwa-secure-hint";
+            n.setAttribute("role", "status");
+            n.innerHTML =
+              "<strong>Limited install on this URL.</strong> Open the site over <strong>HTTPS</strong> (or use " +
+              "<code>localhost</code> on this device) for the full app install and offline support. " +
+              "Plain <code>http://</code> to a phone or LAN IP cannot register a service worker.";
+            region.appendChild(n);
+          }
+          return;
+        }
+        navigator.serviceWorker
+          .register("/sw.js", { scope: "/", updateViaCache: "none" })
+          .catch(function (err) {
+            console.warn("Service worker registration failed:", err);
+          });
+      })();
+    </script>
+    <script>
+      // Footer version badge — populated from /api/version (resolved server-side
+      // from dist/build-manifest.json in prod, or git + package.json in dev).
+      (function () {
+        var tag = document.getElementById("appVersionTag");
+        var line = document.getElementById("appVersionLine");
+        if (!tag || !line) return;
+        fetch("/api/version", {
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        })
+          .then(function (r) {
+            return r.ok ? r.json() : null;
+          })
+          .then(function (v) {
+            if (!v) {
+              line.hidden = true;
+              return;
+            }
+            var label = "v" + (v.appVersion || "0.0.0");
+            var suffix =
+              v.commitShort || (v.buildHash ? v.buildHash.slice(0, 7) : "");
+            if (suffix) label += " · " + suffix;
+            if (v.dirty) label += "*";
+            tag.textContent = label;
+            var tipParts = [];
+            if (v.appVersion) tipParts.push("App: v" + v.appVersion);
+            if (v.buildHash) tipParts.push("Build: " + v.buildHash);
+            if (v.commit)
+              tipParts.push(
+                "Commit: " +
+                  v.commit +
+                  (v.branch ? " (" + v.branch + ")" : "") +
+                  (v.dirty ? " [dirty]" : ""),
+              );
+            if (v.builtAt)
+              tipParts.push("Built: " + new Date(v.builtAt).toLocaleString());
+            if (v.mode) tipParts.push("Mode: " + v.mode);
+            if (tipParts.length) line.title = tipParts.join("\n");
+          })
+          .catch(function () {
+            line.hidden = true;
+          });
+      })();
+    </script>
+    <script src="/ai_cricket_war_room.js"></script>
+  </body>
 </html>

@@ -190,11 +190,38 @@ def _format_cricapi_score(match: dict[str, Any]) -> str:
     return " | ".join(parts)
 
 
+_IPL_CODE_ALIASES: dict[str, tuple[str, ...]] = {
+    "CSK": ("CSK", "CHENNAI", "SUPER KINGS"),
+    "MI": ("MI", "MUMBAI", "INDIANS"),
+    "RCB": ("RCB", "BANGALORE", "BENGALURU", "CHALLENGERS"),
+    "KKR": ("KKR", "KOLKATA", "KNIGHT RIDERS", "KNIGHT"),
+    "DC": ("DC", "DELHI", "CAPITALS"),
+    "PBKS": ("PBKS", "PUNJAB", "KINGS"),
+    "RR": ("RR", "RAJASTHAN", "ROYALS"),
+    "SRH": ("SRH", "HYDERABAD", "SUNRISERS"),
+    "GT": ("GT", "GUJARAT", "TITANS"),
+    "LSG": ("LSG", "LUCKNOW", "SUPER GIANTS", "GIANTS"),
+}
+
+
+def _snippet_matches_team_codes(snippet: str, team_codes: list[str]) -> bool:
+    """Reject unrelated live feeds (e.g. other internationals on the same CricAPI page)."""
+    if not snippet or len(team_codes) < 2:
+        return bool(snippet)
+    up = snippet.upper()
+    for code in team_codes[:2]:
+        aliases = _IPL_CODE_ALIASES.get(code.upper(), (code.upper(),))
+        if not any(alias in up for alias in aliases):
+            return False
+    return True
+
+
 async def fetch_cricapi_live(
     client: httpx.AsyncClient,
     *,
     tokens: list[str],
     timeout_sec: float,
+    required_team_codes: list[str] | None = None,
 ) -> dict[str, Any]:
     """
     Fetch live/current matches from CricAPI v1.
@@ -243,17 +270,27 @@ async def fetch_cricapi_live(
 
     all_matches: list[dict[str, Any]] = data.get("data") or []
 
+    req_codes = [str(c).strip().upper() for c in (required_team_codes or []) if str(c).strip()]
+
     def _relevance(m: dict[str, Any]) -> int:
         hay = " ".join(
             filter(None, [m.get("name", ""), m.get("venue", ""), " ".join(m.get("teams") or [])])
         ).lower()
         return sum(1 for t in tokens if t.lower() in hay)
 
+    def _has_required_teams(m: dict[str, Any]) -> bool:
+        if len(req_codes) < 2:
+            return _relevance(m) > 0
+        hay = " ".join(
+            filter(None, [m.get("name", ""), m.get("venue", ""), " ".join(m.get("teams") or [])])
+        ).upper()
+        return all(code in hay for code in req_codes[:2])
+
     # Prefer matches that mention our teams/venue; fall back to first 3 live matches
-    if tokens:
-        relevant = [m for m in all_matches if _relevance(m) > 0]
+    if tokens or req_codes:
+        relevant = [m for m in all_matches if _has_required_teams(m)]
         relevant.sort(key=_relevance, reverse=True)
-        candidates = relevant[:5] or all_matches[:3]
+        candidates = relevant[:5] or ([m for m in all_matches if _relevance(m) > 0][:3] if tokens else [])
     else:
         candidates = all_matches[:3]
 
@@ -326,6 +363,7 @@ async def build_match_context(
 
     timeout = _timeout_sec()
     tokens = _tokenize_context(label, teams, venue)
+    team_codes = [c.strip().upper() for c in teams.split(",") if c.strip()]
 
     limits = httpx.Limits(max_keepalive_connections=4, max_connections=8)
     async with httpx.AsyncClient(
@@ -348,8 +386,18 @@ async def build_match_context(
                 feed_url=CRICBUZZ_FEED,
                 timeout_sec=timeout,
             ),
-            fetch_cricapi_live(client, tokens=tokens, timeout_sec=timeout),
-            fetch_cricbuzz_live(client, tokens=tokens),
+            fetch_cricapi_live(
+                client,
+                tokens=tokens,
+                timeout_sec=timeout,
+                required_team_codes=team_codes,
+            ),
+            fetch_cricbuzz_live(
+                client,
+                tokens=tokens,
+                required_team_codes=team_codes,
+                skip_cache=not use_cache,
+            ),
         )
 
     sources: list[dict[str, Any]] = []
@@ -432,24 +480,40 @@ async def build_match_context(
         {"cricapi_current": summaries} if isinstance(summaries, list) and len(summaries) else {}
     )
 
-    # Source priority for live state:
+      # Source priority for live state:
     #   1. Cricbuzz scrape (structured + ball-level freshness when enabled)
     #   2. CricAPI structured (rate-limited but reliable)
     #   3. RSS-scraped snippet (slow, headline-only)
-    if scrape_struct and scrape_struct.get("snippet"):
-        live_score_snippet = str(scrape_struct.get("snippet") or "")
-        live_score_source = "cricbuzz_scrape"
-    elif cricapi.get("live_score_snippet"):
-        live_score_snippet = cricapi.get("live_score_snippet") or ""
-        live_score_source = "cricapi"
-    else:
+    live_score_snippet = ""
+    live_score_source = "none"
+    if scrape_struct:
+        sn = str(scrape_struct.get("snippet") or "").strip()
+        if not sn and scrape_struct.get("runs") is not None:
+            bat = str(scrape_struct.get("batting_team") or "").strip()
+            runs = scrape_struct.get("runs")
+            wkts = scrape_struct.get("wickets")
+            overs = scrape_struct.get("overs")
+            sn = f"{bat} {runs}/{wkts} ({overs} ov)".strip()
+            tgt = scrape_struct.get("target")
+            if tgt is not None:
+                sn += f", chasing {tgt}"
+        if _snippet_matches_team_codes(sn, team_codes):
+            live_score_snippet = sn[:400]
+            live_score_source = "cricbuzz_scrape"
+    if not live_score_snippet:
+        cric_sn = str(cricapi.get("live_score_snippet") or "").strip()
+        if cric_sn and _snippet_matches_team_codes(cric_sn, team_codes):
+            live_score_snippet = cric_sn
+            live_score_source = "cricapi"
+    if not live_score_snippet:
         rss_snippet = _extract_live_score_snippet(news_bullets)
-        live_score_snippet = rss_snippet
-        live_score_source = "rss" if rss_snippet else "none"
+        if rss_snippet and _snippet_matches_team_codes(rss_snippet, team_codes):
+            live_score_snippet = rss_snippet
+            live_score_source = "rss" if rss_snippet else "none"
 
     live_score_struct: dict[str, Any] | None = None
     match_status: str = "unknown"
-    if scrape_struct:
+    if scrape_struct and live_score_source == "cricbuzz_scrape":
         live_score_struct = {
             k: v
             for k, v in scrape_struct.items()

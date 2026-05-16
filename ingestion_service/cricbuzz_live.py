@@ -25,13 +25,40 @@ import httpx
 
 CRICBUZZ_LIVE_URL = "https://www.cricbuzz.com/cricket-match/live-scores"
 
+# Cricbuzz blocks often spell out franchise names; fixture queries use short codes.
+_IPL_CODE_ALIASES: dict[str, tuple[str, ...]] = {
+    "CSK": ("CSK", "CHENNAI", "SUPER KINGS"),
+    "MI": ("MI", "MUMBAI", "INDIANS"),
+    "RCB": ("RCB", "BANGALORE", "BENGALURU", "CHALLENGERS"),
+    "KKR": ("KKR", "KOLKATA", "KNIGHT RIDERS", "KNIGHT"),
+    "DC": ("DC", "DELHI", "CAPITALS"),
+    "PBKS": ("PBKS", "PUNJAB", "KINGS"),
+    "RR": ("RR", "RAJASTHAN", "ROYALS"),
+    "SRH": ("SRH", "HYDERABAD", "SUNRISERS"),
+    "GT": ("GT", "GUJARAT", "TITANS"),
+    "LSG": ("LSG", "LUCKNOW", "SUPER GIANTS", "GIANTS"),
+}
+
+
+def _block_matches_team_codes(block: str, codes: list[str]) -> bool:
+    """True when the text block plausibly refers to this fixture (codes or city names)."""
+    if len(codes) < 2:
+        return True
+    up = block.upper()
+    for code in codes[:2]:
+        aliases = _IPL_CODE_ALIASES.get(code.upper(), (code.upper(),))
+        if not any(alias in up for alias in aliases):
+            return False
+    return True
+
+
 _USER_AGENTS: list[str] = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
 ]
 
-_CACHE_TTL_SEC = 25.0
+_CACHE_TTL_SEC = 10.0
 _REQUEST_TIMEOUT_SEC = 8.0
 
 _response_cache: dict[str, tuple[float, str]] = {}
@@ -241,7 +268,16 @@ def _build_struct(block: str, tokens: list[str]) -> dict[str, Any] | None:
             rrr = round((runs_needed / balls_left) * 6, 2)
 
     fmt = _detect_format(block)
+    chase_active = (
+        second_innings_present
+        and target is not None
+        and runs is not None
+        and runs < target
+        and wkts < 10
+    )
     status = _detect_status(block)
+    if chase_active and status == "completed":
+        status = "live"
     if target is not None and runs is not None and runs >= target and second_innings_present:
         status = "completed"
 
@@ -299,10 +335,11 @@ def _build_struct(block: str, tokens: list[str]) -> dict[str, Any] | None:
     return out
 
 
-async def _fetch_html(client: httpx.AsyncClient) -> str | None:
-    cached = _response_cache.get(CRICBUZZ_LIVE_URL)
-    if cached and (time.time() - cached[0]) < _CACHE_TTL_SEC:
-        return cached[1]
+async def _fetch_html(client: httpx.AsyncClient, *, skip_cache: bool = False) -> str | None:
+    if not skip_cache:
+        cached = _response_cache.get(CRICBUZZ_LIVE_URL)
+        if cached and (time.time() - cached[0]) < _CACHE_TTL_SEC:
+            return cached[1]
 
     ua = _USER_AGENTS[int(time.time()) % len(_USER_AGENTS)]
     try:
@@ -333,6 +370,8 @@ async def fetch_cricbuzz_live(
     client: httpx.AsyncClient,
     *,
     tokens: list[str],
+    required_team_codes: list[str] | None = None,
+    skip_cache: bool = False,
 ) -> dict[str, Any]:
     """Return ``{"struct": ..., "error": ..., "ok": bool}``.
 
@@ -342,7 +381,7 @@ async def fetch_cricbuzz_live(
     if not is_enabled():
         return {"struct": None, "error": None, "ok": False, "disabled": True}
 
-    html = await _fetch_html(client)
+    html = await _fetch_html(client, skip_cache=skip_cache)
     if html is None:
         return {"struct": None, "error": "fetch_failed", "ok": False}
 
@@ -352,10 +391,27 @@ async def fetch_cricbuzz_live(
     except (re.error, ValueError) as e:  # noqa: BLE001
         return {"struct": None, "error": f"parse_failed: {e}", "ok": False}
 
+    req_codes = [
+        str(c).strip().upper()
+        for c in (required_team_codes or [])
+        if c and str(c).strip()
+    ]
+    if len(req_codes) < 2 and tokens:
+        # Derive 2–4 letter codes from tokens when teams= wasn't passed.
+        req_codes = list(
+            dict.fromkeys(
+                t.upper()
+                for t in tokens
+                if re.fullmatch(r"[A-Z]{2,4}", str(t).strip().upper())
+            )
+        )[:2]
+
     candidates: list[dict[str, Any]] = []
     for block in blocks:
         rel = _score_relevance(block, tokens)
         if rel < 1 and tokens:
+            continue
+        if len(req_codes) >= 2 and not _block_matches_team_codes(block, req_codes):
             continue
         struct = _build_struct(block, tokens)
         if struct is None:

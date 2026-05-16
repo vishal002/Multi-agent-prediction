@@ -65,6 +65,9 @@ import { fileURLToPath } from "node:url";
 import * as Sentry from "@sentry/node";
 import { ImageResponse } from "@vercel/og";
 import { withCache, TTL } from "./lib/cache.js";
+import { inningsFromInningField, parseLiveScoreSnippet } from "./lib/liveScoreParse.mjs";
+
+export { parseLiveScoreSnippet };
 import { forwardLiteLLM, liteLLMEnabled } from "./lib/litellmForward.mjs";
 import { redis } from "./lib/redis.js";
 import { sanitizeAnthropicMessagesBody } from "./lib/sanitize.js";
@@ -2672,84 +2675,6 @@ function isMainServerModule() {
  *   innings: 1 | 2 | null,
  * } | null}
  */
-export function parseLiveScoreSnippet(snippet, fixtureTeams) {
-  if (typeof snippet !== "string") return null;
-  const text = snippet.trim();
-  if (!text) return null;
-
-  // RSS/CricAPI scoreline forms we accept:
-  //   "LSG 82/2 (9.3 ov)"   "LSG 82/2 (9.3 overs)"   "82/2 (9.3 ov)"   "82/2 (9.3)"
-  // Team prefix is optional; overs MUST be present (we won't auto-fill the
-  // form if the source can't tell us how far the innings is).
-  const SCORE_WITH_OVERS =
-    /(?:\b([A-Z]{2,4})\s+)?\b(\d{1,3})\/(10|\d)\s*\(\s*(\d+(?:\.\d)?)(?:\s*(?:ov|overs?))?\s*\)/g;
-
-  /** @type {Array<{ team: string|null, runs: number, wickets: number, overs: string, idx: number }>} */
-  const matches = [];
-  let m;
-  while ((m = SCORE_WITH_OVERS.exec(text)) !== null) {
-    matches.push({
-      team: m[1] ? m[1].toUpperCase() : null,
-      runs: parseInt(m[2], 10),
-      wickets: parseInt(m[3], 10),
-      overs: m[4],
-      idx: m.index,
-    });
-  }
-  if (matches.length === 0) return null;
-
-  const codeA = (fixtureTeams?.codeA || "").toUpperCase();
-  const codeB = (fixtureTeams?.codeB || "").toUpperCase();
-  const fixtureCodes = new Set([codeA, codeB].filter(Boolean));
-
-  // Trust a leading 2–4 letter code only when it matches one of the fixture
-  // codes — otherwise it's likely a stray uppercase token (e.g. "LIVE").
-  const fixtureMatches = matches.filter((x) => x.team && fixtureCodes.has(x.team));
-
-  /** @type {typeof matches[number]} */
-  let chosen;
-  if (fixtureMatches.length === 1) {
-    chosen = fixtureMatches[0];
-  } else if (fixtureMatches.length >= 2) {
-    // Two team-tagged scorelines (e.g. "SRH 242/2 (20 ov) · DC 195/9 (15.4 ov)")
-    // → the *last* in text order is typically the side currently batting.
-    chosen = fixtureMatches[fixtureMatches.length - 1];
-  } else {
-    // No fixture-tagged scoreline — fall back to the last bare scoreline.
-    chosen = matches[matches.length - 1];
-  }
-
-  let batting_team = chosen.team && fixtureCodes.has(chosen.team) ? chosen.team : null;
-  /** @type {string | null} */
-  let bowling_team = null;
-  if (batting_team) {
-    bowling_team = batting_team === codeA ? codeB : batting_team === codeB ? codeA : null;
-  }
-
-  /** @type {1 | 2 | null} */
-  let innings = null;
-  if (/\b2nd\s+innings?\b/i.test(text)) innings = 2;
-  else if (/\b1st\s+innings?\b/i.test(text)) innings = 1;
-  else if (
-    /\b(chasing|target\s*[:\-]?\s*\d+|RRR|req(?:uired)?\s*(?:run\s*)?rate|need\s+\d+\s+(?:runs?|more|in\s+\d+)|DLS)\b/i.test(
-      text,
-    )
-  ) {
-    innings = 2;
-  } else if (fixtureMatches.length >= 2) {
-    // Two team-tagged scorelines → second innings is in progress (or finished).
-    innings = 2;
-  }
-
-  return {
-    runs: chosen.runs,
-    wickets: chosen.wickets,
-    overs: chosen.overs,
-    batting_team,
-    bowling_team,
-    innings,
-  };
-}
 
 export async function warRoomHttpHandler(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host}`);
@@ -2888,25 +2813,48 @@ export async function warRoomHttpHandler(req, res) {
       }
 
       // Use pre-extracted snippet from ingestion service if present
-      const preExtracted = data.live_score_snippet || "";
+      const preExtracted =
+        typeof data.live_score_snippet === "string" ? data.live_score_snippet.trim() : "";
+      const ingestLiveSource =
+        typeof data.live_score_source === "string" ? data.live_score_source : "";
+      const structEarly =
+        data.live_score_struct && typeof data.live_score_struct === "object"
+          ? data.live_score_struct
+          : null;
 
-      let best = preExtracted;
+      // When Cricbuzz/CricAPI already picked this fixture, do not let unrelated
+      // RSS headlines (often richer regex-wise) override the structured snippet.
+      const trustIngestionSnippet =
+        Boolean(structEarly) ||
+        ingestLiveSource === "cricbuzz_scrape" ||
+        ingestLiveSource === "cricapi";
+
+      let snippet = "";
       let bestScore = preExtracted ? scoreRichness(preExtracted) : 0;
+      if (trustIngestionSnippet && preExtracted) {
+        snippet = preExtracted.slice(0, 400);
+        bestScore = scoreRichness(preExtracted);
+      } else {
+        let best = preExtracted;
+        bestScore = preExtracted ? scoreRichness(preExtracted) : 0;
 
-      // Also scan all news bullets ourselves (full text, not stripped)
-      const bullets = Array.isArray(data.news_bullets) ? data.news_bullets : [];
-      for (const b of bullets) {
-        const plain = String(b).replace(/^\[[^\]]+\]\s*/, "").trim();
-        const s = scoreRichness(plain);
-        if (s > bestScore) { bestScore = s; best = plain; }
+        const bullets = Array.isArray(data.news_bullets) ? data.news_bullets : [];
+        for (const b of bullets) {
+          const plain = String(b).replace(/^\[[^\]]+\]\s*/, "").trim();
+          const s = scoreRichness(plain);
+          if (s > bestScore) {
+            bestScore = s;
+            best = plain;
+          }
+        }
+
+        snippet =
+          bestScore >= 5 ||
+          (bestScore >= 4 && best) ||
+          (bestScore >= 3 && best && SCORE_LOOSE.test(best))
+            ? best.slice(0, 400)
+            : "";
       }
-
-      const snippet =
-        bestScore >= 5 ||
-        (bestScore >= 4 && best) ||
-        (bestScore >= 3 && best && SCORE_LOOSE.test(best))
-          ? best.slice(0, 400)
-          : "";
 
       const fixtureCodes = teamsParam
         .split(",")
@@ -2925,13 +2873,16 @@ export async function warRoomHttpHandler(req, res) {
           ? data.live_score_struct
           : null;
       const regexParsed = snippet ? parseLiveScoreSnippet(snippet, fixtureTeams) : null;
+      const inningField = struct?.inning ?? regexParsed?.innings ?? null;
+      const inningsNum = regexParsed?.innings ?? inningsFromInningField(inningField);
       const parsed = struct
         ? {
             runs: struct.runs ?? regexParsed?.runs ?? null,
             wickets: struct.wickets ?? regexParsed?.wickets ?? null,
             overs: struct.overs ?? regexParsed?.overs ?? null,
             target: struct.target ?? null,
-            inning: struct.inning ?? regexParsed?.innings ?? null,
+            inning: inningField,
+            innings: inningsNum,
             format: struct.format ?? null,
             batting_team: struct.batting_team || regexParsed?.batting_team || null,
             bowling_team: struct.bowling_team || regexParsed?.bowling_team || null,
@@ -2977,12 +2928,14 @@ export async function warRoomHttpHandler(req, res) {
         })
       );
     } catch (e) {
-      res.writeHead(503, {
-        "Content-Type": "application/json; charset=utf-8",
-        ...corsHeaders(req),
-        "Cache-Control": "no-store",
-      });
-      res.end(JSON.stringify({ snippet: "", error: e instanceof Error ? e.message : String(e) }));
+      if (!res.headersSent) {
+        res.writeHead(503, {
+          "Content-Type": "application/json; charset=utf-8",
+          ...corsHeaders(req),
+          "Cache-Control": "no-store",
+        });
+        res.end(JSON.stringify({ snippet: "", error: e instanceof Error ? e.message : String(e) }));
+      }
     }
     return;
   }

@@ -4582,6 +4582,68 @@ function extractLiveStateFromCtx(ctx) {
  */
 
 /**
+/**
+ * Browser copy of `lib/liveScoreParse.mjs` — parse scorelines from RSS/snippet text.
+ * @param {string} snippet
+ * @param {{ codeA: string, codeB: string }} fixtureTeams
+ * @returns {{ runs: number, wickets: number, overs: string, batting_team: string | null, bowling_team: string | null, innings: 1 | 2 | null } | null}
+ */
+function parseLiveScoreSnippetClient(snippet, fixtureTeams) {
+  if (typeof snippet !== "string") return null;
+  const text = snippet.trim();
+  if (!text) return null;
+  const SCORE_WITH_OVERS =
+    /(?:\b([A-Z]{2,4})\s+)?\b(\d{1,3})\/(10|\d)\s*\(\s*(\d+(?:\.\d)?)(?:\s*(?:ov|overs?))?\s*\)/g;
+  /** @type {Array<{ team: string|null, runs: number, wickets: number, overs: string }>} */
+  const matches = [];
+  let m;
+  while ((m = SCORE_WITH_OVERS.exec(text)) !== null) {
+    matches.push({
+      team: m[1] ? m[1].toUpperCase() : null,
+      runs: parseInt(m[2], 10),
+      wickets: parseInt(m[3], 10),
+      overs: m[4],
+    });
+  }
+  if (!matches.length) return null;
+  const codeA = (fixtureTeams?.codeA || "").toUpperCase();
+  const codeB = (fixtureTeams?.codeB || "").toUpperCase();
+  const fixtureCodes = new Set([codeA, codeB].filter(Boolean));
+  const fixtureMatches = matches.filter((x) => x.team && fixtureCodes.has(x.team));
+  const chosen =
+    fixtureMatches.length === 1
+      ? fixtureMatches[0]
+      : fixtureMatches.length >= 2
+        ? fixtureMatches[fixtureMatches.length - 1]
+        : matches[matches.length - 1];
+  let batting_team = chosen.team && fixtureCodes.has(chosen.team) ? chosen.team : null;
+  let bowling_team = null;
+  if (batting_team) {
+    bowling_team = batting_team === codeA ? codeB : batting_team === codeB ? codeA : null;
+  }
+  let innings = null;
+  if (/\b2nd\s+innings?\b/i.test(text)) innings = 2;
+  else if (/\b1st\s+innings?\b/i.test(text)) innings = 1;
+  else if (
+    /\b(chasing|target\s*[:\-]?\s*\d+|RRR|req(?:uired)?\s*(?:run\s*)?rate|need\s+\d+\s+(?:runs?|more|in\s+\d+)|DLS)\b/i.test(
+      text,
+    )
+  ) {
+    innings = 2;
+  } else if (fixtureMatches.length >= 2) {
+    innings = 2;
+  }
+  return {
+    runs: chosen.runs,
+    wickets: chosen.wickets,
+    overs: chosen.overs,
+    batting_team,
+    bowling_team,
+    innings,
+  };
+}
+
+/**
  * Normalize server `parsed` payload from GET /api/live-score.
  * Accepts both the legacy regex shape (innings: 1|2, overs: string) and the
  * richer Cricbuzz-scrape shape (inning: "1st"|"2nd", overs: number, plus
@@ -4653,6 +4715,123 @@ function normalizeLiveScoreParsed(raw) {
 }
 
 /**
+ * Fill runs_needed / balls_left / RRR when the server sent target + overs only.
+ * @param {LiveScoreParsed} parsed
+ * @returns {LiveScoreParsed}
+ */
+function enrichParsedChaseMetrics(parsed) {
+  if (!parsed || parsed.target == null || parsed.runs == null || !parsed.overs) return parsed;
+  const fmt = String(parsed.format || "T20").toUpperCase();
+  const totalOvers = fmt === "TEST" ? 90 : fmt === "ODI" ? 50 : 20;
+  const oversFloat = parseFloat(String(parsed.overs));
+  if (!Number.isFinite(oversFloat)) return parsed;
+  const completedBalls = Math.floor(oversFloat) * 6 + Math.round((oversFloat % 1) * 10);
+  const ballsLeft = Math.max(0, totalOvers * 6 - completedBalls);
+  const runsNeeded = Math.max(0, parsed.target - parsed.runs);
+  if (parsed.runs_needed == null) parsed.runs_needed = runsNeeded;
+  if (parsed.balls_left == null) parsed.balls_left = ballsLeft;
+  if (parsed.rrr == null && ballsLeft > 0 && runsNeeded > 0) {
+    parsed.rrr = (runsNeeded / ballsLeft) * 6;
+  }
+  if (parsed.crr == null && oversFloat > 0) {
+    parsed.crr = parsed.runs / oversFloat;
+  }
+  if (parsed.innings == null && parsed.target != null) parsed.innings = 2;
+  return inferDefendingInnings(parsed, null);
+}
+
+/**
+ * Fill first-innings (defending) totals for the dual scoreboard when only the chase is known.
+ * @param {LiveScoreParsed} parsed
+ * @param {{ codeA: string, codeB: string } | null} teams
+ * @returns {LiveScoreParsed}
+ */
+function inferDefendingInnings(parsed, teams) {
+  if (!parsed || parsed.innings !== 2) return parsed;
+
+  const defRunsRaw = /** @type {HTMLInputElement|null} */ (document.getElementById("lfDefRuns"))?.value.trim() || "";
+  const defWktsRaw = /** @type {HTMLInputElement|null} */ (document.getElementById("lfDefWickets"))?.value.trim() || "";
+  const defOversRaw = /** @type {HTMLInputElement|null} */ (document.getElementById("lfDefOvers"))?.value.trim() || "";
+  if (defRunsRaw) {
+    const dr = parseInt(defRunsRaw, 10);
+    const dw = defWktsRaw ? parseInt(defWktsRaw, 10) : 10;
+    const bat = (parsed.batting_team || "").toUpperCase();
+    let defCode = (parsed.bowling_team || "").toUpperCase();
+    if (!defCode && teams) {
+      defCode = bat === teams.codeA.toUpperCase() ? teams.codeB.toUpperCase() : teams.codeA.toUpperCase();
+    }
+    if (Number.isFinite(dr) && defCode) {
+      parsed.inn1_team = defCode;
+      parsed.inn1_runs = dr;
+      parsed.inn1_wickets = Number.isFinite(dw) ? Math.max(0, Math.min(10, dw)) : 10;
+      parsed.inn1_overs = defOversRaw || (parsed.format === "ODI" ? "50" : "20");
+      return parsed;
+    }
+  }
+
+  if (parsed.inn1_team && parsed.inn1_runs != null) return parsed;
+
+  const bat = (parsed.batting_team || "").toUpperCase();
+  let defCode = (parsed.bowling_team || "").toUpperCase();
+  if (!defCode && teams) {
+    defCode = bat === teams.codeA.toUpperCase() ? teams.codeB.toUpperCase() : teams.codeA.toUpperCase();
+  }
+  if (!defCode || parsed.target == null) return parsed;
+
+  const fmt = String(parsed.format || "T20").toUpperCase();
+  const defOvers = fmt === "ODI" ? "50" : "20";
+  parsed.inn1_team = defCode;
+  // Target field = runs to win; first-innings total is one less in standard cricket.
+  parsed.inn1_runs = Math.max(0, parsed.target - 1);
+  if (parsed.inn1_wickets == null) parsed.inn1_wickets = 10;
+  if (parsed.inn1_overs == null) parsed.inn1_overs = defOvers;
+  return parsed;
+}
+
+/**
+ * @param {LiveScoreParsed | null} parsed
+ * @param {{ teamA: string, teamB: string, codeA: string, codeB: string } | null} teams
+ * @returns {LiveScoreParsed | null}
+ */
+function finalizeLiveParsed(parsed, teams) {
+  if (!parsed) return null;
+  let p = enrichParsedChaseMetrics({ ...parsed });
+  p = inferDefendingInnings(p, teams);
+  return p;
+}
+
+/** @param {LiveScoreParsed | null} parsed */
+function isChaseInProgress(parsed) {
+  if (!parsed || parsed.target == null || parsed.runs == null) return false;
+  const wkts = typeof parsed.wickets === "number" ? parsed.wickets : 0;
+  return parsed.runs < parsed.target && wkts < 10;
+}
+
+/**
+ * @param {{ match_status?: string, source?: string }} detail
+ * @param {LiveScoreParsed | null} parsed
+ */
+function shouldStopLivePoll(detail, parsed) {
+  const st = String(detail.match_status || "").toLowerCase();
+  if (st === "innings_break" || st === "live") return false;
+  if (st !== "completed") return false;
+  if (isChaseInProgress(parsed)) return false;
+  return true;
+}
+
+/** @param {string | null | undefined} source */
+function formatLiveScoreSource(source) {
+  const s = String(source || livePoll.lastSource || "").toLowerCase();
+  if (s === "cricbuzz_scrape" || s === "cricbuzz") return "source: Cricbuzz live";
+  if (s === "cricapi") return "source: CricAPI";
+  if (s === "rss") return "source: RSS";
+  if (s === "manual") return "source: manual entry";
+  if (s === "none") return "source: none";
+  if (s) return `source: ${s}`;
+  return "source: —";
+}
+
+/**
  * Deterministic over-by-over win-probability calculator.
  *
  * Pure JS, zero LLM cost. Calibrated against the RRR thresholds the Judge
@@ -4720,11 +4899,12 @@ function computeWinProbability(parsed) {
 }
 
 /** Latest structured live score + status for the fixture bar (from /api/live-score or the live form). */
-const liveFixtureChrome = /** @type {{ matchKey: string, match_status: string | null, parsed: LiveScoreParsed | null, snippet: string }} */ ({
+const liveFixtureChrome = /** @type {{ matchKey: string, match_status: string | null, parsed: LiveScoreParsed | null, snippet: string, source: string | null }} */ ({
   matchKey: "",
   match_status: null,
   parsed: null,
   snippet: "",
+  source: null,
 });
 
 function isFixtureDateStrictlyFuture(match) {
@@ -4774,7 +4954,9 @@ function buildParsedFromLiveForm(teams) {
     balls_left: null,
     runs_needed: null,
   };
-  return normalizeLiveScoreParsed(raw);
+  const parsed = normalizeLiveScoreParsed(raw);
+  if (!parsed) return null;
+  return finalizeLiveParsed(parsed, teams);
 }
 
 /**
@@ -4785,7 +4967,9 @@ function buildParsedFromLiveForm(teams) {
  */
 function resolveParsedForLiveChrome(match, teams) {
   const mk = normalizeFixtureLabelKey(String(match || "").trim());
-  if (liveFixtureChrome.matchKey === mk && liveFixtureChrome.parsed) return liveFixtureChrome.parsed;
+  if (liveFixtureChrome.matchKey === mk && liveFixtureChrome.parsed) {
+    return finalizeLiveParsed(liveFixtureChrome.parsed, teams);
+  }
   return buildParsedFromLiveForm(teams);
 }
 
@@ -4840,6 +5024,10 @@ function applyLiveScoreDetailToFixtureChrome(match, teams, detail) {
   if (detail.parsed) liveFixtureChrome.parsed = detail.parsed;
   if (detail.snippet != null && String(detail.snippet).trim()) {
     liveFixtureChrome.snippet = String(detail.snippet).trim();
+  }
+  if (typeof detail.source === "string" && detail.source.trim()) {
+    liveFixtureChrome.source = detail.source.trim();
+    livePoll.lastSource = detail.source.trim();
   }
   syncMatchLiveChrome(match, teams);
 }
@@ -5048,6 +5236,16 @@ function syncLiveScoreboard(_match, teams, show, parsed) {
     if (parsed?.batting_team?.toUpperCase() === c && parsed.runs != null && parsed.wickets != null && parsed.overs) {
       return `${parsed.runs}/${parsed.wickets} (${formatOversForDisplay(parsed.overs)})`;
     }
+    if (
+      parsed?.innings === 2 &&
+      parsed.target != null &&
+      parsed.batting_team?.toUpperCase() !== c &&
+      parsed.inn1_runs != null
+    ) {
+      const wk = parsed.inn1_wickets != null ? parsed.inn1_wickets : "?";
+      const ov = parsed.inn1_overs != null ? formatOversForDisplay(parsed.inn1_overs) : "20";
+      return `${parsed.inn1_runs}/${wk} (${ov})`;
+    }
     if (dualSnip) {
       const hit = dualSnip.find((h) => h.code === c);
       if (hit) return `${hit.runs}/${hit.wkts} (${hit.overs})`;
@@ -5168,6 +5366,15 @@ function scheduleSyncLiveChromeFromForm() {
   _fixtureLiveFormSyncTimer = window.setTimeout(() => {
     _fixtureLiveFormSyncTimer = 0;
     syncMatchLiveChrome(match, teams);
+    const parsed = finalizeLiveParsed(buildParsedFromLiveForm(teams), teams);
+    if (parsed && typeof livePoll !== "undefined" && livePoll.running && livePoll.match === match) {
+      liveFixtureChrome.parsed = parsed;
+      renderLiveTicker(parsed, {
+        source: liveFixtureChrome.source || "manual",
+        match_status: liveFixtureChrome.match_status || "",
+        fromPoll: false,
+      });
+    }
   }, 350);
 }
 
@@ -5190,7 +5397,7 @@ function initFixtureLiveChromeListeners() {
     if (liveFixtureChrome.matchKey && liveFixtureChrome.matchKey !== mk) return;
     liveFixtureChrome.matchKey = mk;
     if (d.match_status != null) liveFixtureChrome.match_status = String(d.match_status);
-    if (d.parsed) liveFixtureChrome.parsed = d.parsed;
+    if (d.parsed) liveFixtureChrome.parsed = finalizeLiveParsed(d.parsed, teams);
     if (d.snippet != null && String(d.snippet).trim()) {
       liveFixtureChrome.snippet = String(d.snippet).trim();
     }
@@ -5236,6 +5443,16 @@ function applyLiveScoreParsedToForm(parsed, teams) {
     innSel.value = parsed.innings === 2 ? "2" : "1";
     innSel.dispatchEvent(new Event("change", { bubbles: true }));
   }
+
+  const targetEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfTarget"));
+  if (targetEl && parsed.target != null) targetEl.value = String(parsed.target);
+
+  const defRunsEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfDefRuns"));
+  const defWktsEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfDefWickets"));
+  const defOversEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfDefOvers"));
+  if (parsed.inn1_runs != null && defRunsEl) defRunsEl.value = String(parsed.inn1_runs);
+  if (parsed.inn1_wickets != null && defWktsEl) defWktsEl.value = String(parsed.inn1_wickets);
+  if (parsed.inn1_overs != null && defOversEl) defOversEl.value = String(parsed.inn1_overs);
 }
 
 /**
@@ -5281,8 +5498,23 @@ async function fetchLiveScoreDetail(match, teams, opts) {
     }
     const sn = typeof data.snippet === "string" ? data.snippet.trim() : "";
     const hint = typeof data.hint === "string" && data.hint.trim() ? data.hint.trim() : undefined;
-    const parsed = normalizeLiveScoreParsed(data.parsed);
+    let parsed = normalizeLiveScoreParsed(data.parsed);
+    if (parsed) parsed = finalizeLiveParsed(parsed, teams);
+    if (!parsed && sn) {
+      const rx = parseLiveScoreSnippetClient(sn, { codeA: teams.codeA, codeB: teams.codeB });
+      parsed = normalizeLiveScoreParsed(rx);
+      if (parsed) parsed = finalizeLiveParsed(parsed, teams);
+    }
+    if (parsed && sn) {
+      const metrics = parseLiveScoreText(sn);
+      if (metrics) {
+        if (parsed.rrr == null && metrics.rrr != null) parsed.rrr = metrics.rrr;
+        if (parsed.runs_needed == null && metrics.runsNeeded != null) parsed.runs_needed = metrics.runsNeeded;
+        if (parsed.balls_left == null && metrics.ballsLeft != null) parsed.balls_left = metrics.ballsLeft;
+      }
+    }
     const source = typeof data.source === "string" ? data.source : undefined;
+    if (source) livePoll.lastSource = source;
     const matchStatus = typeof data.match_status === "string" ? data.match_status : undefined;
     const fetchedAt = typeof data.fetched_at === "string" ? data.fetched_at : null;
     return { snippet: sn, hint, parsed, source, match_status: matchStatus, fetched_at: fetchedAt };
@@ -6053,8 +6285,11 @@ async function runWarRoom() {
     } catch { /* best-effort */ }
   }
 
-  // Show a warning banner when no live data is available so the user can paste it manually
-  showNoLiveDataWarning(!liveState);
+  const hasLiveChrome =
+    Boolean(liveState) ||
+    hasLivePlaySignal(match, teams) ||
+    Boolean(liveFixtureChrome.parsed?.runs != null && liveFixtureChrome.parsed?.overs);
+  showNoLiveDataWarning(!hasLiveChrome);
 
   const insights = {};
   /** @type {Record<string, string>} agent.id -> trimmed/clipped evidence string */
@@ -6415,9 +6650,11 @@ function initMatchAutocomplete() {
       li.addEventListener("mousedown", (e) => {
         e.preventDefault();
         input.value = hit.label;
+        input.dispatchEvent(new Event("change", { bubbles: true }));
         closeList();
         updateClearBtn();
         _syncControlsLiveTabVisibility();
+        syncLivePollForCurrentFixture();
         // Completed OR past matches go straight to the result/past-match view —
         // skip the war-room agents entirely (date-based guard catches missing
         // `completed` flags so we never run agents on a finished fixture).
@@ -6544,9 +6781,11 @@ function initMatchAutocomplete() {
       e.preventDefault();
       const selectedHit = filteredHits[activeIndex];
       input.value = selectedHit.label;
+      input.dispatchEvent(new Event("change", { bubbles: true }));
       closeList();
       updateClearBtn();
       _syncControlsLiveTabVisibility();
+      syncLivePollForCurrentFixture();
       if (selectedHit.completed && selectedHit.result) runWarRoom();
       return;
     }
@@ -7194,8 +7433,13 @@ function initLivePanel() {
   const targetWrap = document.getElementById("lfTargetWrap");
 
   if (innSel && targetWrap) {
+    const defFields = document.querySelectorAll(".lf-def-field");
     const updateTargetVisibility = () => {
-      targetWrap.style.display = innSel.value === "2" ? "" : "none";
+      const on = innSel.value === "2";
+      targetWrap.style.display = on ? "" : "none";
+      defFields.forEach((el) => {
+        el.hidden = !on;
+      });
     };
     innSel.addEventListener("change", updateTargetVisibility);
     updateTargetVisibility();
@@ -7286,6 +7530,7 @@ async function runInitialBootAfterDom() {
   void refreshFreemiumPill();
   void loadRecentVerdictsPanel();
   if (didAutoFillMatch) await maybeAutoRunWarRoomAfterPopulate();
+  syncLivePollForCurrentFixture();
 }
 
 /** Pull-to-refresh (full reload) when scrolled to top on narrow viewports. */
@@ -7567,9 +7812,11 @@ async function applyResolvedSharePackToInput(pack) {
   }
   try {
     input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
   } catch {
     /* */ 
   }
+  syncLivePollForCurrentFixture();
   return true;
 }
 
@@ -7665,9 +7912,11 @@ async function applyShareQueryParam() {
   }
   try {
     input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
   } catch {
     /* */ 
   }
+  syncLivePollForCurrentFixture();
 }
 
 /**
@@ -7811,6 +8060,7 @@ async function autoPopulateTodayMatch() {
     }
   }
 
+  syncLivePollForCurrentFixture();
   return true;
 }
 
@@ -8150,8 +8400,8 @@ function initLiveScoreBar() {
 // cost. The Bull/Bear debate stays one-shot; this just keeps the score and
 // win-percent fresh between debate runs, like Google's live cricket card.
 
-const LIVE_POLL_INTERVAL_MS = 30_000;
-const LIVE_POLL_STALE_THRESHOLD_MS = 90_000;
+const LIVE_POLL_INTERVAL_MS = 12_000;
+const LIVE_POLL_STALE_THRESHOLD_MS = 45_000;
 
 const livePoll = /** @type {{
  *   timer: number | null,
@@ -8163,6 +8413,7 @@ const livePoll = /** @type {{
  *   teams: { teamA: string, teamB: string, codeA: string, codeB: string } | null,
  *   lastSignature: string,
  *   lastUpdateAt: number | null,
+ *   lastSource: string,
  *   inFlight: boolean,
  *   trajectory: Array<{ overs: number, wp: number, ts: number }>,
  * }} */ ({
@@ -8175,6 +8426,7 @@ const livePoll = /** @type {{
   teams: null,
   lastSignature: "",
   lastUpdateAt: null,
+  lastSource: "",
   inFlight: false,
   trajectory: [],
 });
@@ -8221,18 +8473,23 @@ function liveSignature(parsed) {
     parsed.overs ?? "",
     parsed.target ?? "",
     parsed.innings ?? "",
+    parsed.runs_needed ?? "",
+    parsed.balls_left ?? "",
+    parsed.rrr ?? "",
   ].join("|");
 }
 
 /**
  * Render the live ticker from the latest parsed payload.
  * @param {LiveScoreParsed} parsed
- * @param {{ source?: string, match_status?: string }} meta
+ * @param {{ source?: string, match_status?: string, fromPoll?: boolean }} meta
  */
 function renderLiveTicker(parsed, meta) {
   showLiveTicker();
   const el = liveTickerEl();
   if (!el) return;
+
+  if (meta.source) livePoll.lastSource = meta.source;
 
   const bat = parsed.batting_team || "Bat";
   const score = `${bat} ${parsed.runs ?? "?"}/${parsed.wickets ?? "?"}` +
@@ -8251,24 +8508,23 @@ function renderLiveTicker(parsed, meta) {
 
   const wp = computeWinProbability(parsed);
   if (wp == null) {
-    setLiveTickerText("liveTickerWp", "Win% —");
+    const wpLabel =
+      parsed.innings === 2 && parsed.target == null
+        ? "Win% · chase pending"
+        : parsed.innings === 1 || parsed.innings == null
+          ? "Win% · 1st inn"
+          : "Win% —";
+    setLiveTickerText("liveTickerWp", wpLabel);
   } else {
     const bowling = parsed.bowling_team || "Bowl";
     setLiveTickerText("liveTickerWp", `${bat} ${wp}% · ${bowling} ${100 - wp}%`);
   }
 
-  const sourceLabel = (() => {
-    const s = (meta.source || "").toLowerCase();
-    if (s === "cricbuzz_scrape") return "source: Cricbuzz live";
-    if (s === "cricapi") return "source: CricAPI";
-    if (s === "rss") return "source: RSS";
-    if (s === "none") return "source: none";
-    return "source: —";
-  })();
-  setLiveTickerText("liveTickerSource", sourceLabel);
+  setLiveTickerText("liveTickerSource", formatLiveScoreSource(meta.source));
 
   const status = (meta.match_status || "").toLowerCase();
-  if (status === "completed") {
+  const chaseLive = isChaseInProgress(parsed);
+  if (status === "completed" && !chaseLive) {
     el.classList.add("live-ticker--locked");
     setLiveTickerText("liveTickerUpdated", "match ended — feed locked");
   } else if (status === "innings_break") {
@@ -8276,8 +8532,14 @@ function renderLiveTicker(parsed, meta) {
     setLiveTickerText("liveTickerUpdated", "innings break");
   } else {
     el.classList.remove("live-ticker--locked");
-    livePoll.lastUpdateAt = Date.now();
-    setLiveTickerText("liveTickerUpdated", formatAgo(0));
+    if (meta.fromPoll) {
+      livePoll.lastUpdateAt = Date.now();
+      setLiveTickerText("liveTickerUpdated", formatAgo(0));
+    } else if (livePoll.lastUpdateAt) {
+      setLiveTickerText("liveTickerUpdated", formatAgo(Date.now() - livePoll.lastUpdateAt));
+    } else {
+      setLiveTickerText("liveTickerUpdated", "awaiting live feed…");
+    }
     el.classList.remove("live-ticker--stale");
   }
 
@@ -8312,13 +8574,36 @@ function refreshLiveTickerFreshnessLabel() {
   }
 }
 
+/** @param {string} message */
+function showLiveTickerFetchError(message) {
+  showLiveTicker();
+  const el = liveTickerEl();
+  if (el) el.classList.remove("live-ticker--locked");
+  setLiveTickerText("liveTickerScore", String(message || "live feed unavailable").slice(0, 120));
+  setLiveTickerText("liveTickerRrr", "—");
+  setLiveTickerText("liveTickerWp", "Win% —");
+  setLiveTickerText("liveTickerSource", "source: —");
+  livePoll.lastUpdateAt = Date.now();
+  setLiveTickerText("liveTickerUpdated", formatAgo(0));
+}
+
 async function pollLiveScoreOnce() {
   if (livePoll.inFlight || livePoll.paused) return;
   if (!livePoll.match || !livePoll.teams) return;
   livePoll.inFlight = true;
   try {
     const detail = await fetchLiveScoreDetail(livePoll.match, livePoll.teams, { fresh: true });
-    if (!detail) return;
+    if (!detail) {
+      showLiveTickerFetchError("live feed unavailable");
+      return;
+    }
+
+    if (detail.unreachable) {
+      showLiveTickerFetchError(
+        detail.hint || "ingestion offline — run npm run ingestion:dev",
+      );
+      return;
+    }
 
     if (detail.snippet) {
       const input = /** @type {HTMLInputElement|null} */ (document.getElementById("liveScoreInput"));
@@ -8330,19 +8615,21 @@ async function pollLiveScoreOnce() {
     }
 
     if (detail.parsed) {
-      const sig = liveSignature(detail.parsed);
+      const finalized = finalizeLiveParsed(detail.parsed, livePoll.teams);
+      const sig = liveSignature(finalized);
       const changed = sig !== livePoll.lastSignature;
       livePoll.lastSignature = sig;
-      renderLiveTicker(detail.parsed, {
+      renderLiveTicker(finalized, {
         source: detail.source,
         match_status: detail.match_status,
+        fromPoll: true,
       });
       if (changed) {
-        applyLiveScoreParsedToForm(detail.parsed, livePoll.teams);
+        applyLiveScoreParsedToForm(finalized, livePoll.teams);
         document.dispatchEvent(
           new CustomEvent("livescore:update", {
             detail: {
-              parsed: detail.parsed,
+              parsed: finalized,
               source: detail.source || null,
               match_status: detail.match_status || null,
               snippet: detail.snippet || "",
@@ -8355,17 +8642,33 @@ async function pollLiveScoreOnce() {
       setLiveTickerText("liveTickerScore", detail.snippet.slice(0, 80));
       setLiveTickerText("liveTickerRrr", "");
       setLiveTickerText("liveTickerWp", "Win% —");
-      setLiveTickerText("liveTickerSource", `source: ${detail.source || "—"}`);
+      setLiveTickerText("liveTickerSource", formatLiveScoreSource(detail.source));
       livePoll.lastUpdateAt = Date.now();
+      setLiveTickerText("liveTickerUpdated", formatAgo(0));
+    } else {
+      const formParsed = finalizeLiveParsed(buildParsedFromLiveForm(livePoll.teams), livePoll.teams);
+      if (formParsed) {
+        renderLiveTicker(formParsed, {
+          source: liveFixtureChrome.source || "manual",
+          match_status: liveFixtureChrome.match_status || "",
+          fromPoll: true,
+        });
+        applyLiveScoreParsedToForm(formParsed, livePoll.teams);
+      } else {
+        showLiveTickerFetchError(
+          detail.hint || "no live feed for this fixture — paste score above or use Live match tab",
+        );
+      }
     }
 
     if (livePoll.match && livePoll.teams) {
       applyLiveScoreDetailToFixtureChrome(livePoll.match, livePoll.teams, detail);
     }
 
-    const status = (detail.match_status || "").toLowerCase();
-    if (status === "completed") {
+    if (shouldStopLivePoll(detail, finalizeLiveParsed(detail.parsed || null, livePoll.teams))) {
       stopLivePollLoop({ lock: true });
+    } else if (isChaseInProgress(detail.parsed || null)) {
+      livePoll.lockedMatch = null;
     }
   } catch {
     /* swallow — next tick retries */
@@ -8381,7 +8684,10 @@ async function pollLiveScoreOnce() {
  */
 function startLivePollLoop(match, teams) {
   if (!match || !teams) return;
-  if (livePoll.running && livePoll.match === match) return;
+  if (livePoll.running && livePoll.match === match) {
+    void pollLiveScoreOnce();
+    return;
+  }
   stopLivePollLoop();
   livePoll.match = match;
   livePoll.teams = teams;
@@ -8442,11 +8748,45 @@ function stopLivePollLoop(opts) {
  * banner on top of the verdict card, so we suppress them up front using
  * synchronous lookups (fallback rows, cached completed result, fixture date).
  */
+/** Start/stop the live ticker poll for whatever is in `#matchInput` now. */
+function syncLivePollForCurrentFixture() {
+  const matchInput = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+  if (!matchInput) return;
+  const match = matchInput.value.trim();
+  if (!isFixtureLiveCandidate(match)) {
+    stopLivePollLoop();
+    hideLiveTicker();
+    return;
+  }
+  if (!match) {
+    stopLivePollLoop();
+    hideLiveTicker();
+    return;
+  }
+  let teams;
+  try {
+    teams = parseTeamsFromMatch(match);
+  } catch {
+    stopLivePollLoop();
+    hideLiveTicker();
+    return;
+  }
+  if (!teams || !teams.codeA || !teams.codeB) return;
+  startLivePollLoop(match, teams);
+}
+
 function isFixtureLiveCandidate(match) {
   if (!match) return false;
-  if (livePoll.lockedMatch && livePoll.lockedMatch === match) return false;
 
   const t = String(match).trim();
+  if (livePoll.lockedMatch && livePoll.lockedMatch === t) {
+    const p = liveFixtureChrome.parsed;
+    if (isChaseInProgress(p)) {
+      livePoll.lockedMatch = null;
+    } else {
+      return false;
+    }
+  }
   if (!t) return false;
   const key = normalizeFixtureLabelKey(t);
 
@@ -8478,35 +8818,24 @@ function initLivePollLoop() {
   const liveInput = /** @type {HTMLInputElement|null} */ (document.getElementById("liveScoreInput"));
   if (!matchInput) return;
 
-  const tryStart = () => {
-    const match = matchInput.value.trim();
-    if (!isFixtureLiveCandidate(match)) {
-      stopLivePollLoop();
-      hideLiveTicker();
-      return;
-    }
-    if (!match) {
-      stopLivePollLoop();
-      hideLiveTicker();
-      return;
-    }
-    let teams;
-    try {
-      teams = parseTeamsFromMatch(match);
-    } catch {
-      return;
-    }
-    if (!teams || !teams.codeA || !teams.codeB) return;
-    startLivePollLoop(match, teams);
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let inputDebounce = null;
+  const scheduleSync = () => {
+    if (inputDebounce != null) clearTimeout(inputDebounce);
+    inputDebounce = setTimeout(() => {
+      inputDebounce = null;
+      syncLivePollForCurrentFixture();
+    }, 280);
   };
 
-  matchInput.addEventListener("change", tryStart);
-  matchInput.addEventListener("blur", tryStart);
+  matchInput.addEventListener("change", syncLivePollForCurrentFixture);
+  matchInput.addEventListener("blur", syncLivePollForCurrentFixture);
+  matchInput.addEventListener("input", scheduleSync);
 
   if (liveInput) {
     liveInput.addEventListener("input", () => {
       if (liveInput.value.trim() && matchInput.value.trim()) {
-        tryStart();
+        syncLivePollForCurrentFixture();
       }
     });
   }
@@ -8526,5 +8855,5 @@ function initLivePollLoop() {
     });
   }
 
-  setTimeout(tryStart, 800);
+  setTimeout(syncLivePollForCurrentFixture, 800);
 }
