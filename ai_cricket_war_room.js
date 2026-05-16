@@ -1794,11 +1794,37 @@ function externalHostReferrerPolicyAttr(url) {
   return "";
 }
 
+/**
+ * Assign team-logo `src` only when the resolved URL changes. Live polls and form
+ * sync call this path often; re-setting the same `src` re-fetches (especially with
+ * DevTools “Disable cache”).
+ * @param {HTMLImageElement} imgEl
+ * @param {string | null | undefined} url
+ * @returns {boolean} whether `src` was updated
+ */
+function applyTeamLogoToImg(imgEl, url) {
+  if (!imgEl) return false;
+  const next = String(url || "");
+  const prev = imgEl.dataset.teamLogoUrl || "";
+  if (prev === next) return false;
+  if (next) {
+    imgEl.dataset.teamLogoUrl = next;
+    if (/^https:\/\/([^/]+\.)?wikimedia\.org\//i.test(next)) imgEl.referrerPolicy = "no-referrer";
+    else imgEl.removeAttribute("referrerpolicy");
+    imgEl.src = next;
+  } else {
+    delete imgEl.dataset.teamLogoUrl;
+    imgEl.removeAttribute("src");
+    imgEl.removeAttribute("referrerpolicy");
+  }
+  return true;
+}
+
 function setMatchBarTeamImage(imgEl, pillEl, code, teamName) {
   if (!imgEl) return;
   const url = resolveTeamLogoUrl(code, teamName);
   if (!url) {
-    imgEl.removeAttribute("src");
+    applyTeamLogoToImg(imgEl, null);
     imgEl.hidden = true;
     imgEl.alt = "";
     pillEl?.classList.add("match-bar__pill--nologo");
@@ -1810,9 +1836,7 @@ function setMatchBarTeamImage(imgEl, pillEl, code, teamName) {
     imgEl.hidden = true;
     pillEl?.classList.add("match-bar__pill--nologo");
   };
-  if (/^https:\/\/([^/]+\.)?wikimedia\.org\//i.test(url)) imgEl.referrerPolicy = "no-referrer";
-  else imgEl.removeAttribute("referrerpolicy");
-  imgEl.src = url;
+  applyTeamLogoToImg(imgEl, url);
   imgEl.hidden = false;
 }
 
@@ -5281,14 +5305,22 @@ function syncLiveScoreboard(_match, teams, show, parsed) {
   elLeftRuns.textContent = leftScore || "—";
   elRightRuns.textContent = rightScore || "—";
 
-  if (sbImgA && imgA?.src && !imgA.hidden) {
-    sbImgA.src = imgA.src;
+  const logoUrlA = imgA && !imgA.hidden ? imgA.dataset.teamLogoUrl || "" : "";
+  const logoUrlB = imgB && !imgB.hidden ? imgB.dataset.teamLogoUrl || "" : "";
+  if (sbImgA && logoUrlA) {
+    applyTeamLogoToImg(sbImgA, logoUrlA);
     sbImgA.hidden = false;
-  } else if (sbImgA) sbImgA.hidden = true;
-  if (sbImgB && imgB?.src && !imgB.hidden) {
-    sbImgB.src = imgB.src;
+  } else if (sbImgA) {
+    applyTeamLogoToImg(sbImgA, null);
+    sbImgA.hidden = true;
+  }
+  if (sbImgB && logoUrlB) {
+    applyTeamLogoToImg(sbImgB, logoUrlB);
     sbImgB.hidden = false;
-  } else if (sbImgB) sbImgB.hidden = true;
+  } else if (sbImgB) {
+    applyTeamLogoToImg(sbImgB, null);
+    sbImgB.hidden = true;
+  }
 
   const statusParts = [];
   const bat = parsed?.batting_team?.toUpperCase();
