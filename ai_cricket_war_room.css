@@ -2660,6 +2660,36 @@ html.acwr-notice-dismissed .notice-strip {
   line-height: 1.4;
 }
 
+.verdict-summary__text {
+  margin: 0;
+}
+
+.verdict-summary--clamp .verdict-summary__text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+}
+
+.verdict-summary__toggle {
+  display: inline-block;
+  margin: 0.2rem 0 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #c5d9ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.verdict-summary__toggle:hover {
+  color: #fff;
+}
+
 /* Ingestion provenance on verdict card */
 .verdict-ingestion-meta {
   margin-top: 0.55rem;
@@ -4265,6 +4295,11 @@ html.acwr-notice-dismissed .notice-strip {
   padding: 0.6rem 0.8rem;
   margin-bottom: 10px;
   animation: fadeUp 0.35s var(--ease-out);
+  position: relative;
+}
+
+.no-live-alert[hidden] {
+  display: none !important;
 }
 
 .no-live-alert__icon {
@@ -4296,10 +4331,15 @@ html.acwr-notice-dismissed .notice-strip {
   border: none;
   cursor: pointer;
   color: var(--color-text-tertiary);
-  font-size: 1rem;
+  font-size: 1.1rem;
   line-height: 1;
-  padding: 0 2px;
+  padding: 0.15rem 0.35rem;
+  margin: -0.15rem -0.2rem 0 0;
   flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  min-width: 1.75rem;
+  min-height: 1.75rem;
 }
 
 .no-live-alert__close:hover {
@@ -4913,6 +4953,8 @@ html[data-ui="ipl"] .ui-toggle[aria-pressed="true"] {
 
 [data-theme="light"] .verdict-winner      { color: #1e3a8a; }
 [data-theme="light"] .verdict-summary     { color: rgba(15, 23, 42, 0.82); }
+[data-theme="light"] .verdict-summary__toggle { color: #2563eb; }
+[data-theme="light"] .verdict-summary__toggle:hover { color: #1d4ed8; }
 [data-theme="light"] .verdict-kicker      { color: #1d4ed8; }
 [data-theme="light"] .verdict-card--final .verdict-kicker { color: #15803d; }
 
@@ -5995,6 +6037,17 @@ html[data-ui="ipl"][data-theme="light"] body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.app-footer__ingestion {
+  width: 100%;
+  max-width: min(720px, 100%);
+  margin: 0 auto 0.65rem;
+  text-align: left;
+}
+
+.app-footer__ingestion .verdict-ingestion-meta {
+  margin-top: 0;
 }
 
 .recent-verdicts {

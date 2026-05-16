@@ -51,6 +51,7 @@
  *
  * Freemium (optional): GET /api/freemium-status — IST-day cap on successful Judge runs while IPL catalog
  * has a non-completed fixture today (or IPL_FREEMIUM_ACTIVE=1). FREEMIUM_MAX_RUNS_PER_DAY defaults to 5; set 0 to disable.
+ * Caps are off in local dev (`node server.mjs` without SERVE_DIST). FREEMIUM_FORCE_DEV=1 re-enables them for testing.
  * Bearer WAR_ROOM_API_SECRET bypasses the cap when the secret is configured.
  */
 

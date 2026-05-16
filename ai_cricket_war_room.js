@@ -1946,6 +1946,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 let running = false;
 /** True after homepage demo hydrate; cleared on first real {@link runWarRoom}. */
 let _demoWarRoomActive = false;
+/** User dismissed the no-live-score banner for the current war-room session. */
+let _noLiveDataWarningDismissed = false;
 
 /**
  * Canonical site origin for copied share links (no trailing slash).
@@ -2703,6 +2705,74 @@ function formatVerdictIngestionMetaHtml(ctx) {
   return `<div class="verdict-ingestion-meta">${rows.join("")}</div>`;
 }
 
+function clearVerdictIngestionFooter() {
+  const el = document.getElementById("verdictIngestionFooter");
+  if (!el) return;
+  el.hidden = true;
+  el.innerHTML = "";
+}
+
+/**
+ * @param {Record<string, unknown>|null|undefined} ctx
+ */
+function updateVerdictIngestionFooter(ctx) {
+  const el = document.getElementById("verdictIngestionFooter");
+  if (!el) return;
+  if (ctx == null) {
+    clearVerdictIngestionFooter();
+    return;
+  }
+  el.hidden = false;
+  el.innerHTML = formatVerdictIngestionMetaHtml(ctx);
+}
+
+/**
+ * @param {string} summary
+ * @returns {string}
+ */
+function renderVerdictSummaryHtml(summary) {
+  const text = String(summary ?? "").trim();
+  return `<div class="verdict-summary verdict-summary--clamp">
+    <p class="verdict-summary__text">${escapeHtml(text)}</p>
+    <button type="button" class="verdict-summary__toggle" hidden>Show more</button>
+  </div>`;
+}
+
+/**
+ * @param {ParentNode|null|undefined} rootEl
+ */
+function hydrateVerdictSummaryClamps(rootEl) {
+  if (!rootEl) return;
+  for (const block of rootEl.querySelectorAll(".verdict-summary--clamp")) {
+    if (block.dataset.summaryHydrated === "1") continue;
+    block.dataset.summaryHydrated = "1";
+    const textEl = block.querySelector(".verdict-summary__text");
+    const btn = /** @type {HTMLButtonElement|null} */ (block.querySelector(".verdict-summary__toggle"));
+    if (!textEl || !btn) continue;
+
+    const syncToggle = () => {
+      const expanded = block.classList.contains("verdict-summary--expanded");
+      if (expanded) {
+        btn.hidden = false;
+        btn.textContent = "Show less";
+        return;
+      }
+      block.classList.add("verdict-summary--clamp");
+      btn.hidden = textEl.scrollHeight <= textEl.clientHeight + 1;
+      btn.textContent = "Show more";
+    };
+
+    requestAnimationFrame(syncToggle);
+
+    btn.addEventListener("click", () => {
+      const expand = !block.classList.contains("verdict-summary--expanded");
+      block.classList.toggle("verdict-summary--expanded", expand);
+      block.classList.toggle("verdict-summary--clamp", !expand);
+      syncToggle();
+    });
+  }
+}
+
 /**
  * @param {HTMLElement} verdictRootEl
  * @param {WarRoomVerdict} v
@@ -2726,7 +2796,7 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
   const conf = Number.isFinite(confRaw) ? Math.min(100, Math.max(0, confRaw)) : 55;
   const pctForTeamA = pickedA ? conf : 100 - conf;
   const winProb = renderVerdictWinProbabilityBlock(teams, pctForTeamA, { variant: "judge" });
-  const ingestionBlock = formatVerdictIngestionMetaHtml(meta.ingestionCtx);
+  updateVerdictIngestionFooter(meta.ingestionCtx ?? null);
   const sub =
     meta.source === "service" && meta.predictionId != null
       ? `<p class="verdict-subkicker">Saved · prediction #${escapeHtml(String(meta.predictionId))} (Judge service)</p>`
@@ -2745,8 +2815,7 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
       ${sub}
       ${judgeNote}
       <div class="verdict-winner-row">${verdictLogoHtml}<div class="verdict-winner">${escapeHtml(String(winDisplay).toUpperCase())} WINS</div></div>
-      <div class="verdict-summary">${escapeHtml(v.summary || "")}</div>
-      ${ingestionBlock}
+      ${renderVerdictSummaryHtml(v.summary || "")}
       ${winProb.html}
       <div class="stat-grid">
         <div class="stat-cell"><div class="stat-label">PROJECTED SCORE</div><div class="stat-val">${escapeHtml(String(v.score_range || "—"))}</div></div>
@@ -2764,6 +2833,7 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
     </div>`;
   scheduleVerdictWinProbabilityAnimation(verdictRootEl, winProb.pctA, winProb.pctB);
   hydratePlayerOfMatchPhotos(verdictRootEl);
+  hydrateVerdictSummaryClamps(verdictRootEl);
   const shareBtn = verdictRootEl.querySelector(".js-share-prediction");
   if (shareBtn) {
     shareBtn.addEventListener("click", () => {
@@ -3043,7 +3113,7 @@ function mountSharedPredictionPreviewCard(verdictRootEl, v, teams, opts) {
       <div class="verdict-kicker">Shared prediction</div>
       ${sub}
       <div class="verdict-winner-row">${verdictLogoHtml}<div class="verdict-winner">${escapeHtml(String(winDisplay).toUpperCase())} WINS</div></div>
-      <div class="verdict-summary">${escapeHtml(v.summary || "")}</div>
+      ${renderVerdictSummaryHtml(v.summary || "")}
       ${winProb.html}
       <div class="stat-grid">
         <div class="stat-cell"><div class="stat-label">PROJECTED SCORE</div><div class="stat-val">${escapeHtml(String(v.score_range || "—"))}</div></div>
@@ -3057,6 +3127,7 @@ function mountSharedPredictionPreviewCard(verdictRootEl, v, teams, opts) {
     </div>`;
   scheduleVerdictWinProbabilityAnimation(verdictRootEl, winProb.pctA, winProb.pctB);
   hydratePlayerOfMatchPhotos(verdictRootEl);
+  hydrateVerdictSummaryClamps(verdictRootEl);
 
   const cta = verdictRootEl.querySelector(".js-shared-run-war-room");
   if (cta) {
@@ -3884,10 +3955,47 @@ function setElDisplay(id, value) {
 }
 
 function dismissNoLiveDataWarning() {
+  _noLiveDataWarningDismissed = true;
   const el = document.getElementById("noLiveDataAlert");
-  if (el) el.hidden = true;
+  if (el) {
+    el.hidden = true;
+    el.setAttribute("aria-hidden", "true");
+  }
   const bar = document.getElementById("liveScoreBar");
   if (bar) bar.classList.remove("live-score-bar--no-data");
+}
+
+/**
+ * @param {HTMLElement} el
+ */
+function wireNoLiveAlertDismiss(el) {
+  if (!el || el.dataset.closeWired === "1") return;
+  el.dataset.closeWired = "1";
+  el.addEventListener("click", (e) => {
+    const t = e.target;
+    if (!(t instanceof Element)) return;
+    if (!t.closest(".no-live-alert__close")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dismissNoLiveDataWarning();
+  });
+}
+
+function initNoLiveDataAlert() {
+  if (document.documentElement.dataset.noLiveAlertInit === "1") return;
+  document.documentElement.dataset.noLiveAlertInit = "1";
+  document.addEventListener(
+    "click",
+    (e) => {
+      const t = e.target;
+      if (!(t instanceof Element)) return;
+      if (!t.closest(".no-live-alert__close")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dismissNoLiveDataWarning();
+    },
+    true
+  );
 }
 
 /**
@@ -3901,10 +4009,15 @@ function showNoLiveDataWarning(show) {
   let el = document.getElementById(id);
 
   if (!show) {
-    if (el) el.hidden = true;
+    if (el) {
+      el.hidden = true;
+      el.setAttribute("aria-hidden", "true");
+    }
     if (bar) bar.classList.remove("live-score-bar--no-data");
     return;
   }
+
+  if (_noLiveDataWarningDismissed) return;
 
   if (!el) {
     el = document.createElement("div");
@@ -3923,11 +4036,11 @@ function showNoLiveDataWarning(show) {
     const debateCard = document.getElementById("debateCard");
     if (debateCard) debateCard.prepend(el);
     else return;
-    const closeBtn = el.querySelector(".no-live-alert__close");
-    if (closeBtn) closeBtn.addEventListener("click", dismissNoLiveDataWarning);
   }
 
+  wireNoLiveAlertDismiss(el);
   el.hidden = false;
+  el.removeAttribute("aria-hidden");
   if (bar) bar.classList.add("live-score-bar--no-data");
 }
 
@@ -6007,8 +6120,10 @@ function renderRecoveredPastMatchCard(match, teams, recovered) {
     ? `${escapeHtml(winDisplay.toUpperCase())} WINS`
     : escapeHtml(winDisplay);
   const summaryHtml = result.summary
-    ? `<div class="verdict-summary">${escapeHtml(result.summary)}</div>`
-    : `<div class="verdict-summary">Match completed — recorded scorecard pending; showing best-effort scoreline below.</div>`;
+    ? renderVerdictSummaryHtml(result.summary)
+    : renderVerdictSummaryHtml(
+        "Match completed — recorded scorecard pending; showing best-effort scoreline below."
+      );
   const verdictEl = document.getElementById('verdictArea');
   verdictEl.innerHTML = `
     <div class="verdict-card verdict-card--final" data-completed-match="${escapeHtml(match)}">
@@ -6032,6 +6147,7 @@ function renderRecoveredPastMatchCard(match, teams, recovered) {
       </div>
     </div>`;
   scheduleVerdictWinProbabilityAnimation(verdictEl, winProbFinal.pctA, winProbFinal.pctB);
+  hydrateVerdictSummaryClamps(verdictEl);
   bindPrematchPredictionButton(verdictEl, teams, winnerCode || null);
 }
 
@@ -6061,7 +6177,9 @@ function renderPastPendingResultCard(match, teams) {
         <div class="verdict-winner">${escapeHtml(teams.teamA)} vs ${escapeHtml(teams.teamB)}</div>
         ${logoHtml(teamBLogo)}
       </div>
-      <div class="verdict-summary">This fixture has already been played but the recorded scorecard hasn't been ingested yet — agents stand down to avoid a stale prediction.</div>
+      ${renderVerdictSummaryHtml(
+        "This fixture has already been played but the recorded scorecard hasn't been ingested yet — agents stand down to avoid a stale prediction."
+      )}
       <div class="stat-grid stat-grid--completed-final">
         <div class="stat-cell"><div class="stat-label">ACTUAL SCORE</div><div class="stat-val">Pending ingestion</div></div>
         <div class="stat-cell"><div class="stat-label">SWING FACTOR</div><div class="stat-val">—</div></div>
@@ -6073,6 +6191,7 @@ function renderPastPendingResultCard(match, teams) {
         <div class="verdict-prematch-result" id="prematchResult" hidden></div>
       </div>
     </div>`;
+  hydrateVerdictSummaryClamps(verdictEl);
   bindPrematchPredictionButton(verdictEl, teams, null);
 }
 
@@ -6156,7 +6275,7 @@ async function runWarRoom() {
     <div class="verdict-card verdict-card--final" data-completed-match="${escapeHtml(match)}">
       <div class="verdict-kicker">Final result</div>
       <div class="verdict-winner-row">${verdictLogoHtml}<div class="verdict-winner">${escapeHtml(winDisplay.toUpperCase())} WINS</div></div>
-      <div class="verdict-summary">${escapeHtml(completedRow.result.summary || '')}</div>
+      ${renderVerdictSummaryHtml(completedRow.result.summary || "")}
       ${winProbFinal.html}
       <div class="stat-grid stat-grid--completed-final">
         <div class="stat-cell"><div class="stat-label">ACTUAL SCORE</div><div class="stat-val">${escapeHtml(actualScoreLine)}</div></div>
@@ -6179,6 +6298,7 @@ async function runWarRoom() {
       scheduleVerdictWinProbabilityAnimation(verdictEl, winProbFinal.pctA, winProbFinal.pctB);
       bindPrematchPredictionButton(verdictEl, teams, completedRow.result.winner);
       hydratePlayerOfMatchPhotos(verdictEl);
+      hydrateVerdictSummaryClamps(verdictEl);
 
       trackWarRoomEvent("warroom_run_complete", { match, ms: Date.now() - warRoomStartedAt });
       scrollVerdictPanelIntoView({ behavior: "smooth" });
@@ -6273,6 +6393,7 @@ async function runWarRoom() {
   setElDisplay('runningLabel', '');
   setElDisplay('emptyState', 'none');
   document.getElementById('verdictArea').innerHTML='';
+  clearVerdictIngestionFooter();
   setMatchBar(match, teams);
 
   setPhase('Gathering intelligence…', true);
@@ -6583,6 +6704,7 @@ async function runWarRoom() {
 
 function resetWarRoom() {
   running = false;
+  _noLiveDataWarningDismissed = false;
   showNoLiveDataWarning(false);
   document.getElementById('debateArea')?.classList.remove('debate-area--final-only');
   document.getElementById('debateArea')?.classList.remove('debate-area--postmatch');
@@ -6593,6 +6715,7 @@ function resetWarRoom() {
       <p class="empty-state__desc">Pick a fixture above, then <strong>Run war room</strong> for intel, debate, and verdict.</p>
     </div>`;
   document.getElementById('verdictArea').innerHTML='';
+  clearVerdictIngestionFooter();
   setElDisplay('typingBubble', 'none');
   hideMatchBar();
   AGENTS.forEach(a => {
@@ -7521,6 +7644,7 @@ renderAgents();
 initIntelAgentRefreshHandlers();
 initMatchAutocomplete();
 initNoticeStrip();
+initNoLiveDataAlert();
 initAgentsToggle();
 initLivePanel();
 initControlsTabs();

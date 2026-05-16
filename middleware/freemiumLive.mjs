@@ -7,7 +7,16 @@ import { redis, TTL } from "../lib/redis.js";
 /** @type {Map<string, number>} key -> count (memory fallback when Redis unset) */
 const _memCounts = new Map();
 
-const MAX_RUNS = Math.max(0, Math.floor(Number(process.env.FREEMIUM_MAX_RUNS_PER_DAY) || 5));
+/** `node server.mjs` / dev:stack — no SERVE_DIST or Vercel. Set FREEMIUM_FORCE_DEV=1 to test caps locally. */
+const FREEMIUM_OFF_IN_DEV =
+  process.env.SERVE_DIST !== "1" &&
+  process.env.VERCEL !== "1" &&
+  process.env.FREEMIUM_FORCE_DEV !== "1" &&
+  process.env.FREEMIUM_FORCE_DEV !== "true";
+
+const MAX_RUNS = FREEMIUM_OFF_IN_DEV
+  ? 0
+  : Math.max(0, Math.floor(Number(process.env.FREEMIUM_MAX_RUNS_PER_DAY) || 5));
 
 const FORCE_ACTIVE =
   process.env.IPL_FREEMIUM_ACTIVE === "1" || process.env.IPL_FREEMIUM_ACTIVE === "true";
