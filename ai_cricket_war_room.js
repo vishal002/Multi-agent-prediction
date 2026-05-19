@@ -1965,6 +1965,13 @@ function shareLinkOrigin() {
   return "";
 }
 
+/** `light` | `dark` — matches `data-theme` for share URLs and OG previews. */
+function acwrShareThemeParam() {
+  if (typeof document === "undefined") return "light";
+  const t = document.documentElement.getAttribute("data-theme");
+  return t === "dark" ? "dark" : "light";
+}
+
 /**
  * Absolute URL for shareable prediction links (`/s/{id}` or current path + query).
  * Uses {@link shareLinkOrigin} when set (production meta), else `window.location.origin`.
@@ -1981,7 +1988,12 @@ function shareUrlFromPathnameAndSearch(pathname, search) {
   let path = pathname != null && String(pathname).trim() ? String(pathname).trim() : "/";
   if (!path.startsWith("/")) path = `/${path}`;
   const rawQ = search != null ? String(search) : "";
-  const q = !rawQ ? "" : rawQ.startsWith("?") ? rawQ : `?${rawQ}`;
+  let q = !rawQ ? "" : rawQ.startsWith("?") ? rawQ : `?${rawQ}`;
+  if (path === "/") {
+    const u = new URL(`${origin}${path}${q || ""}`);
+    u.searchParams.set("theme", acwrShareThemeParam());
+    return `${u.origin}${u.pathname}${u.search}`;
+  }
   return `${origin}${path}${q}`;
 }
 

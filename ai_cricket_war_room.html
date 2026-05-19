@@ -28,7 +28,7 @@
     <!-- ?v= bumps when OG art/copy changes so Meta/WhatsApp treat it as a new image URL (cache bust). -->
     <meta
       property="og:image"
-      content="https://cricket-war-room.vercel.app/og-homepage.png?v=6"
+      content="https://cricket-war-room.vercel.app/og-homepage.png?v=7&theme=light"
     />
     <meta property="og:image:type" content="image/png" />
     <meta property="og:image:width" content="1200" />
@@ -48,7 +48,7 @@
     />
     <meta
       name="twitter:image"
-      content="https://cricket-war-room.vercel.app/og-homepage.png?v=6"
+      content="https://cricket-war-room.vercel.app/og-homepage.png?v=7&theme=light"
     />
     <meta name="application-name" content="AI Cricket War Room" />
     <meta name="mobile-web-app-capable" content="yes" />
@@ -94,7 +94,18 @@
     <script>
       (function () {
         var saved = localStorage.getItem("acwr-theme");
-        var theme = saved === "light" || saved === "dark" ? saved : "light";
+        var urlTheme = null;
+        try {
+          urlTheme = new URLSearchParams(location.search).get("theme");
+        } catch (e) {
+          /* ignore */
+        }
+        var theme =
+          urlTheme === "light" || urlTheme === "dark"
+            ? urlTheme
+            : saved === "light" || saved === "dark"
+              ? saved
+              : "light";
         document.documentElement.setAttribute("data-theme", theme);
         var uiSaved = localStorage.getItem("acwr-ui");
         var uiInit =
@@ -102,6 +113,27 @@
             ? uiSaved
             : "classic";
         document.documentElement.setAttribute("data-ui", uiInit);
+        function acwrOgImageUrl(t) {
+          var el = document.querySelector('meta[name="war-room-share-origin"]');
+          var origin =
+            el && el.getAttribute("content")
+              ? String(el.getAttribute("content")).replace(/\/+$/, "")
+              : location.origin || "";
+          return (
+            origin +
+            "/og-homepage.png?v=7&theme=" +
+            (t === "dark" ? "dark" : "light")
+          );
+        }
+        function acwrSyncOgHomepageImage(t) {
+          var url = acwrOgImageUrl(t);
+          var og = document.querySelector('meta[property="og:image"]');
+          var tw = document.querySelector('meta[name="twitter:image"]');
+          if (og) og.setAttribute("content", url);
+          if (tw) tw.setAttribute("content", url);
+        }
+        window.acwrSyncOgHomepageImage = acwrSyncOgHomepageImage;
+        acwrSyncOgHomepageImage(theme);
       })();
     </script>
     <script
@@ -1247,10 +1279,27 @@
           if (metaTheme)
             metaTheme.setAttribute("content", map[theme] || map.light);
         }
+        function syncThemeInShareUrl(theme) {
+          if (!window.history || !window.history.replaceState) return;
+          if ((location.pathname || "/") !== "/") return;
+          try {
+            var u = new URL(location.href);
+            u.searchParams.set("theme", theme === "dark" ? "dark" : "light");
+            history.replaceState(
+              null,
+              "",
+              u.pathname + u.search + u.hash,
+            );
+          } catch (e) {
+            /* ignore */
+          }
+        }
         function applyTheme(theme) {
           document.documentElement.setAttribute("data-theme", theme);
           localStorage.setItem("acwr-theme", theme);
           syncMetaThemeColor();
+          if (window.acwrSyncOgHomepageImage) window.acwrSyncOgHomepageImage(theme);
+          syncThemeInShareUrl(theme);
         }
         function applyUi(ui) {
           document.documentElement.setAttribute("data-ui", ui);

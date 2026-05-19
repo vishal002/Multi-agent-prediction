@@ -1116,17 +1116,24 @@ const SERVE_DIST = process.env.SERVE_DIST === "1" || process.env.VERCEL === "1";
 const STATIC_ROOT = SERVE_DIST ? path.join(APP_ROOT, "dist") : __dirname;
 
 /**
- * Prefer `image/og-logo-flat.png` — a 480×480 logo pre-flattened against the
- * OG navy background at build/commit time. Satori's PNG path keeps premultiplied
- * alpha but doesn't redraw transparent pixels against the parent background, so
- * raw `ai-cricket-war-room-logo.png` would expose checkerboard gray on the OG
- * card. Falls back to the raw transparent logo if the flattened sibling isn't
- * present (e.g. fresh checkout before rerunning the flatten step).
+ * Theme-flat logo PNGs (`og-logo-flat-dark.png`, `og-logo-flat-light.png`).
+ * Satori keeps premultiplied alpha and won't fill transparency against the card bg.
+ * Run `npm run og-logos` after changing the source logo.
+ *
+ * @param {"dark"|"light"} theme
  */
-function findOgLogoPath() {
+function findOgLogoPath(theme = "dark") {
+  const flatName =
+    theme === "light" ? "og-logo-flat-light.png" : "og-logo-flat-dark.png";
   const candidates = [
-    path.join(STATIC_ROOT, "image", "og-logo-flat.png"),
-    path.join(APP_ROOT, "image", "og-logo-flat.png"),
+    path.join(STATIC_ROOT, "image", flatName),
+    path.join(APP_ROOT, "image", flatName),
+    ...(theme === "dark"
+      ? [
+          path.join(STATIC_ROOT, "image", "og-logo-flat.png"),
+          path.join(APP_ROOT, "image", "og-logo-flat.png"),
+        ]
+      : []),
     path.join(STATIC_ROOT, "image", "ai-cricket-war-room-logo.png"),
     path.join(APP_ROOT, "image", "ai-cricket-war-room-logo.png"),
     path.join(APP_ROOT, "ai-cricket-war-room-logo.png"),
@@ -1141,27 +1148,37 @@ function findOgLogoPath() {
   return null;
 }
 
-/**
- * Read the brand logo PNG once at module init, base64-encode for inline `<img>`
- * use inside the @vercel/og JSX tree. Satori composites onto our solid navy
- * background so we don't need to pre-flatten transparency.
- * @type {string | null}
- */
-const OG_LOGO_DATA_URI = (() => {
-  const logoPath = findOgLogoPath();
-  if (!logoPath) {
-    console.warn(
-      "War room: ai-cricket-war-room-logo.png not found (image/ or project root) — OG images use WR text / omit logo until the file is present."
-    );
-    return null;
-  }
+/** @param {string | null} logoPath */
+function logoPathToDataUri(logoPath) {
+  if (!logoPath) return null;
   try {
     return `data:image/png;base64,${fs.readFileSync(logoPath).toString("base64")}`;
   } catch (e) {
     console.warn("War room: OG logo read failed:", e instanceof Error ? e.message : e);
     return null;
   }
-})();
+}
+
+/** @type {{ dark: string | null, light: string | null }} */
+const OG_LOGO_BY_THEME = {
+  dark: logoPathToDataUri(findOgLogoPath("dark")),
+  light: logoPathToDataUri(findOgLogoPath("light")),
+};
+
+if (!OG_LOGO_BY_THEME.dark && !OG_LOGO_BY_THEME.light) {
+  console.warn(
+    "War room: no flat OG logos (run npm run og-logos) — OG cards omit logo until image/og-logo-flat-*.png exist."
+  );
+}
+
+/** Share / verdict OG cards (always dark). */
+const OG_LOGO_DATA_URI = OG_LOGO_BY_THEME.dark;
+
+/** @param {"dark"|"light"} theme */
+function ogLogoDataUriForTheme(theme) {
+  const key = theme === "light" ? "light" : "dark";
+  return OG_LOGO_BY_THEME[key] || OG_LOGO_BY_THEME.dark || OG_LOGO_BY_THEME.light;
+}
 
 /**
  * Hashed asset filename suffix from build.mjs (8-char SHA-256 prefix).
@@ -1621,6 +1638,67 @@ function escapeHtmlAttr(s) {
     .replace(/'/g, "&#39;");
 }
 
+/** Bump when homepage OG art changes (must match HTML `?v=`). */
+const HOMEPAGE_OG_CACHE_V = 7;
+
+/** @param {string | null | undefined} themeQ */
+function resolveHomepageOgTheme(themeQ) {
+  return themeQ === "dark" ? "dark" : "light";
+}
+
+/**
+ * @param {string} base Site origin without trailing slash
+ * @param {"dark"|"light"} theme
+ */
+function homepageOgImageUrl(base, theme) {
+  const t = resolveHomepageOgTheme(theme);
+  return `${String(base).replace(/\/+$/, "")}/og-homepage.png?v=${HOMEPAGE_OG_CACHE_V}&theme=${t}`;
+}
+
+/** @param {string} html */
+function injectHomepageOgMeta(html, imgUrl) {
+  const safe = escapeHtmlAttr(imgUrl);
+  return html
+    .replace(/(<meta\s+property="og:image"\s+content=")[^"]*(")/i, `$1${safe}$2`)
+    .replace(/(<meta\s+name="twitter:image"\s+content=")[^"]*(")/i, `$1${safe}$2`);
+}
+
+/**
+ * Homepage HTML with og:image / twitter:image matching `?theme=` (for link previews).
+ * @param {import("http").IncomingMessage} req
+ * @param {import("http").ServerResponse} res
+ * @param {URL} url
+ */
+function serveHomepageHtml(req, res, url) {
+  const filePath = safeJoin(STATIC_ROOT, "/ai_cricket_war_room.html");
+  if (!filePath) {
+    res.writeHead(403);
+    res.end("Forbidden");
+    return;
+  }
+  fs.readFile(filePath, "utf8", (err, html) => {
+    if (err) {
+      res.writeHead(404);
+      res.end("Not found");
+      return;
+    }
+    const theme = resolveHomepageOgTheme(url.searchParams.get("theme"));
+    const base = publicOgSiteBase(req, url);
+    const body = injectHomepageOgMeta(html, homepageOgImageUrl(base, theme));
+    const buf = Buffer.from(body, "utf8");
+    res.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-cache",
+      "Content-Length": String(buf.length),
+    });
+    if (req.method === "HEAD") {
+      res.end();
+      return;
+    }
+    res.end(buf);
+  });
+}
+
 function escapeHtmlPcdata(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
@@ -1673,8 +1751,65 @@ const OG_W = 1200;
 const OG_H = 630;
 const OG_BG = "#060a12";
 
+/** Homepage OG card palettes (dark cyber-ops vs light broadcast). */
+const HOMEPAGE_OG_THEMES = {
+  dark: {
+    bg: "#060a12",
+    text: "#ffffff",
+    eyebrow: "rgba(255,255,255,0.32)",
+    subhead: "rgba(255,255,255,0.48)",
+    matchSuffix: "#ffffff",
+    accentOne: "#22c55e",
+    railLabel: "rgba(255,255,255,0.24)",
+    divider: "rgba(255,255,255,0.07)",
+    pillBg: "rgba(255,255,255,0.05)",
+    pillBorder: "rgba(255,255,255,0.1)",
+    pillLabel: "rgba(255,255,255,0.72)",
+    pillHint: "rgba(255,255,255,0.28)",
+    pillCaption: "rgba(255,255,255,0.28)",
+    logoPlaceholderBg: "rgba(100,116,139,0.14)",
+    logoPlaceholderText: "#64748b",
+    ctaBg: "linear-gradient(135deg, #16a34a 0%, #14532d 100%)",
+    ctaBorder: "rgba(255,255,255,0.14)",
+    ctaText: "#ffffff",
+    statGreen: "#22c55e",
+    statYellow: "#fbbf24",
+    statRed: "#f87171",
+    statPurple: "#a78bfa",
+  },
+  light: {
+    bg: "#f4f6f8",
+    text: "#0f172a",
+    eyebrow: "#64748b",
+    subhead: "#475569",
+    matchSuffix: "#0f172a",
+    accentOne: "#16a34a",
+    railLabel: "#94a3b8",
+    divider: "rgba(15,23,42,0.08)",
+    pillBg: "#ffffff",
+    pillBorder: "rgba(15,23,42,0.10)",
+    pillLabel: "#1e293b",
+    pillHint: "#94a3b8",
+    pillCaption: "#94a3b8",
+    logoPlaceholderBg: "rgba(148,163,184,0.18)",
+    logoPlaceholderText: "#64748b",
+    ctaBg: "linear-gradient(135deg, #22c55e 0%, #16a34a 100%)",
+    ctaBorder: "rgba(22,163,74,0.35)",
+    ctaText: "#ffffff",
+    statGreen: "#16a34a",
+    statYellow: "#ca8a04",
+    statRed: "#dc2626",
+    statPurple: "#7c3aed",
+  },
+};
+
+/** @param {"dark"|"light"} theme */
+function homepageOgThemeTokens(theme) {
+  return theme === "dark" ? HOMEPAGE_OG_THEMES.dark : HOMEPAGE_OG_THEMES.light;
+}
+
 /** One pill for the "ACTIVE AI AGENTS" stack on the homepage card. */
-function homepageAgentPill(top, dotColor, label, hint) {
+function homepageAgentPill(top, dotColor, label, hint, t) {
   return el(
     "div",
     {
@@ -1685,8 +1820,8 @@ function homepageAgentPill(top, dotColor, label, hint) {
         width: 260,
         height: 46,
         borderRadius: 23,
-        background: "rgba(255,255,255,0.05)",
-        border: "1px solid rgba(255,255,255,0.1)",
+        background: t.pillBg,
+        border: `1px solid ${t.pillBorder}`,
         display: "flex",
         alignItems: "center",
         padding: "0 22px",
@@ -1699,7 +1834,7 @@ function homepageAgentPill(top, dotColor, label, hint) {
       "div",
       {
         style: {
-          color: "rgba(255,255,255,0.72)",
+          color: t.pillLabel,
           fontSize: 14,
           fontWeight: 600,
           flex: 1,
@@ -1712,7 +1847,7 @@ function homepageAgentPill(top, dotColor, label, hint) {
       "div",
       {
         style: {
-          color: "rgba(255,255,255,0.28)",
+          color: t.pillHint,
           fontSize: 11,
           display: "flex",
         },
@@ -1723,7 +1858,7 @@ function homepageAgentPill(top, dotColor, label, hint) {
 }
 
 /** One small stat pill in the homepage CTA row (5 / MULTI / LIVE / FREE). */
-function homepageStatPill(left, width, valueColor, value, captionLabel) {
+function homepageStatPill(left, width, valueColor, value, captionLabel, t) {
   return el(
     "div",
     {
@@ -1734,8 +1869,8 @@ function homepageStatPill(left, width, valueColor, value, captionLabel) {
         width,
         height: 52,
         borderRadius: 10,
-        background: "rgba(255,255,255,0.05)",
-        border: "1px solid rgba(255,255,255,0.1)",
+        background: t.pillBg,
+        border: `1px solid ${t.pillBorder}`,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -1751,7 +1886,7 @@ function homepageStatPill(left, width, valueColor, value, captionLabel) {
       "div",
       {
         style: {
-          color: "rgba(255,255,255,0.28)",
+          color: t.pillCaption,
           fontSize: 10,
           fontWeight: 600,
           letterSpacing: 1,
@@ -1768,9 +1903,13 @@ function homepageStatPill(left, width, valueColor, value, captionLabel) {
  * 1200×630 homepage OG card rendered with @vercel/og (Satori).
  * Layout mirrors the previous SVG: brand logo block on the left, big headline
  * stack centered, agent pill rail and CTA row on the right/bottom.
+ * @param {"dark"|"light"} [theme="light"]
  * @returns {Promise<Buffer>}
  */
-async function renderHomepageOgPng() {
+async function renderHomepageOgPng(theme = "light") {
+  const ogTheme = resolveHomepageOgTheme(theme);
+  const t = homepageOgThemeTokens(ogTheme);
+  const homepageLogoUri = ogLogoDataUriForTheme(ogTheme);
   const tree = el(
     "div",
     {
@@ -1779,9 +1918,9 @@ async function renderHomepageOgPng() {
         width: OG_W,
         height: OG_H,
         display: "flex",
-        background: OG_BG,
+        background: t.bg,
         fontFamily: "Inter",
-        color: "#ffffff",
+        color: t.text,
       },
     },
     el("div", {
@@ -1802,12 +1941,12 @@ async function renderHomepageOgPng() {
         top: 100,
         width: 1,
         height: 430,
-        background: "rgba(255,255,255,0.07)",
+        background: t.divider,
       },
     }),
-    OG_LOGO_DATA_URI
+    homepageLogoUri
       ? el("img", {
-          src: OG_LOGO_DATA_URI,
+          src: homepageLogoUri,
           width: 240,
           height: 240,
           style: {
@@ -1830,11 +1969,11 @@ async function renderHomepageOgPng() {
               width: 240,
               height: 240,
               borderRadius: 18,
-              background: "rgba(100,116,139,0.14)",
+              background: t.logoPlaceholderBg,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#64748b",
+              color: t.logoPlaceholderText,
               fontSize: 22,
               fontWeight: 700,
             },
@@ -1848,7 +1987,7 @@ async function renderHomepageOgPng() {
           position: "absolute",
           left: 380,
           top: 200,
-          color: "rgba(255,255,255,0.32)",
+          color: t.eyebrow,
           fontSize: 13,
           fontWeight: 600,
           letterSpacing: 3,
@@ -1866,7 +2005,7 @@ async function renderHomepageOgPng() {
           top: 230,
           fontSize: 86,
           fontWeight: 700,
-          color: "#ffffff",
+          color: t.text,
           display: "flex",
           lineHeight: 1.05,
         },
@@ -1886,8 +2025,8 @@ async function renderHomepageOgPng() {
           lineHeight: 1.05,
         },
       },
-      el("span", { style: { color: "#22c55e" } }, "ONE"),
-      el("span", { style: { color: "#ffffff" } }, " MATCH.")
+      el("span", { style: { color: t.accentOne } }, "ONE"),
+      el("span", { style: { color: t.matchSuffix } }, " MATCH.")
     ),
     el(
       "div",
@@ -1898,7 +2037,7 @@ async function renderHomepageOgPng() {
           top: 410,
           fontSize: 86,
           fontWeight: 700,
-          color: "#ffffff",
+          color: t.text,
           display: "flex",
           lineHeight: 1.05,
         },
@@ -1912,7 +2051,7 @@ async function renderHomepageOgPng() {
           position: "absolute",
           left: 380,
           top: 502,
-          color: "rgba(255,255,255,0.48)",
+          color: t.subhead,
           fontSize: 18,
           fontWeight: 500,
           display: "flex",
@@ -1920,10 +2059,10 @@ async function renderHomepageOgPng() {
       },
       "Bull vs Bear multi-round debate. Five intel agents, one Judge verdict."
     ),
-    homepageStatPill(380, 56, "#22c55e", "5", "AGENTS"),
-    homepageStatPill(448, 88, "#fbbf24", "MULTI", "ROUNDS"),
-    homepageStatPill(548, 72, "#f87171", "LIVE", "DATA"),
-    homepageStatPill(632, 72, "#a78bfa", "FREE", "ALWAYS"),
+    homepageStatPill(380, 56, t.statGreen, "5", "AGENTS", t),
+    homepageStatPill(448, 88, t.statYellow, "MULTI", "ROUNDS", t),
+    homepageStatPill(548, 72, t.statRed, "LIVE", "DATA", t),
+    homepageStatPill(632, 72, t.statPurple, "FREE", "ALWAYS", t),
     el(
       "div",
       {
@@ -1934,12 +2073,12 @@ async function renderHomepageOgPng() {
           width: 200,
           height: 52,
           borderRadius: 12,
-          background: "linear-gradient(135deg, #16a34a 0%, #14532d 100%)",
-          border: "1px solid rgba(255,255,255,0.14)",
+          background: t.ctaBg,
+          border: `1px solid ${t.ctaBorder}`,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "#ffffff",
+          color: t.ctaText,
           fontSize: 14,
           fontWeight: 700,
           letterSpacing: 1.5,
@@ -1954,7 +2093,7 @@ async function renderHomepageOgPng() {
           position: "absolute",
           left: 920,
           top: 156,
-          color: "rgba(255,255,255,0.24)",
+          color: t.railLabel,
           fontSize: 11,
           fontWeight: 600,
           letterSpacing: 2,
@@ -1963,10 +2102,10 @@ async function renderHomepageOgPng() {
       },
       "ACTIVE AI AGENTS"
     ),
-    homepageAgentPill(186, "#22c55e", "Bull Agent", "Makes the case"),
-    homepageAgentPill(242, "#ef4444", "Bear Agent", "Counters hard"),
-    homepageAgentPill(298, "#818cf8", "5 Intel Agents", "Form · Pitch · News"),
-    homepageAgentPill(354, "#eab308", "Judge Agent", "Final verdict")
+    homepageAgentPill(186, "#22c55e", "Bull Agent", "Makes the case", t),
+    homepageAgentPill(242, "#ef4444", "Bear Agent", "Counters hard", t),
+    homepageAgentPill(298, "#818cf8", "5 Intel Agents", "Form · Pitch · News", t),
+    homepageAgentPill(354, "#eab308", "Judge Agent", "Final verdict", t)
   );
 
   const ir = new ImageResponse(tree, { width: OG_W, height: OG_H, fonts: OG_FONTS });
@@ -3555,7 +3694,8 @@ export async function warRoomHttpHandler(req, res) {
 
   if ((req.method === "GET" || req.method === "HEAD") && pathname === "/og-homepage.png") {
     try {
-      const png = await renderHomepageOgPng();
+      const themeQ = new URL(req.url || "", "http://localhost").searchParams.get("theme");
+      const png = await renderHomepageOgPng(resolveHomepageOgTheme(themeQ));
       res.writeHead(200, {
         "Content-Type": "image/png",
         "Cache-Control": "public, max-age=3600",
@@ -3612,6 +3752,11 @@ export async function warRoomHttpHandler(req, res) {
       sendShareOgHtml(req, res, url, sidOnly, row2.pack, `/?sid=${encodeURIComponent(sidOnly)}`);
       return;
     }
+  }
+
+  if (pathname === "/" || pathname === "/ai_cricket_war_room.html") {
+    serveHomepageHtml(req, res, url);
+    return;
   }
 
   const filePath = safeJoin(STATIC_ROOT, pathname);

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prebuild": "node scripts/enrich-completed-matches.mjs",
+    "prebuild": "node scripts/enrich-completed-matches.mjs && node scripts/flatten-og-logos.mjs",
     "build": "node scripts/build.mjs",
     "enrich": "node scripts/enrich-completed-matches.mjs",
     "start": "cross-env SERVE_DIST=1 node server.mjs",
@@ -12,7 +12,8 @@
     "ingestion:dev": "node scripts/run-uvicorn.mjs ingestion_service.app:app 3334",
     "judge:dev": "node scripts/run-uvicorn.mjs judge_service.app:app 8000",
     "dev:stack": "concurrently -n war,ing,jdg -c blue,green,magenta \"node server.mjs\" \"node scripts/run-uvicorn.mjs ingestion_service.app:app 3334\" \"node scripts/run-uvicorn.mjs judge_service.app:app 8000\"",
-    "icons": "node scripts/generate-pwa-icons.mjs"
+    "icons": "node scripts/generate-pwa-icons.mjs",
+    "og-logos": "node scripts/flatten-og-logos.mjs"
   },
   "dependencies": {
     "@sentry/node": "^9.5.0",
