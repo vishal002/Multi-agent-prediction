@@ -17,6 +17,7 @@ from judge_service.judge import run_judge
 from judge_service.models import Verdict
 from judge_service.predictions_db import PredictionsStore
 from judge_service.predictions_supabase import SupabasePredictionsStore, supabase_configured
+from judge_service.predictions_turso import TursoPredictionsStore, turso_configured
 
 app = FastAPI(title="Cricket War Room — Judge", version="0.1.0")
 
@@ -51,7 +52,12 @@ JudgeAuth = Annotated[None, Depends(verify_judge_service_auth)]
 def get_store() -> PredictionsStore:
     global _store
     if _store is None:
-        if supabase_configured():
+        if turso_configured():
+            _store = TursoPredictionsStore(
+                os.environ["TURSO_DATABASE_URL"].strip(),
+                os.environ["TURSO_AUTH_TOKEN"].strip(),
+            )
+        elif supabase_configured():
             _store = SupabasePredictionsStore(
                 os.environ["SUPABASE_URL"].strip(),
                 os.environ["SUPABASE_SERVICE_ROLE_KEY"].strip(),

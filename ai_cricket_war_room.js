@@ -1926,21 +1926,6 @@ function hideMatchBar() {
   if (summary) summary.hidden = true;
 }
 
-function initNoticeStrip() {
-  const btn = document.getElementById("acwrNoticeClose");
-  if (!btn) return;
-  if (btn.dataset.noticeInit === "1") return;
-  btn.dataset.noticeInit = "1";
-  btn.addEventListener("click", () => {
-    try {
-      localStorage.setItem("acwr-notice-dismissed", "1");
-    } catch {
-      /* private mode */
-    }
-    document.documentElement.classList.add("acwr-notice-dismissed");
-  });
-}
-
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 let running = false;
@@ -2827,6 +2812,9 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
       ${sub}
       ${judgeNote}
       <div class="verdict-winner-row">${verdictLogoHtml}<div class="verdict-winner">${escapeHtml(String(winDisplay).toUpperCase())} WINS</div></div>
+      <div class="verdict-share-row verdict-share-row--primary">
+        <button type="button" class="verdict-share-btn verdict-share-cta js-share-prediction" aria-label="Copy link to this prediction">Share this prediction</button>
+      </div>
       ${renderVerdictSummaryHtml(v.summary || "")}
       ${winProb.html}
       <div class="stat-grid">
@@ -2834,9 +2822,6 @@ function mountJudgeVerdictCard(verdictRootEl, v, teams, meta) {
         ${renderVerdictKeyPlayerStatCellHtml(v.key_player)}
         <div class="stat-cell"><div class="stat-label">SWING FACTOR</div><div class="stat-val">${escapeHtml(String(v.swing_factor || "—"))}</div></div>
         <div class="stat-cell"><div class="stat-label">MODEL CONFIDENCE</div><div class="stat-val">${escapeHtml(String(v.confidence ?? "—"))}% <span class="stat-sublabel">not win probability</span></div></div>
-      </div>
-      <div class="verdict-share-row">
-        <button type="button" class="verdict-share-btn js-share-prediction" aria-label="Copy link to this prediction">Share this prediction</button>
       </div>
       <div class="verdict-affiliate-row" role="group" aria-label="Fantasy cricket apps">
         <a href="https://www.dream11.com/cricket" class="verdict-affiliate-btn verdict-affiliate-btn--dream11 js-dream11-aff" target="_blank" rel="noopener noreferrer">Play on Dream11</a>
@@ -5782,11 +5767,11 @@ function buildMatchContextBlock(match, insights, teams, ingestedCtx, liveState) 
 
 /** Bull: team A; Bear: team B; ≤60 words; evidence-bound (keep short — sent every round). */
 function debateSystemBull(teams) {
-  return `Argue **${teams.teamA}** over **${teams.teamB}** using ONLY the first user message’s ingested evidence + specialist signals. No invented stats. If data is thin, say so in one line. ≤60 words; no preamble.`;
+  return `You are the BULL — a fired-up ${teams.teamA} superfan on a cricket panel. Voice: punchy, optimistic, crowd-pleasing; short sentences; one vivid image from the evidence. Champion **${teams.teamA}** over **${teams.teamB}** using ONLY the first user message’s ingested evidence + specialist signals. No invented stats or players not in that bundle. If data is thin, admit it in one line then give your best evidence-backed angle. ≤60 words; no preamble or labels.`;
 }
 
 function debateSystemBear(teams) {
-  return `Argue **${teams.teamB}** over **${teams.teamA}**; counter the last assistant turn using ONLY evidence from the first user message. No invented stats. ≤60 words; no preamble.`;
+  return `You are the BEAR — a dry, skeptical ${teams.teamB} analyst who lives to puncture hype. Voice: contrarian, precise, slightly sarcastic but fair; directly counter the Bull’s last point. Champion **${teams.teamB}** over **${teams.teamA}** using ONLY evidence from the first user message (never outside facts). No invented stats. ≤60 words; no preamble or labels.`;
 }
 
 const DEBATE_MAX_TOKENS = 140;
@@ -6558,28 +6543,28 @@ async function runWarRoom() {
         teamCode: teams.codeA,
         roundLabel: 'Round 1 · Opening',
         userContent:
-          `${matchContext}\n\n---\nOpen the debate: argue why **${teams.teamA}** wins this fixture using ONLY the ingested evidence and specialist signals above—no outside facts or invented stats. If evidence is weak, say so briefly. Max 60 words.`,
+          `${matchContext}\n\n---\nOpening thesis: one sharp reason **${teams.teamA}** wins—hook the room with your best evidence-backed line only. Max 60 words.`,
       },
       {
         side: 'bear',
         who: `Bear · ${teams.teamB}`,
         teamCode: teams.codeB,
         roundLabel: 'Round 1 · Counter',
-        userContent: `Counter the Bull directly: argue why **${teams.teamB}** wins using ONLY the ingested evidence and specialist signals from the first message—different angles allowed only when supported there. Max 60 words.`,
+        userContent: `Counter-punch the Bull’s opening: one flaw in their case, then your best reason **${teams.teamB}** still wins—evidence from the first message only. Max 60 words.`,
       },
       {
         side: 'bull',
         who: `Bull · ${teams.teamA}`,
         teamCode: teams.codeA,
         roundLabel: 'Round 2 · Rebuttal',
-        userContent: `Rebut the Bear. Strengthen **${teams.teamA}**’s case with one angle grounded only in that same evidence bundle; if you cannot, concede thin data. Max 60 words.`,
+        userContent: `Rebut the Bear’s last point—don’t repeat yourself; add one new evidence-backed angle for **${teams.teamA}**, or concede thin data in one line. Max 60 words.`,
       },
       {
         side: 'bear',
         who: `Bear · ${teams.teamB}`,
         teamCode: teams.codeB,
         roundLabel: 'Round 2 · Final',
-        userContent: `Final round: your strongest line for **${teams.teamB}**—still countering the Bull’s last point—using only the ingested evidence and specialist signals. Max 60 words.`,
+        userContent: `Closer: land your sharpest one-liner for **${teams.teamB}** that answers the Bull’s last point—make it quotable, stay inside the evidence. Max 60 words.`,
       },
     ];
 
@@ -7655,7 +7640,6 @@ function initUmamiButtonTracking() {
 renderAgents();
 initIntelAgentRefreshHandlers();
 initMatchAutocomplete();
-initNoticeStrip();
 initNoLiveDataAlert();
 initAgentsToggle();
 initLivePanel();
@@ -8159,48 +8143,78 @@ async function maybeAutoRunWarRoomAfterPopulate() {
 
   trackWarRoomEvent("warroom_autorun_from_detect", { match });
   await runWarRoom();
+  scrollVerdictPanelIntoView({ behavior: "smooth" });
 }
 
 /**
- * On page load, detect today's fixture (or the nearest upcoming one) and auto-fill the match
- * input, the live panel team/venue fields, and the live score bar.
- * @returns {Promise<boolean>} true when this function set the match field from auto-detect
+ * Server-injected default fixture for bare `/` visits (`<meta name="acwr-default-match">`).
+ * @returns {string}
  */
-async function autoPopulateTodayMatch() {
-  const input = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
-  if (!input || input.value.trim()) return false; // user has already typed something
+function readDefaultMatchFromMeta() {
+  if (typeof document === "undefined") return "";
+  const el = document.querySelector('meta[name="acwr-default-match"]');
+  const raw = el && el.getAttribute("content") != null ? String(el.getAttribute("content")).trim() : "";
+  return raw;
+}
 
-  /** @type {TodayMatchContext} */
-  let ctx;
-  try {
-    ctx = await getTodayMatchContext();
-  } catch {
-    return false;
-  }
-  const { rows, todayStr, todayLive } = ctx;
+/** @param {MatchSuggestionRow} row */
+function rowHasCatalogLiveHint(row) {
+  if (row.completed) return false;
+  const r = row.result;
+  if (!r || typeof r !== "object") return false;
+  if (String(r.winner || "").trim()) return false;
+  const text = String(r.actual_score || r.summary || "").trim();
+  return /\d+\s*\/\s*\d+/.test(text);
+}
 
-  // 2nd priority: nearest future incomplete match
-  const upcoming = rows
-    .filter((r) => !r.completed && r.date > todayStr)
-    .sort((a, b) => {
-      if (a.date !== b.date) return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
-      return iplMatchNumberFromLabel(a.label) - iplMatchNumberFromLabel(b.label);
+/**
+ * @param {MatchSuggestionRow[]} todayLive
+ * @param {MatchSuggestionRow[]} upcoming
+ * @returns {Promise<MatchSuggestionRow|null>}
+ */
+async function pickBestDefaultMatchRow(todayLive, upcoming) {
+  if (!todayLive.length && !upcoming.length) return null;
+  const pool = todayLive.length ? todayLive : upcoming;
+  const withHint = todayLive.filter(rowHasCatalogLiveHint);
+  let candidates = (withHint.length ? withHint : pool).slice();
+  candidates.sort((a, b) => iplMatchNumberFromLabel(a.label) - iplMatchNumberFromLabel(b.label));
+
+  if (apiBase() !== null && candidates.length > 1) {
+    const scored = await Promise.all(
+      candidates.map(async (row) => {
+        const preds = await fetchSavedPredictionsByMatch(row.label);
+        const conf =
+          preds && preds.length ? Math.max(...preds.map((p) => Number(p.confidence) || 0)) : 0;
+        return { row, conf };
+      })
+    );
+    scored.sort((a, b) => {
+      if (b.conf !== a.conf) return b.conf - a.conf;
+      return iplMatchNumberFromLabel(a.row.label) - iplMatchNumberFromLabel(b.row.label);
     });
+    return scored[0]?.row || candidates[0] || null;
+  }
+  return candidates[0] || null;
+}
 
-  const best = todayLive[0] || upcoming[0];
-  if (!best) return false;
-
-  // Populate match input
+/**
+ * Fill fixture + live panel from a catalog row.
+ * @param {MatchSuggestionRow} best
+ * @param {MatchSuggestionRow[]} todayLive
+ * @returns {Promise<void>}
+ */
+async function applyDefaultMatchRow(best, todayLive) {
+  const input = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+  if (!input) return;
   input.value = best.label;
   const clearBtn = document.getElementById("matchSearchClear");
   if (clearBtn) /** @type {HTMLElement} */ (clearBtn).hidden = false;
 
-  // Parse teams and sync the live-panel fields
   const teams = parseTeamsFromMatch(best.label);
-  const batEl  = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBatTeam"));
+  const batEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBatTeam"));
   const bowlEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfBowlTeam"));
   const venueEl = /** @type {HTMLInputElement|null} */ (document.getElementById("lfVenue"));
-  if (batEl  && !batEl.value)  batEl.value  = teams.codeA;
+  if (batEl && !batEl.value) batEl.value = teams.codeA;
   if (bowlEl && !bowlEl.value) bowlEl.value = teams.codeB;
   if (venueEl && !venueEl.value) {
     const vMatch = best.label.match(/,\s*([^,]+)$/);
@@ -8208,10 +8222,10 @@ async function autoPopulateTodayMatch() {
     else if (best.venue) venueEl.value = best.venue;
   }
 
-  // Subtle toast — keeps the command bar uncluttered
-  showAutoDetectToast(todayLive.length > 0 ? "Today's match auto-detected" : "Next upcoming match auto-detected");
+  showAutoDetectToast(
+    todayLive.length > 0 ? "Today's match auto-detected" : "Next upcoming match auto-detected"
+  );
 
-  // Auto-fetch live score only for today's matches (not future ones)
   if (todayLive.length > 0) {
     const liveInput = /** @type {HTMLInputElement|null} */ (document.getElementById("liveScoreInput"));
     const liveClear = document.getElementById("liveScoreClear");
@@ -8224,11 +8238,78 @@ async function autoPopulateTodayMatch() {
           if (liveClear) /** @type {HTMLElement} */ (liveClear).hidden = false;
         }
         applyLiveScoreDetailToFixtureChrome(best.label, teams, d);
-      } catch { /* best-effort */ }
+      } catch {
+        /* best-effort */
+      }
     }
   }
 
+  try {
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  } catch {
+    /* */
+  }
   syncLivePollForCurrentFixture();
+}
+
+/**
+ * On page load, detect today's fixture (or the nearest upcoming one) and auto-fill the match
+ * input, the live panel team/venue fields, and the live score bar.
+ * @returns {Promise<boolean>} true when this function set the match field from auto-detect
+ */
+async function autoPopulateTodayMatch() {
+  const input = /** @type {HTMLInputElement|null} */ (document.getElementById("matchInput"));
+  if (!input || input.value.trim()) return false; // user has already typed something
+
+  const metaLabel = readDefaultMatchFromMeta();
+  if (metaLabel) {
+    try {
+      const ctx = await getTodayMatchContext();
+      const key = normalizeFixtureLabelKey(metaLabel);
+      const row =
+        ctx.rows.find((r) => r.label === metaLabel) ||
+        ctx.rows.find((r) => normalizeFixtureLabelKey(r.label) === key);
+      if (row) {
+        await applyDefaultMatchRow(row, ctx.todayLive);
+        return true;
+      }
+    } catch {
+      /* fall through to label-only fill */
+    }
+    input.value = metaLabel;
+    const clearBtn = document.getElementById("matchSearchClear");
+    if (clearBtn) /** @type {HTMLElement} */ (clearBtn).hidden = false;
+    try {
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    } catch {
+      /* */
+    }
+    syncLivePollForCurrentFixture();
+    return true;
+  }
+
+  /** @type {TodayMatchContext} */
+  let ctx;
+  try {
+    ctx = await getTodayMatchContext();
+  } catch {
+    return false;
+  }
+  const { rows, todayStr, todayLive } = ctx;
+
+  const upcoming = rows
+    .filter((r) => !r.completed && r.date > todayStr)
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+      return iplMatchNumberFromLabel(a.label) - iplMatchNumberFromLabel(b.label);
+    });
+
+  const best = await pickBestDefaultMatchRow(todayLive, upcoming);
+  if (!best) return false;
+
+  await applyDefaultMatchRow(best, todayLive);
   return true;
 }
 

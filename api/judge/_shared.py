@@ -119,29 +119,32 @@ def war_room_bearer_ok(authorization: str | None) -> bool:
 
 
 def get_store():
-    """Return a SupabasePredictionsStore. Raises clearly if env is missing."""
-    # Local imports so the bundle only pays for them on first invocation.
+    """Return Turso, Supabase, or local SQLite store (first configured wins)."""
+    from judge_service.predictions_db import PredictionsStore
     from judge_service.predictions_supabase import (
         SupabasePredictionsStore,
         supabase_configured,
     )
+    from judge_service.predictions_turso import TursoPredictionsStore, turso_configured
 
-    if not supabase_configured():
-        raise RuntimeError(
-            "supabase_not_configured: set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY"
+    if turso_configured():
+        return TursoPredictionsStore(
+            os.environ["TURSO_DATABASE_URL"].strip(),
+            os.environ["TURSO_AUTH_TOKEN"].strip(),
         )
 
-    key = os.environ["SUPABASE_SERVICE_ROLE_KEY"].strip()
-    if key.startswith("sb_publishable_") or key.startswith("eyJpc3MiOiJzdXBh"):
-        # Catches the most common foot-gun: pasting the anon/publishable key
-        # into the service-role slot. Inserts will silently fail under RLS.
-        raise RuntimeError(
-            "supabase_wrong_key: SUPABASE_SERVICE_ROLE_KEY looks like a "
-            "publishable/anon key. Copy the *service_role* secret from "
-            "Supabase → Project Settings → API."
-        )
+    if supabase_configured():
+        key = os.environ["SUPABASE_SERVICE_ROLE_KEY"].strip()
+        if key.startswith("sb_publishable_") or key.startswith("eyJpc3MiOiJzdXBh"):
+            raise RuntimeError(
+                "supabase_wrong_key: SUPABASE_SERVICE_ROLE_KEY looks like a "
+                "publishable/anon key. Copy the *service_role* secret from "
+                "Supabase → Project Settings → API."
+            )
+        return SupabasePredictionsStore(os.environ["SUPABASE_URL"].strip(), key)
 
-    return SupabasePredictionsStore(os.environ["SUPABASE_URL"].strip(), key)
+    path = os.environ.get("WAR_ROOM_DB_PATH", "").strip() or None
+    return PredictionsStore(path)
 
 
 class JsonHandler(BaseHTTPRequestHandler):
