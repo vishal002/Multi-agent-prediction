@@ -101,7 +101,8 @@ Open [http://localhost:3333/](http://localhost:3333/). Judge data uses the `judg
 | `INGESTION_SERVICE_URL` / `JUDGE_SERVICE_URL`           | Python service bases (local / Render); on Vercel, Judge is in-process Python—`JUDGE_SERVICE_URL` is for local proxy only.                                             |
 | `CRICAPI_KEY`                                           | On **ingestion**; optional live scores.                                                                                                                               |
 | `WAR_ROOM_DB_PATH`                                      | Judge **SQLite** when Supabase env is unset.                                                                                                                          |
-| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`            | Judge predictions + share packs in Postgres (preferred in production).                                                                                                |
+| `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN`               | Judge predictions in Turso libSQL (preferred on Render; survives cold starts).                                                                                      |
+| `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`            | Judge predictions + share packs in Postgres (fallback if Turso unset).                                                                                              |
 | `PUBLIC_SITE_URL`                                       | Canonical origin for OG and `/s/{id}` when behind another host.                                                                                                       |
 | `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN`   | Optional Redis for caches, rate limits, freemium counts.                                                                                                              |
 | `FREEMIUM_MAX_RUNS_PER_DAY`                             | Daily cap on successful Judge runs per IP during IPL live window (IST); default `5`, `0` disables.                                                                    |
@@ -122,7 +123,10 @@ Open [http://localhost:3333/](http://localhost:3333/). Judge data uses the `judg
 When the Judge API is enabled, the UI shows **running accuracy** and can load **saved pre-match predictions** on completed fixtures.
 
 - **SQLite** (`WAR_ROOM_DB_PATH` or default `data/war_room.db`): fine for `npm run judge:dev` and Docker.
-- **Supabase Postgres** (preferred): set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` on the Judge process. Schema: `[supabase_migrations/migrations/001_initial.sql](supabase_migrations/migrations/001_initial.sql)`.
+- **Turso libSQL** (preferred on Render): set `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` on the Judge process (auto-creates the `predictions` table on first use).
+- **Supabase Postgres** (fallback): set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` on the Judge process. Schema: `[supabase_migrations/migrations/001_initial.sql](supabase_migrations/migrations/001_initial.sql)`.
+
+**Homepage boot:** on a clean visit (no share deep link), the app auto-fills today’s live fixture (or the next upcoming one) and runs the war room once. Append `?noautorun=1` to fill the fixture without starting agents.
 
 **Freemium:** during an IPL “live” day (catalog has a non-completed fixture on today’s IST date, or `IPL_FREEMIUM_ACTIVE=1`), each successful `POST /api/judge/predict` increments a per-IP counter up to `FREEMIUM_MAX_RUNS_PER_DAY`. When the cap is reached, both `POST /api/messages` and `POST /api/judge/predict` return 429 until the next IST calendar day. `GET /api/freemium-status` drives the UI pill. Clients presenting `WAR_ROOM_API_SECRET` bypass the cap when that secret is configured.
 

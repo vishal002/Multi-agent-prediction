@@ -7,6 +7,7 @@
     "prebuild": "node scripts/enrich-completed-matches.mjs && node scripts/flatten-og-logos.mjs",
     "build": "node scripts/build.mjs",
     "enrich": "node scripts/enrich-completed-matches.mjs",
+    "settle-predictions": "node scripts/settle-predictions-from-catalog.mjs",
     "start": "cross-env SERVE_DIST=1 node server.mjs",
     "start:dev": "node server.mjs",
     "ingestion:dev": "node scripts/run-uvicorn.mjs ingestion_service.app:app 3334",

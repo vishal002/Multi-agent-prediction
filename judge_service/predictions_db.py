@@ -2,9 +2,9 @@
 Persistence for predictions and running accuracy.
 
 Local SQLite store for development (`npm run judge:dev`) and Docker volume
-deployments. Production on Vercel uses `predictions_supabase.SupabasePredictionsStore`
-instead — `judge_service.app.get_store()` picks Supabase when SUPABASE_URL +
-SUPABASE_SERVICE_ROLE_KEY are set, else falls back to this file-backed store.
+deployments. Production uses `predictions_turso.TursoPredictionsStore` when
+TURSO_DATABASE_URL + TURSO_AUTH_TOKEN are set, else Supabase when configured,
+else this file-backed store (`judge_service.app.get_store()`).
 
 Schema (table `predictions`):
   id, match_id, predicted_winner, actual_winner, confidence, created_at

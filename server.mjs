@@ -78,6 +78,7 @@ import {
   freemiumRecordSuccessfulJudgeRun,
   freemiumShouldBlock,
   freemiumStatusPayload,
+  istCalendarDateYmd,
   isFreemiumLiveWindow,
 } from "./middleware/freemiumLive.mjs";
 
@@ -1663,6 +1664,62 @@ function injectHomepageOgMeta(html, imgUrl) {
     .replace(/(<meta\s+name="twitter:image"\s+content=")[^"]*(")/i, `$1${safe}$2`);
 }
 
+/** @param {ReturnType<typeof normalizeMatchSuggestions>[number]} row */
+function rowHasCatalogLiveHint(row) {
+  if (row.completed) return false;
+  const r = row.result;
+  if (!r || typeof r !== "object") return false;
+  if (String(r.winner || "").trim()) return false;
+  const text = String(r.actual_score || r.summary || "").trim();
+  return /\d+\s*\/\s*\d+/.test(text);
+}
+
+/**
+ * Best fixture for a bare homepage visit (IST calendar day).
+ * @param {ReturnType<typeof normalizeMatchSuggestions>} rows
+ * @param {string} todayStr YYYY-MM-DD (IST)
+ * @returns {string|null} catalog label
+ */
+function pickDefaultLiveMatch(rows, todayStr) {
+  const todayLive = rows
+    .filter((r) => r.date === todayStr && !r.completed)
+    .sort((a, b) => iplMatchNumberFromLabel(a.label) - iplMatchNumberFromLabel(b.label));
+  const withHint = todayLive.filter(rowHasCatalogLiveHint);
+  const pool = withHint.length ? withHint : todayLive;
+  if (pool.length) return pool[0].label;
+
+  const upcoming = rows
+    .filter((r) => !r.completed && r.date > todayStr)
+    .sort((a, b) => {
+      if (a.date !== b.date) return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+      return iplMatchNumberFromLabel(a.label) - iplMatchNumberFromLabel(b.label);
+    });
+  return upcoming[0]?.label || null;
+}
+
+/** @param {URL} url */
+function homepageHasDeepLinkParams(url) {
+  const p = url.searchParams;
+  return !!(
+    (p.get("share") || "").trim() ||
+    (p.get("sid") || "").trim() ||
+    (p.get("p") || "").trim() ||
+    (p.get("verdict") || "").trim() ||
+    (p.get("match") || "").trim()
+  );
+}
+
+/** @param {string} html @param {string} matchLabel */
+function injectHomepageDefaultMatchMeta(html, matchLabel) {
+  const label = String(matchLabel || "").trim();
+  if (!label) return html;
+  const tag = `<meta name="acwr-default-match" content="${escapeHtmlAttr(label)}" />`;
+  if (/<meta\s+name="acwr-default-match"/i.test(html)) {
+    return html.replace(/<meta\s+name="acwr-default-match"[^>]*>/i, tag);
+  }
+  return html.replace(/<head>/i, `<head>\n    ${tag}`);
+}
+
 /**
  * Homepage HTML with og:image / twitter:image matching `?theme=` (for link previews).
  * @param {import("http").IncomingMessage} req
@@ -1684,7 +1741,11 @@ function serveHomepageHtml(req, res, url) {
     }
     const theme = resolveHomepageOgTheme(url.searchParams.get("theme"));
     const base = publicOgSiteBase(req, url);
-    const body = injectHomepageOgMeta(html, homepageOgImageUrl(base, theme));
+    let body = injectHomepageOgMeta(html, homepageOgImageUrl(base, theme));
+    if (!homepageHasDeepLinkParams(url)) {
+      const defaultMatch = pickDefaultLiveMatch(matchSuggestionsRows, istCalendarDateYmd());
+      body = injectHomepageDefaultMatchMeta(body, defaultMatch || "");
+    }
     const buf = Buffer.from(body, "utf8");
     res.writeHead(200, {
       "Content-Type": "text/html; charset=utf-8",
