@@ -7778,6 +7778,36 @@ if (!acwrIsNarrowMobileLayout()) {
 }
 
 const ACWR_BOOT_LOADER_MAX_MS = 12_000;
+const ACWR_BOOT_TAGLINES = [
+  "Warming up the war room…",
+  "Checking today's fixtures…",
+  "Briefing the intel agents…",
+  "Polishing the pitch…",
+  "Almost ready to bowl…",
+];
+
+/** Cycle boot tagline on narrow viewports while the skeleton is visible. */
+function initBootTaglineCycler() {
+  if (!acwrIsNarrowMobileLayout()) return;
+  const el = document.getElementById("acwrBootTagline");
+  if (!el) return;
+  let i = 0;
+  const tick = () => {
+    if (document.documentElement.classList.contains("acwr-mobile-ready")) return;
+    i = (i + 1) % ACWR_BOOT_TAGLINES.length;
+    el.textContent = ACWR_BOOT_TAGLINES[i];
+  };
+  const id = window.setInterval(tick, 2200);
+  const stop = () => window.clearInterval(id);
+  if (ACWR_MOBILE_BOOT_MQ.addEventListener) {
+    ACWR_MOBILE_BOOT_MQ.addEventListener("change", (ev) => {
+      if (!ev.matches) stop();
+    });
+  }
+}
+
+initBootTaglineCycler();
+
 const bootAfterDomPromise = runInitialBootAfterDom();
 void Promise.race([
   bootAfterDomPromise.catch(() => {}),
