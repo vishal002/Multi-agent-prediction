@@ -141,7 +141,23 @@
       aria-busy="true"
     >
       <span class="visually-hidden">Loading match room…</span>
-      <div class="acwr-app-loader__inner" aria-hidden="true">
+      <div class="acwr-app-loader__cricket" aria-hidden="true">
+        <div class="acwr-cricket-loader">
+          <div class="acwr-cricket-loader__ring" aria-hidden="true"></div>
+          <div class="acwr-cricket-loader__stage">
+            <span class="acwr-cricket-loader__pitch"></span>
+            <span class="acwr-cricket-loader__shadow"></span>
+            <span class="acwr-cricket-loader__ball"></span>
+            <span class="acwr-cricket-loader__stumps" aria-hidden="true">
+              <span></span><span></span><span></span>
+            </span>
+          </div>
+        </div>
+        <p class="acwr-app-loader__tagline" id="acwrBootTagline">
+          Warming up the war room…
+        </p>
+      </div>
+      <div class="acwr-app-loader__inner acwr-app-loader__inner--dimmed" aria-hidden="true">
         <div class="acwr-skel-header">
           <div class="acwr-skel-block acwr-skel-block--logo"></div>
           <div class="acwr-skel-header__text">
